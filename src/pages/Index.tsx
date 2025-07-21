@@ -39,10 +39,11 @@ import { SimulationData } from '../components/MonteCarloVisualization';
 import { Switch } from "@/components/ui/switch";
 import { v4 as uuidv4 } from 'uuid';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { toast } from "@/hooks/use-toast";
+import { useToast } from "@/hooks/use-toast";
 import ZeroCostStrategies from '@/components/ZeroCostStrategies';
 import ZeroCostTab from '@/components/ZeroCostTab';
 import ForexDashboard from '@/components/ForexDashboard';
+import { PricingService } from '@/services/PricingService';
 
 // Currency Pair interface
 interface CurrencyPair {
@@ -280,6 +281,8 @@ export const CURRENCY_PAIRS: CurrencyPair[] = [
 
 // State pour les paires de devises personnalisées
 const Index = () => {
+  const { toast } = useToast();
+  
   const [customCurrencyPairs, setCustomCurrencyPairs] = useState<CurrencyPair[]>(() => {
     const savedPairs = localStorage.getItem('customCurrencyPairs');
     return savedPairs ? JSON.parse(savedPairs) : [];
@@ -2783,8 +2786,8 @@ const Index = () => {
             monthKey: monthKey,
             periodIndex: periodIndex
           },
-          // Volatilités implicites spécifiques
-          impliedVolatilities: impliedVolatilities[result.date] || {},
+          // ✅ CORRECTION : Volatilités implicites spécifiques du tableau detailed results
+          impliedVolatilities: impliedVolatilities[monthKey] || {},
           // Prix personnalisés si utilisés
           customPrices: useCustomOptionPrices ? (customOptionPrices[monthKey] || {}) : {},
           // Forwards manuels si utilisés
@@ -2817,11 +2820,17 @@ const Index = () => {
                 : undefined;
             }
 
-            // Obtenir la volatilité effective utilisée pour ce composant
+            // ✅ CORRECTION : Obtenir la volatilité effective du tableau Detailed Results
             const optionKey = `${component.type}-${componentIndex}`;
-            const effectiveVolatility = useImpliedVol && impliedVolatilities[result.date]?.[optionKey] !== undefined
-              ? impliedVolatilities[result.date][optionKey]
-              : component.volatility;
+            let effectiveVolatility = component.volatility; // Fallback par défaut
+            
+            if (useImpliedVol && impliedVolatilities[monthKey]) {
+              // Utiliser la volatilité implicite spécifique à l'option si disponible
+              const impliedVol = getImpliedVolatility(monthKey, optionKey);
+              if (impliedVol !== undefined && impliedVol !== null && impliedVol > 0) {
+                effectiveVolatility = impliedVol;
+              }
+            }
 
             // Obtenir le prix d'option correspondant depuis les résultats
             const optionPriceData = result.optionPrices[componentIndex];
@@ -5124,6 +5133,23 @@ const Index = () => {
     }
   };
 
+  // Export des fonctions de pricing pour centralisation
+// ... toutes les fonctions de pricing ici ...
+
+const pricingFunctions = {
+  calculateGarmanKohlhagenPrice,
+  calculateVanillaOptionMonteCarlo,
+  calculateBarrierOptionPrice,
+  calculateDigitalOptionPrice,
+  calculateBarrierOptionClosedForm,
+  calculateFXForwardPrice,
+  calculateOptionPrice,
+  erf,
+  CND: (x: number) => (1 + erf(x / Math.sqrt(2))) / 2
+};
+
+PricingService.initializePricingFunctions(pricingFunctions);
+
   // Fonction pour initialiser les volatilités implicites à partir des prix actuels
   const initializeImpliedVolatilities = () => {
     if (!results) return;
@@ -5413,7 +5439,6 @@ const Index = () => {
                                   toast({
                                     title: "Validation Error",
                                     description: "All fields are required and spot rate must be a valid number.",
-                                    variant: "destructive"
                                   });
                                   return;
                                 }
@@ -5424,7 +5449,6 @@ const Index = () => {
                                   toast({
                                     title: "Pair Already Exists",
                                     description: `Currency pair ${symbol} already exists.`,
-                                    variant: "destructive"
                                   });
                                   return;
                                 }
@@ -5443,7 +5467,6 @@ const Index = () => {
                                 toast({
                                   title: "Success",
                                   description: `Currency pair ${symbol} added successfully.`,
-                                  variant: "default"
                                 });
                                 
                                 // Reset form and close dialog
@@ -5512,7 +5535,6 @@ const Index = () => {
                           toast({
                             title: "Currency Pair Removed",
                             description: `Currency pair ${params.currencyPair?.symbol} has been removed.`,
-                            variant: "default"
                           });
                         }}
                         title="Remove custom currency pair"
@@ -7594,5 +7616,9 @@ const Index = () => {
     </div>
   );
 };
+
+
+
+
 
 export default Index;

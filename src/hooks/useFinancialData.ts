@@ -171,7 +171,8 @@ export const useFinancialData = (): UseFinancialDataReturn => {
           maturity: new Date(hedgingInstrument.maturity),
           counterparty: hedgingInstrument.counterparty || 'Strategy Import',
           hedgeAccounting: hedgingInstrument.hedge_accounting || false,
-          effectivenessRatio: hedgingInstrument.effectiveness_ratio || 95
+          // ✅ CORRECTION : Utiliser la vraie quantité de couverture si disponible
+          effectivenessRatio: hedgingInstrument.hedgeQuantity || hedgingInstrument.effectiveness_ratio || 95
         };
         
         serviceRef.current.addInstrument(financialInstrument);
@@ -187,59 +188,233 @@ export const useFinancialData = (): UseFinancialDataReturn => {
       const currentExposures = serviceRef.current.getExposures();
       const currentInstruments = serviceRef.current.getInstruments();
       
-      // Only auto-generate if we have instruments but no exposures
-      if (currentInstruments.length > 0 && currentExposures.length === 0) {
-        console.log('Auto-generating exposures from hedging instruments...');
+      // ✅ AMÉLIORATION : Détecter les nouvelles devises et échéances même s'il y a déjà des expositions
+      if (currentInstruments.length > 0) {
+        console.log('Analyzing hedging instruments for new currencies and maturities...');
+        
+        // ✅ NOUVEAU : Accéder aux instruments originaux pour obtenir les vraies quantités
+        const originalInstruments = strategyImportServiceRef.current.getHedgingInstruments();
+        
+        // ✅ NOUVEAU : Analyser les devises et échéances existantes
+        const existingCurrencies = new Set(currentExposures.map(exp => exp.currency));
+        const existingMaturities = new Set(currentExposures.map(exp => exp.maturity.toISOString().split('T')[0]));
+        
+        // ✅ NOUVEAU : Détecter les nouvelles devises et échéances
+        const newCurrencies = new Set<string>();
+        const newMaturities = new Set<string>();
+        const newCurrencyMaturityPairs = new Set<string>();
         
         // Group instruments by currency to create consolidated exposures
-        const currencyGroups: { [currency: string]: HedgingInstrument[] } = {};
+        const currencyGroups: { [currency: string]: { 
+          financialInstruments: HedgingInstrument[], 
+          originalInstruments: any[],
+          maturities: Set<string>
+        } } = {};
         
-        currentInstruments.forEach(instrument => {
+        currentInstruments.forEach((instrument, index) => {
           const currency = extractBaseCurrency(instrument.currencyPair);
+          const maturityStr = instrument.maturity.toISOString().split('T')[0];
+          
           if (!currencyGroups[currency]) {
-            currencyGroups[currency] = [];
+            currencyGroups[currency] = { 
+              financialInstruments: [], 
+              originalInstruments: [],
+              maturities: new Set()
+            };
           }
-          currencyGroups[currency].push(instrument);
+          currencyGroups[currency].financialInstruments.push(instrument);
+          currencyGroups[currency].maturities.add(maturityStr);
+          
+          // ✅ NOUVEAU : Détecter les nouvelles devises
+          if (!existingCurrencies.has(currency)) {
+            newCurrencies.add(currency);
+          }
+          
+          // ✅ NOUVEAU : Détecter les nouvelles échéances
+          if (!existingMaturities.has(maturityStr)) {
+            newMaturities.add(maturityStr);
+          }
+          
+          // ✅ NOUVEAU : Détecter les nouvelles combinaisons devise-échéance
+          const currencyMaturityPair = `${currency}-${maturityStr}`;
+          const existingPair = currentExposures.find(exp => 
+            exp.currency === currency && 
+            exp.maturity.toISOString().split('T')[0] === maturityStr
+          );
+          if (!existingPair) {
+            newCurrencyMaturityPairs.add(currencyMaturityPair);
+          }
+          
+          // Trouver l'instrument original correspondant
+          const originalInstrument = originalInstruments.find(orig => 
+            orig.currency === instrument.currencyPair && 
+            Math.abs(orig.notional - instrument.notional) < 0.01
+          );
+          if (originalInstrument) {
+            currencyGroups[currency].originalInstruments.push(originalInstrument);
+          }
         });
         
-        // Create exposures for each currency group
-        Object.entries(currencyGroups).forEach(([currency, instruments]) => {
-          const totalNotional = instruments.reduce((sum, inst) => sum + inst.notional, 0);
-          const avgMaturity = new Date(
-            instruments.reduce((sum, inst) => sum + inst.maturity.getTime(), 0) / instruments.length
-          );
+        // ✅ NOUVEAU : Créer des expositions pour les nouvelles combinaisons devise-échéance
+        let expositionsCreated = 0;
+        let expositionsUpdated = 0;
+        let newCurrenciesDetected = Array.from(newCurrencies);
+        let newMaturitiesDetected = Array.from(newMaturities);
+        
+        // Créer des expositions groupées par devise et échéance
+        Object.entries(currencyGroups).forEach(([currency, instrumentGroup]) => {
+          const instruments = instrumentGroup.financialInstruments;
+          const originalInstruments = instrumentGroup.originalInstruments;
           
-          // Determine if this should be a receivable or payable based on instrument types
-          const hasReceivableInstruments = instruments.some(inst => 
-            inst.type === 'vanilla-call' || inst.type === 'forward' || inst.type === 'collar'
-          );
+          // Grouper par échéance au sein de chaque devise
+          const maturityGroups: { [maturity: string]: HedgingInstrument[] } = {};
+          instruments.forEach(instrument => {
+            const maturityStr = instrument.maturity.toISOString().split('T')[0];
+            if (!maturityGroups[maturityStr]) {
+              maturityGroups[maturityStr] = [];
+            }
+            maturityGroups[maturityStr].push(instrument);
+          });
           
-          const exposureType: 'receivable' | 'payable' = hasReceivableInstruments ? 'receivable' : 'payable';
-          const exposureAmount = exposureType === 'receivable' ? totalNotional : -totalNotional;
-          
-          // Calculate hedge ratio (assume 100% hedged since we have instruments)
-          const hedgeRatio = 100;
-          const hedgedAmount = exposureType === 'receivable' ? totalNotional : -totalNotional;
-          
-          const autoExposure: Omit<ExposureData, 'id'> = {
-            currency: currency,
-            amount: exposureAmount,
-            type: exposureType,
-            maturity: avgMaturity,
-            description: `Auto-generated from ${instruments.length} hedging instrument(s)`,
-            subsidiary: 'Auto-Generated',
-            hedgeRatio: hedgeRatio,
-            hedgedAmount: hedgedAmount
-          };
-          
-          serviceRef.current.addExposure(autoExposure);
-          console.log(`Created auto-exposure for ${currency}: ${exposureAmount}`);
+          // Créer une exposition pour chaque combinaison devise-échéance qui n'existe pas
+          Object.entries(maturityGroups).forEach(([maturityStr, maturityInstruments]) => {
+            const currencyMaturityPair = `${currency}-${maturityStr}`;
+            
+            // Vérifier si cette combinaison existe déjà
+            const existingExposure = currentExposures.find(exp => 
+              exp.currency === currency && 
+              exp.maturity.toISOString().split('T')[0] === maturityStr
+            );
+            
+            // ✅ CORRECTION : Traiter les expositions existantes ET nouvelles
+            const totalNotional = maturityInstruments.reduce((sum, inst) => sum + inst.notional, 0);
+            const maturityDate = new Date(maturityStr);
+            
+            // ✅ CORRECTION : Calculer le hedge ratio basé sur les vraies quantités des instruments originaux
+            let maxHedgeQuantity = 95; // Default fallback
+            
+            if (originalInstruments.length > 0) {
+              // ✅ CORRECTION : Prendre le maximum des quantités absolues des instruments originaux SANS plafonnement
+              const maturityOriginalInstruments = originalInstruments.filter(orig => {
+                const origMaturity = new Date(orig.maturity).toISOString().split('T')[0];
+                return origMaturity === maturityStr;
+              });
+              
+              if (maturityOriginalInstruments.length > 0) {
+                // Utiliser les instruments de cette échéance spécifique
+                maxHedgeQuantity = Math.max(...maturityOriginalInstruments.map(inst => {
+                  const quantity = inst.hedgeQuantity !== undefined ? 
+                    inst.hedgeQuantity : 
+                    (inst.quantity !== undefined ? Math.abs(inst.quantity) : 95);
+                  return quantity; // ✅ SUPPRESSION du plafonnement Math.min(100, quantity)
+                }));
+              } else {
+                // Fallback: utiliser tous les instruments originaux
+                maxHedgeQuantity = Math.max(...originalInstruments.map(inst => {
+                  const quantity = inst.hedgeQuantity !== undefined ? 
+                    inst.hedgeQuantity : 
+                    (inst.quantity !== undefined ? Math.abs(inst.quantity) : 95);
+                  return quantity; // ✅ SUPPRESSION du plafonnement Math.min(100, quantity)
+                }));
+              }
+            }
+            
+            // ✅ NOUVEAU : Calculer le volume d'exposition total pour cette échéance
+            let totalExposureVolume = totalNotional;
+            
+            if (originalInstruments.length > 0) {
+              // Utiliser les volumes bruts des instruments originaux si disponibles
+              const maturityOriginalInstruments = originalInstruments.filter(orig => {
+                const origMaturity = new Date(orig.maturity).toISOString().split('T')[0];
+                return origMaturity === maturityStr;
+              });
+              
+              if (maturityOriginalInstruments.length > 0) {
+                totalExposureVolume = maturityOriginalInstruments.reduce((sum, inst) => {
+                  const volume = inst.rawVolume !== undefined ? inst.rawVolume : 
+                             inst.exposureVolume !== undefined ? inst.exposureVolume : 
+                             inst.notional;
+                  return sum + volume;
+                }, 0);
+              }
+            }
+            
+            // Determine if this should be a receivable or payable based on instrument types
+            const hasReceivableInstruments = maturityInstruments.some(inst => 
+              inst.type === 'vanilla-call' || inst.type === 'forward' || inst.type === 'collar'
+            );
+            
+            const exposureType: 'receivable' | 'payable' = hasReceivableInstruments ? 'receivable' : 'payable';
+            
+            // ✅ CORRECTION : Utiliser le volume d'exposition total au lieu du notional
+            const exposureAmount = exposureType === 'receivable' ? totalExposureVolume : -totalExposureVolume;
+            
+            // ✅ CORRECTION : Calculer le montant couvert basé sur le hedge ratio réel
+            const hedgedAmount = (maxHedgeQuantity / 100) * Math.abs(exposureAmount);
+            const finalHedgedAmount = exposureType === 'receivable' ? hedgedAmount : -hedgedAmount;
+            
+            if (!existingExposure) {
+              // ✅ CRÉER UNE NOUVELLE EXPOSITION
+              const autoExposure: Omit<ExposureData, 'id'> = {
+                currency: currency,
+                amount: exposureAmount,
+                type: exposureType,
+                maturity: maturityDate,
+                description: `Auto-generated from ${maturityInstruments.length} hedging instrument(s) - Maturity: ${maturityStr} - Hedge Ratio: ${maxHedgeQuantity}%`,
+                subsidiary: 'Auto-Generated',
+                hedgeRatio: maxHedgeQuantity,
+                hedgedAmount: finalHedgedAmount
+              };
+              
+              serviceRef.current.addExposure(autoExposure);
+              expositionsCreated++;
+              console.log(`Created auto-exposure for ${currency} (${maturityStr}): ${exposureAmount}`);
+            } else {
+              // ✅ METTRE À JOUR L'EXPOSITION EXISTANTE
+              const updatedExposure = {
+                amount: exposureAmount,
+                type: exposureType,
+                description: `Auto-updated from ${maturityInstruments.length} hedging instrument(s) - Maturity: ${maturityStr} - Hedge Ratio: ${maxHedgeQuantity}%`,
+                hedgeRatio: maxHedgeQuantity,
+                hedgedAmount: finalHedgedAmount
+              };
+              
+              const updateSuccess = serviceRef.current.updateExposure(existingExposure.id, updatedExposure);
+              if (updateSuccess) {
+                expositionsUpdated++; // ✅ COMPTEUR SÉPARÉ pour les mises à jour
+                console.log(`Updated existing exposure for ${currency} (${maturityStr}): ${exposureAmount} - Hedge Ratio: ${maxHedgeQuantity}%`);
+              }
+            }
+          });
         });
         
-        // Dispatch event to notify that exposures were auto-generated
-        window.dispatchEvent(new CustomEvent('exposuresAutoGenerated', {
-          detail: { count: Object.keys(currencyGroups).length }
-        }));
+        // ✅ NOUVEAU : Dispatch des événements pour notifier des nouvelles détections
+        if (expositionsCreated > 0 || expositionsUpdated > 0) {
+          window.dispatchEvent(new CustomEvent('exposuresAutoGenerated', {
+            detail: { 
+              count: expositionsCreated,
+              updated: expositionsUpdated,
+              newCurrencies: newCurrenciesDetected,
+              newMaturities: newMaturitiesDetected,
+              newCurrencyMaturityPairs: Array.from(newCurrencyMaturityPairs)
+            }
+          }));
+        }
+        
+        // ✅ NOUVEAU : Dispatch des événements spécifiques pour les nouvelles devises et échéances
+        if (newCurrenciesDetected.length > 0) {
+          window.dispatchEvent(new CustomEvent('newCurrenciesDetected', {
+            detail: { currencies: newCurrenciesDetected }
+          }));
+        }
+        
+        if (newMaturitiesDetected.length > 0) {
+          window.dispatchEvent(new CustomEvent('newMaturitiesDetected', {
+            detail: { maturities: newMaturitiesDetected }
+          }));
+        }
+        
+        console.log(`Auto-sync completed: ${expositionsCreated} exposures created, ${expositionsUpdated} exposures updated, ${newCurrenciesDetected.length} new currencies, ${newMaturitiesDetected.length} new maturities`);
       }
     } catch (error) {
       console.error('Error auto-generating exposures:', error);

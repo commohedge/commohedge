@@ -27,7 +27,8 @@ import {
   CheckCircle,
   DollarSign,
   Clock,
-  Zap
+  Zap,
+  AlertTriangle
 } from "lucide-react";
 
 const PositionMonitor = () => {

@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import {
   BarChart3,
   DollarSign,
@@ -32,6 +32,7 @@ import {
 } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { useCompanySettings, getCompanyNameSync, companySettingsEmitter } from "@/hooks/useCompanySettings";
 
 const menuItems = [
   {
@@ -117,6 +118,20 @@ const managementItems = [
 
 export function AppSidebar() {
   const location = useLocation();
+  const { getCompanyNameParts, isLoaded, getCompanyLogo } = useCompanySettings();
+  const logo = getCompanyLogo();
+  // Utilise le cache mémoire pour le nom dès le premier render
+  const [companyName, setCompanyName] = useState(getCompanyNameSync());
+  useEffect(() => {
+    const unsubscribe = companySettingsEmitter.subscribe(() => {
+      setCompanyName(getCompanyNameSync());
+    });
+    return unsubscribe;
+  }, []);
+  // Découpe le nom pour l'affichage
+  const dashIndex = companyName.indexOf(' - ');
+  const primaryName = dashIndex === -1 ? companyName : companyName.substring(0, dashIndex).trim();
+  const secondaryName = dashIndex === -1 ? '' : companyName.substring(dashIndex + 3).trim();
   
   const isActive = (path: string) => {
     return location.pathname === path;
@@ -126,10 +141,25 @@ export function AppSidebar() {
     <Sidebar className="border-r border-border/40 bg-gradient-to-b from-background to-background/95">
       <SidebarHeader className="p-6 border-b border-border/40">
         <div className="flex items-center space-x-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 border border-primary/20">
-            <Globe className="h-6 w-6 text-primary" />
+          <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-primary/10 border border-primary/20">
+            <img 
+              src={logo}
+              alt="Company Logo" 
+              className="h-10 w-10 object-contain"
+              onError={(e) => {
+                e.currentTarget.style.display = 'none';
+                e.currentTarget.nextElementSibling?.classList.remove('hidden');
+              }}
+            />
+            <Globe className="h-6 w-6 text-primary hidden" />
           </div>
-          <div>
+          <div className="flex-1">
+            <div className="text-sm font-bold text-primary mb-1">
+              {primaryName}
+            </div>
+            <div className="text-xs text-muted-foreground mb-2">
+              {secondaryName}
+            </div>
             <h2 className="text-lg font-bold text-foreground">FX Risk Manager</h2>
             <p className="text-sm text-muted-foreground">Currency Hedging Platform</p>
           </div>

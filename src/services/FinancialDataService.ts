@@ -6,6 +6,8 @@
  * using default values.
  */
 
+import { PricingService } from '@/services/PricingService';
+
 export interface MarketData {
   spotRates: { [currencyPair: string]: number };
   volatilities: { [currencyPair: string]: number };
@@ -289,52 +291,16 @@ class FinancialDataService {
     const foreignRate = this.marketData.interestRates[baseCurrency] || 0;
     const vol = volatility || this.marketData.volatilities[currencyPair] || 0.1;
 
-    return this.garmanKohlhagenPrice(optionType, spotRate, strike, domesticRate, foreignRate, timeToMaturity, vol);
+    // Utiliser le PricingService centralisé
+    return PricingService.calculateGarmanKohlhagenPrice(optionType, spotRate, strike, domesticRate, foreignRate, timeToMaturity, vol);
   }
 
   /**
    * Garman-Kohlhagen option pricing model
    */
-  private garmanKohlhagenPrice(
-    type: string,
-    S: number,
-    K: number,
-    r_d: number,
-    r_f: number,
-    t: number,
-    sigma: number
-  ): number {
-    const d1 = (Math.log(S / K) + (r_d - r_f + 0.5 * sigma * sigma) * t) / (sigma * Math.sqrt(t));
-    const d2 = d1 - sigma * Math.sqrt(t);
-    
-    const N = (x: number) => (1 + this.erf(x / Math.sqrt(2))) / 2;
-    
-    if (type === 'call') {
-      return S * Math.exp(-r_f * t) * N(d1) - K * Math.exp(-r_d * t) * N(d2);
-    } else {
-      return K * Math.exp(-r_d * t) * N(-d2) - S * Math.exp(-r_f * t) * N(-d1);
-    }
-  }
-
-  /**
-   * Error function approximation
-   */
-  private erf(x: number): number {
-    const a1 = 0.254829592;
-    const a2 = -0.284496736;
-    const a3 = 1.421413741;
-    const a4 = -1.453152027;
-    const a5 = 1.061405429;
-    const p = 0.3275911;
-
-    const sign = x >= 0 ? 1 : -1;
-    x = Math.abs(x);
-
-    const t = 1.0 / (1.0 + p * x);
-    const y = 1.0 - (((((a5 * t + a4) * t) + a3) * t + a2) * t + a1) * t * Math.exp(-x * x);
-
-    return sign * y;
-  }
+  // Utiliser le PricingService centralisé au lieu de redéfinir les fonctions
+  // Les fonctions garmanKohlhagenPrice et erf ont été supprimées pour éviter la redondance
+  // Utiliser PricingService.calculateGarmanKohlhagenPrice() et PricingService.erf() à la place
 
   /**
    * Calculate Mark-to-Market for instruments

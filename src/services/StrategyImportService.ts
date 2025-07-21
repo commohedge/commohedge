@@ -41,6 +41,7 @@ export interface HedgingInstrument {
   // New fields for real data from Detailed Results
   realOptionPrice?: number;  // Actual option price from calculations (Call Price 1, Put Price 2, etc.)
   impliedVolatility?: number; // IV from Detailed Results
+  impliedSpotPrice?: number;  // Individual spot price override
   optionIndex?: number;       // Index of the option in the strategy for mapping
   // New fields for detailed period information
   periodIndex?: number;       // Index of the period in the detailed results
@@ -55,6 +56,17 @@ export interface HedgingInstrument {
     timeToMaturity: number;
   };
   customPrice?: number;       // Custom price if used
+  // Export pricing information to eliminate gaps
+  exportSpotPrice?: number;       // Spot price used during export
+  exportDomesticRate?: number;    // Domestic rate used during export
+  exportForeignRate?: number;     // Foreign rate used during export
+  exportVolatility?: number;      // Volatility used during export
+  exportTimeToMaturity?: number;  // Time to maturity used during export
+  exportForwardPrice?: number;    // Forward price used during export
+  // ✅ NOUVEAUX CHAMPS : Quantité de couverture et volumes
+  hedgeQuantity?: number;         // Quantité de couverture (quantity du composant)
+  exposureVolume?: number;        // Volume d'exposition de la période (monthlyVolume du detailed results)
+  rawVolume?: number;             // Volume brut de la période (sans appliquer la quantité)
   repricingData?: {           // Complete repricing information
     underlyingPrice: number;
     timeToMaturity: number;
@@ -63,6 +75,13 @@ export interface HedgingInstrument {
     volatility: number;
     dividendYield: number;
     pricingModel: string;
+    // Export parameters for exact repricing
+    exportSpotPrice?: number;
+    exportDomesticRate?: number;
+    exportForeignRate?: number;
+    exportVolatility?: number;
+    exportTimeToMaturity?: number;
+    exportForwardPrice?: number;
   };
 }
 
@@ -151,7 +170,11 @@ class StrategyImportService {
     const newInstruments = this.convertStrategyToInstruments(
       strategyName,
       components,
-      params,
+      {
+        ...params,
+        domesticRate: params.domesticRate,
+        foreignRate: params.foreignRate
+      },
       timestamp,
       detailedResults
     );
@@ -172,6 +195,8 @@ class StrategyImportService {
       monthsToHedge: number;
       baseVolume: number;
       quoteVolume: number;
+      domesticRate: number;
+      foreignRate: number;
       useCustomPeriods?: boolean;
       customPeriods?: Array<{ maturityDate: string; volume: number }>;
     },
@@ -197,6 +222,11 @@ class StrategyImportService {
         const strike = this.calculateStrike(component, params.spotPrice);
         let instrumentType = this.mapComponentTypeToInstrument(component.type);
         
+        // ✅ NOUVEAU : Quantité de couverture et volumes pour le fallback
+        const hedgeQuantity = Math.abs(component.quantity);
+        const exposureVolume = params.baseVolume; // Volume total en fallback
+        const rawVolume = params.baseVolume; // Volume brut en fallback
+        
         const baseInstrument: HedgingInstrument = {
           id: instrumentId,
           type: instrumentType,
@@ -213,7 +243,11 @@ class StrategyImportService {
           originalComponent: component,
           strategyName,
           importedAt: timestamp,
-          optionIndex: index
+          optionIndex: index,
+          // ✅ NOUVEAUX CHAMPS : Quantité de couverture et volumes
+          hedgeQuantity: hedgeQuantity,
+          exposureVolume: exposureVolume,
+          rawVolume: rawVolume
         };
 
         if (component.type === 'call' || component.type === 'put' || 
@@ -229,17 +263,21 @@ class StrategyImportService {
         // Ajouter les barrières SEULEMENT pour les options barrières
         if (component.type.includes('knockout') || component.type.includes('knockin') || 
             component.type.includes('touch') || component.type.includes('binary')) {
+          
+          // BARRIÈRE PRINCIPALE - toujours présente pour les options à barrière
           if (component.barrier !== undefined) {
             baseInstrument.barrier = component.barrierType === 'percent' 
               ? params.spotPrice * (component.barrier / 100)
               : component.barrier;
           }
 
-          if (component.secondBarrier !== undefined) {
+          // DEUXIÈME BARRIÈRE - SEULEMENT pour les options à DOUBLE barrière
+          if (component.type.includes('double') && component.secondBarrier !== undefined) {
             baseInstrument.secondBarrier = component.barrierType === 'percent'
               ? params.spotPrice * (component.secondBarrier / 100)
               : component.secondBarrier;
           }
+          // Pour les options à barrière simple, ne PAS définir secondBarrier
         }
 
         if (component.rebate) {
@@ -261,9 +299,25 @@ class StrategyImportService {
           const strategyDetail = strategyDetails[componentIndex];
           const instrumentId = `HDG-${timestamp}-P${periodIndex + 1}-C${componentIndex + 1}`;
           
-          // Calculer le notional pour cette période spécifique
-          const periodVolume = periodResult.monthlyVolume || (params.baseVolume / detailedResults.length);
+          // ✅ CORRECTION : Récupérer le volume modifié (après enregistrement) du tableau Detailed Results
+          const date = new Date(periodResult.date);
+          const monthKey = `${date.getFullYear()}-${date.getMonth() + 1}`;
+          
+          // Prioriser le volume modifié s'il existe dans les données enrichies
+          let finalVolume = periodResult.monthlyVolume || (params.baseVolume / detailedResults.length);
+          
+          // Vérifier si le volume a été modifié et sauvegardé dans les données enrichies
+          if (periodResult.customVolume !== undefined) {
+            finalVolume = periodResult.customVolume;
+          }
+          
+          const periodVolume = finalVolume;
           const notional = Math.abs(component.quantity / 100) * periodVolume;
+          
+          // ✅ NOUVEAU : Extraire la quantité de couverture et les volumes
+          const hedgeQuantity = Math.abs(component.quantity); // Quantité de couverture en %
+          const exposureVolume = periodVolume; // Volume d'exposition de cette période (après modifications)
+          const rawVolume = periodVolume; // Volume brut (sans appliquer la quantité)
           
           let instrumentType = this.mapComponentTypeToInstrument(component.type);
           
@@ -283,7 +337,7 @@ class StrategyImportService {
             hedge_accounting: true,
             effectiveness_ratio: 95,
             counterparty: 'Strategy Import',
-            volatility: component.volatility,
+            volatility: effectiveVolatility, // ✅ CORRECTION : Utiliser la volatilité effective du tableau Detailed Results
             quantity: component.quantity,
             originalComponent: component,
             strategyName: `${strategyName} [P${periodIndex + 1}]`,
@@ -298,8 +352,43 @@ class StrategyImportService {
             timeToMaturity: periodResult.timeToMaturity,
             forwardPrice: periodResult.forward,
             realPrice: strategyDetail?.repricingData?.underlyingPrice || periodResult.realPrice,
+            // INFORMATIONS COMPLÈTES DE PRICING POUR ÉLIMINER LES ÉCARTS
+            exportSpotPrice: params.spotPrice, // Spot utilisé lors de l'export
+            exportDomesticRate: params.domesticRate, // Taux domestique utilisé lors de l'export
+            exportForeignRate: params.foreignRate, // Taux étranger utilisé lors de l'export
+            exportVolatility: effectiveVolatility, // Volatilité utilisée lors de l'export
+            exportTimeToMaturity: periodResult.timeToMaturity, // Time to maturity exact utilisé lors de l'export
+            exportForwardPrice: periodResult.forward, // Forward exact utilisé lors de l'export
+            // ✅ NOUVEAUX CHAMPS : Quantité de couverture et volumes
+            hedgeQuantity: hedgeQuantity, // Quantité de couverture du composant
+            exposureVolume: exposureVolume, // Volume d'exposition de cette période (après modifications)
+            rawVolume: rawVolume, // Volume brut de la période (sans appliquer la quantité)
             // Informations de re-pricing complètes
-            repricingData: strategyDetail?.repricingData
+            repricingData: strategyDetail?.repricingData ? {
+              ...strategyDetail.repricingData,
+              // Ajouter les paramètres exacts utilisés lors de l'export
+              exportSpotPrice: params.spotPrice,
+              exportDomesticRate: params.domesticRate,
+              exportForeignRate: params.foreignRate,
+              exportVolatility: effectiveVolatility,
+              exportTimeToMaturity: periodResult.timeToMaturity,
+              exportForwardPrice: periodResult.forward
+            } : {
+              // Créer un objet repricing même si pas fourni
+              underlyingPrice: params.spotPrice,
+              timeToMaturity: periodResult.timeToMaturity,
+              domesticRate: params.domesticRate,
+              foreignRate: params.foreignRate,
+              volatility: effectiveVolatility,
+              dividendYield: 0,
+              pricingModel: 'Garman-Kohlhagen',
+              exportSpotPrice: params.spotPrice,
+              exportDomesticRate: params.domesticRate,
+              exportForeignRate: params.foreignRate,
+              exportVolatility: effectiveVolatility,
+              exportTimeToMaturity: periodResult.timeToMaturity,
+              exportForwardPrice: periodResult.forward
+            }
           };
 
           // Ajouter le strike en valeur absolue
@@ -313,6 +402,8 @@ class StrategyImportService {
           // Ajouter les barrières en valeur absolue SEULEMENT pour les options barrières
           if (component.type.includes('knockout') || component.type.includes('knockin') || 
               component.type.includes('touch') || component.type.includes('binary')) {
+            
+            // BARRIÈRE PRINCIPALE - toujours présente pour les options à barrière
             if (strategyDetail?.absoluteBarrier !== undefined) {
               instrument.barrier = strategyDetail.absoluteBarrier;
             } else if (component.barrier !== undefined) {
@@ -321,13 +412,18 @@ class StrategyImportService {
                 : component.barrier;
             }
 
-            if (strategyDetail?.absoluteSecondBarrier !== undefined) {
-              instrument.secondBarrier = strategyDetail.absoluteSecondBarrier;
-            } else if (component.secondBarrier !== undefined) {
-              instrument.secondBarrier = component.barrierType === 'percent'
-                ? params.spotPrice * (component.secondBarrier / 100)
-                : component.secondBarrier;
+            // DEUXIÈME BARRIÈRE - SEULEMENT pour les options à DOUBLE barrière
+            if (component.type.includes('double') && 
+                (strategyDetail?.absoluteSecondBarrier !== undefined || component.secondBarrier !== undefined)) {
+              if (strategyDetail?.absoluteSecondBarrier !== undefined) {
+                instrument.secondBarrier = strategyDetail.absoluteSecondBarrier;
+              } else if (component.secondBarrier !== undefined) {
+                instrument.secondBarrier = component.barrierType === 'percent'
+                  ? params.spotPrice * (component.secondBarrier / 100)
+                  : component.secondBarrier;
+              }
             }
+            // Pour les options à barrière simple, ne PAS définir secondBarrier
           }
 
           // Ajouter la rebate pour les options digitales
@@ -348,11 +444,22 @@ class StrategyImportService {
             instrument.customPrice = strategyDetail.customPrice;
           }
 
+          // LOG DE DIAGNOSTIC : Vérifier les données d'export avant sauvegarde
+          console.log(`[DEBUG EXPORT] Instrument ${instrument.id}:`, {
+            exportSpotPrice: instrument.exportSpotPrice,
+            exportDomesticRate: instrument.exportDomesticRate,
+            exportForeignRate: instrument.exportForeignRate,
+            exportVolatility: instrument.exportVolatility,
+            exportTimeToMaturity: instrument.exportTimeToMaturity,
+            exportForwardPrice: instrument.exportForwardPrice
+          });
+
           instruments.push(instrument);
         });
       });
     }
 
+    console.log(`[DEBUG EXPORT] Total instruments créés: ${instruments.length}`);
     return instruments;
   }
 
