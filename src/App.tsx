@@ -13,6 +13,7 @@ import RiskAnalysis from "./pages/RiskAnalysis";
 import PositionMonitor from "./pages/PositionMonitor";
 import Index from "./pages/Index";
 import StrategyBuilder from "./pages/StrategyBuilder";
+import Pricers from "./pages/Pricers";
 import Reports from "./pages/Reports";
 import Performance from "./pages/Performance";
 import Analytics from "./pages/Analytics";
@@ -46,6 +47,7 @@ const App = () => (
             
             {/* Strategy Builder and Advanced Features */}
             <Route path="/strategy-builder" element={<StrategyBuilder />} />
+            <Route path="/pricers" element={<Pricers />} />
             <Route path="/positions" element={<PositionMonitor />} />
             <Route path="/reports" element={<Reports />} />
             <Route path="/performance" element={<Performance />} />

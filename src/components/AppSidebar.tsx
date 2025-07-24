@@ -14,7 +14,8 @@ import {
   Users,
   Database,
   Briefcase,
-  Activity
+  Activity,
+  Calculator
 } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import {
@@ -59,6 +60,12 @@ const menuItems = [
     url: "/strategy-builder",
     icon: Target,
     description: "Build and test hedging strategies"
+  },
+  {
+    title: "Pricers",
+    url: "/pricers",
+    icon: Calculator,
+    description: "Advanced pricing for options, swaps and forwards"
   },
   {
     title: "Risk Analysis",
