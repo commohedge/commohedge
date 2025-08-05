@@ -87,9 +87,9 @@ const HedgingInstruments = () => {
     const savedState = localStorage.getItem('calculatorState');
     if (savedState) {
       const state = JSON.parse(savedState);
-      return state.barrierPricingModel || 'monte-carlo';
+      return state.barrierPricingModel || 'closed-form';
     }
-    return 'monte-carlo';
+    return 'closed-form';
   });
   
   const [barrierOptionSimulations, setBarrierOptionSimulations] = useState<number>(() => {
@@ -171,20 +171,32 @@ const HedgingInstruments = () => {
       const uniqueCurrencies = getUniqueCurrencies(loadedInstruments);
       setCurrencyMarketData(prevData => {
         const newData = { ...prevData };
+        let hasUpdates = false;
+        
         uniqueCurrencies.forEach(currency => {
-          if (!newData[currency]) {
-            const marketData = getMarketDataFromInstruments(currency);
-            if (marketData) {
-              newData[currency] = marketData;
+          const exportData = getMarketDataFromInstruments(currency);
+          if (exportData) {
+            // TOUJOURS mettre à jour avec les données d'export (pas seulement si absent)
+            const currentData = newData[currency];
+            if (!currentData || 
+                currentData.spot !== exportData.spot ||
+                currentData.domesticRate !== exportData.domesticRate ||
+                currentData.foreignRate !== exportData.foreignRate) {
+              
+              console.log(`[DEBUG] Updating market data for ${currency} with export data:`, exportData);
+              newData[currency] = exportData;
+              hasUpdates = true;
             }
           }
         });
         
-        // Sauvegarder dans localStorage
-        try {
-          localStorage.setItem('currencyMarketData', JSON.stringify(newData));
-        } catch (error) {
-          console.error('Error saving currency market data:', error);
+        // Sauvegarder dans localStorage seulement si des mises à jour
+        if (hasUpdates) {
+          try {
+            localStorage.setItem('currencyMarketData', JSON.stringify(newData));
+          } catch (error) {
+            console.error('Error saving currency market data:', error);
+          }
         }
         
         return newData;
@@ -223,12 +235,11 @@ const HedgingInstruments = () => {
 
   // Utiliser exactement la même logique de pricing que Strategy Builder
 
+  // Utiliser PricingService.calculateTimeToMaturity au lieu d'une implémentation locale
   const calculateTimeToMaturity = (maturityDate: string, valuationDate: string): number => {
-    const maturity = new Date(maturityDate + 'T23:00:00Z');
-    const valuation = new Date(valuationDate + 'T00:00:00Z');
-    console.log('[HEDGING] maturity:', maturity.toISOString(), 'valuation:', valuation.toISOString());
-    const diffTime = Math.abs(maturity.getTime() - valuation.getTime());
-    return diffTime / (365.25 * 24 * 60 * 60 * 1000);
+    const result = PricingService.calculateTimeToMaturity(maturityDate, valuationDate);
+    console.log('[HEDGING] maturity:', maturityDate, 'valuation:', valuationDate, 'result:', result.toFixed(6), 'years');
+    return result;
   };
 
   // Utiliser le PricingService centralisé au lieu de redéfinir erf
@@ -321,27 +332,30 @@ const HedgingInstruments = () => {
       );
     }
 
-    // For vanilla options, use the selected pricing model
+    // For vanilla options, use the selected pricing model - utiliser SPOT PRICE comme Strategy Builder
     if (optionPricingModel === 'monte-carlo') {
       // Use domestic and foreign rates for FX options
       const marketData = currencyMarketData[instrument.currency];
       if (marketData) {
+        const spotRate = instrument.impliedSpotPrice || marketData.spot;
         return PricingService.calculateVanillaOptionMonteCarlo(
-          type, S, K, marketData.domesticRate / 100, marketData.foreignRate / 100, t, effectiveSigma
+          type, spotRate, K, marketData.domesticRate / 100, marketData.foreignRate / 100, t, effectiveSigma
         );
       }
     }
 
-    // Default to Garman-Kohlhagen for FX options
+    // Default to Garman-Kohlhagen for FX options - utiliser SPOT PRICE comme Strategy Builder
     const marketData = currencyMarketData[instrument.currency];
     if (marketData) {
+      const spotRate = instrument.impliedSpotPrice || marketData.spot;
       return PricingService.calculateGarmanKohlhagenPrice(
-        type, S, K, marketData.domesticRate / 100, marketData.foreignRate / 100, t, effectiveSigma
+        type, spotRate, K, marketData.domesticRate / 100, marketData.foreignRate / 100, t, effectiveSigma
       );
     }
 
-    // Fallback to Black-Scholes if no market data
-    return PricingService.calculateGarmanKohlhagenPrice(type, S, K, r, 0, t, effectiveSigma);
+    // Fallback to Black-Scholes if no market data - utiliser SPOT PRICE
+    const fallbackSpot = instrument.impliedSpotPrice || S;
+    return PricingService.calculateGarmanKohlhagenPrice(type, fallbackSpot, K, r, 0, t, effectiveSigma);
   };
 
   // Fonction calculateTodayPrice améliorée pour utiliser les données enrichies d'export
@@ -389,10 +403,11 @@ const HedgingInstruments = () => {
       console.log(`[DEBUG] ${instrument.id}: Using CURRENT market volatility: ${(sigma*100).toFixed(3)}%`);
     }
     
-    // 4. FORWARD CALCULATION : Utiliser les paramètres CURRENT pour calculer le forward
-    const S = spotRate * Math.exp((r_d - r_f) * calculationTimeToMaturity);
+    // 4. FORWARD CALCULATION : Utiliser PricingService pour calculer le forward
+    const S = PricingService.calculateFXForwardPrice(spotRate, r_d, r_f, calculationTimeToMaturity);
     
     console.log(`[DEBUG] ${instrument.id}: Forward calculation - Current: ${S.toFixed(6)}, Export: ${instrument.exportForwardPrice || 'N/A'}`);
+    console.log(`[DEBUG] ${instrument.id}: PRICING PARAMETERS - Spot: ${spotRate.toFixed(6)}, Forward: ${S.toFixed(6)} - Using SPOT for vanilla options (Strategy Builder logic)`);
     
     // 5. STRIKE ANALYSIS : Vérifier la cohérence du strike
     console.log(`[DEBUG] ${instrument.id}: Strike analysis - Strike: ${instrument.strike}, Type: ${instrument.originalComponent?.strikeType || 'unknown'}, Original Strike: ${instrument.originalComponent?.strike || 'N/A'}, Spot: ${spotRate}`);
@@ -615,13 +630,13 @@ const HedgingInstruments = () => {
       return digitalPrice;
     }
     
-    // 3. OPTIONS VANILLES EXPLICITES - Utiliser Garman-Kohlhagen
+    // 3. OPTIONS VANILLES EXPLICITES - Utiliser EXACTEMENT la même logique que Strategy Builder
     else if (optionType === 'vanilla call') {
-      console.log(`[DEBUG] ${instrument.id}: Detected as VANILLA CALL, using Garman-Kohlhagen`);
+      console.log(`[DEBUG] ${instrument.id}: Detected as VANILLA CALL, using Strategy Builder logic`);
       
       return PricingService.calculateGarmanKohlhagenPrice(
         'call',
-        S,
+        spotRate,  // ✅ CORRECTION : Utiliser spotRate comme Strategy Builder (pas le forward S)
         K,
         r_d,
         r_f,
@@ -629,11 +644,11 @@ const HedgingInstruments = () => {
         sigma
       );
     } else if (optionType === 'vanilla put') {
-      console.log(`[DEBUG] ${instrument.id}: Detected as VANILLA PUT, using Garman-Kohlhagen`);
+      console.log(`[DEBUG] ${instrument.id}: Detected as VANILLA PUT, using Strategy Builder logic`);
       
       return PricingService.calculateGarmanKohlhagenPrice(
         'put',
-        S,
+        spotRate,  // ✅ CORRECTION : Utiliser spotRate comme Strategy Builder (pas le forward S)
         K,
         r_d,
         r_f,
@@ -646,7 +661,7 @@ const HedgingInstruments = () => {
     else if (optionType === 'forward') {
       console.log(`[DEBUG] ${instrument.id}: Detected as FORWARD`);
       
-      const forward = S * Math.exp((r_d - r_f) * calculationTimeToMaturity);
+      const forward = PricingService.calculateFXForwardPrice(S, r_d, r_f, calculationTimeToMaturity);
       return (forward - K) * Math.exp(-r_d * calculationTimeToMaturity);
     }
     
@@ -654,17 +669,18 @@ const HedgingInstruments = () => {
     else if (optionType === 'swap') {
       console.log(`[DEBUG] ${instrument.id}: Detected as SWAP`);
       
-      const forward = S * Math.exp((r_d - r_f) * calculationTimeToMaturity);
+      const forward = PricingService.calculateFXForwardPrice(S, r_d, r_f, calculationTimeToMaturity);
       return forward;
     }
     
     // 6. OPTIONS VANILLES GÉNÉRIQUES - SEULEMENT si pas déjà traité
     else if (optionType.includes('call') && !optionType.includes('knock')) {
-      console.log(`[DEBUG] ${instrument.id}: Fallback to VANILLA CALL (Garman-Kohlhagen)`);
+      const underlyingResult = PricingService.calculateUnderlyingPrice(spotRate, r_d, r_f, calculationTimeToMaturity);
+      console.log(`[DEBUG] ${instrument.id}: Fallback to VANILLA CALL using ${underlyingResult.type} price: ${underlyingResult.price.toFixed(6)}`);
       
       return PricingService.calculateGarmanKohlhagenPrice(
         'call',
-        S,
+        underlyingResult.price,  // ✅ Utiliser le prix sous-jacent selon les paramètres globaux
         K,
         r_d,
         r_f,
@@ -672,11 +688,12 @@ const HedgingInstruments = () => {
         sigma
       );
     } else if (optionType.includes('put') && !optionType.includes('knock')) {
-      console.log(`[DEBUG] ${instrument.id}: Fallback to VANILLA PUT (Garman-Kohlhagen)`);
+      const underlyingResult = PricingService.calculateUnderlyingPrice(spotRate, r_d, r_f, calculationTimeToMaturity);
+      console.log(`[DEBUG] ${instrument.id}: Fallback to VANILLA PUT using ${underlyingResult.type} price: ${underlyingResult.price.toFixed(6)}`);
       
       return PricingService.calculateGarmanKohlhagenPrice(
         'put',
-        S,
+        underlyingResult.price,  // ✅ Utiliser le prix sous-jacent selon les paramètres globaux
         K,
         r_d,
         r_f,
@@ -687,9 +704,11 @@ const HedgingInstruments = () => {
 
     // Fallback pour types inconnus
     console.warn(`Unknown instrument type: ${instrument.type} for instrument ${instrument.id}`);
+    const underlyingResult = PricingService.calculateUnderlyingPrice(spotRate, r_d, r_f, calculationTimeToMaturity);
+    console.log(`[DEBUG] ${instrument.id}: Fallback pricing using ${underlyingResult.type} price: ${underlyingResult.price.toFixed(6)}`);
     const fallbackPrice = PricingService.calculateGarmanKohlhagenPrice(
       'call', // Default to call
-      S,
+      underlyingResult.price,  // ✅ Utiliser le prix sous-jacent selon les paramètres globaux
       K,
       r_d,
       r_f,
@@ -817,6 +836,10 @@ const HedgingInstruments = () => {
   // Fonction pour appliquer les données par défaut d'une paire de devises
   const applyDefaultDataForCurrency = (currency: string) => {
     const defaultData = getMarketDataFromInstruments(currency) || { spot: 1.0000, volatility: 20, domesticRate: 1.0, foreignRate: 1.0 };
+    
+    console.log(`[DEBUG] Applying default data for ${currency}:`, defaultData);
+    console.log(`[DEBUG] Source instrument exportSpotPrice:`, instruments.find(inst => inst.currency === currency)?.exportSpotPrice);
+    
     setCurrencyMarketData(prev => {
       const newData = {
       ...prev,
@@ -835,7 +858,42 @@ const HedgingInstruments = () => {
     
     toast({
       title: "Market Data Updated",
-      description: `Applied default parameters for ${currency}`,
+      description: `Applied export parameters for ${currency}: Spot ${defaultData.spot.toFixed(6)}`,
+    });
+  };
+
+  // NOUVELLE FONCTION : Forcer la mise à jour depuis les données d'export
+  const refreshMarketDataFromExport = () => {
+    const uniqueCurrencies = getUniqueCurrencies(instruments);
+    
+    setCurrencyMarketData(prevData => {
+      const newData = { ...prevData };
+      let updatedCount = 0;
+      
+      uniqueCurrencies.forEach(currency => {
+        const exportData = getMarketDataFromInstruments(currency);
+        if (exportData) {
+          console.log(`[DEBUG] Refreshing ${currency} with export data:`, exportData);
+          newData[currency] = exportData;
+          updatedCount++;
+        }
+      });
+      
+      // Sauvegarder dans localStorage
+      try {
+        localStorage.setItem('currencyMarketData', JSON.stringify(newData));
+      } catch (error) {
+        console.error('Error saving currency market data:', error);
+      }
+      
+      if (updatedCount > 0) {
+        toast({
+          title: "Market Data Refreshed",
+          description: `Updated ${updatedCount} currencies with export parameters`,
+        });
+      }
+      
+      return newData;
     });
   };
 
@@ -1099,9 +1157,20 @@ const HedgingInstruments = () => {
             {/* Market Data per Currency */}
             {getUniqueCurrencies(instruments).length > 0 ? (
               <div className="space-y-3">
-                <Label className="text-sm font-medium text-muted-foreground">
-                  Market Parameters by Currency ({getUniqueCurrencies(instruments).length} currencies found)
-                </Label>
+                <div className="flex items-center justify-between">
+                  <Label className="text-sm font-medium text-muted-foreground">
+                    Market Parameters by Currency ({getUniqueCurrencies(instruments).length} currencies found)
+                  </Label>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={refreshMarketDataFromExport}
+                    className="text-xs"
+                  >
+                    <RefreshCw className="h-3 w-3 mr-1" />
+                    Refresh from Export
+                  </Button>
+                </div>
                 {getUniqueCurrencies(instruments).map((currency) => {
                   const data = currencyMarketData[currency] || getMarketDataFromInstruments(currency) || { spot: 1.0000, volatility: 20, domesticRate: 1.0, foreignRate: 1.0 };
                   return (
@@ -1830,10 +1899,12 @@ const HedgingInstruments = () => {
                           <TableCell className="font-mono text-center bg-green-50">
                             {(() => {
                               const marketData = currencyMarketData[instrument.currency] || getMarketDataFromInstruments(instrument.currency) || { spot: 1.0000, volatility: 20, domesticRate: 1.0, foreignRate: 1.0 };
-                              const timeToMat = instrument.exportTimeToMaturity || instrument.timeToMaturity || calculateTimeToMaturity(instrument.maturity, valuationDate);
+                              // TOUJOURS utiliser le temps calculé avec la date de valorisation ACTUELLE pour "Current"
+                              const currentTimeToMat = calculateTimeToMaturity(instrument.maturity, valuationDate);
                               const r_d = marketData.domesticRate / 100;
                               const r_f = marketData.foreignRate / 100;
-                              const currentForward = marketData.spot * Math.exp((r_d - r_f) * timeToMat);
+                              const currentSpot = instrument.impliedSpotPrice || marketData.spot;
+                              const currentForward = PricingService.calculateFXForwardPrice(currentSpot, r_d, r_f, currentTimeToMat);
                               return (
                                 <div className="text-xs text-green-600">
                                   {currentForward.toFixed(6)}

@@ -68,6 +68,8 @@ interface AppSettings {
     volatilityModel: string;
     interestRateSource: string;
     pricingFrequency: string;
+    underlyingPriceType: 'spot' | 'forward';
+    backtestExerciseType: 'monthly-average' | 'third-friday';
   };
   
   // Interface settings
@@ -152,7 +154,9 @@ const Settings = () => {
       useRealTimeData: true,
       volatilityModel: "garch",
       interestRateSource: "bloomberg",
-      pricingFrequency: "real-time"
+      pricingFrequency: "real-time",
+      underlyingPriceType: "spot",
+      backtestExerciseType: "monthly-average"
     },
     ui: {
       theme: "light",
@@ -1026,6 +1030,42 @@ const Settings = () => {
                       <SelectItem value="daily">Daily</SelectItem>
                     </SelectContent>
                   </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="underlying-price-type">Underlying Price for Options</Label>
+                  <Select
+                    value={settings.pricing.underlyingPriceType}
+                    onValueChange={(value) => updateSettings('pricing', { underlyingPriceType: value as 'spot' | 'forward' })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="spot">Spot Price</SelectItem>
+                      <SelectItem value="forward">Forward Price</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    Choose whether to use spot or forward price as the underlying for option pricing calculations. This setting applies to Strategy Builder and Hedging Instruments.
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="backtest-exercise-type">Backtest Exercise Type</Label>
+                  <Select
+                    value={settings.pricing.backtestExerciseType}
+                    onValueChange={(value) => updateSettings('pricing', { backtestExerciseType: value as 'monthly-average' | 'third-friday' })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="monthly-average">Monthly Average</SelectItem>
+                      <SelectItem value="third-friday">Third Friday Price</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    Choose how to calculate exercise prices for backtesting: use monthly average price or the price on the third Friday of each month (typical option expiry date).
+                  </p>
                 </div>
               </div>
 

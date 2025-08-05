@@ -43,6 +43,12 @@ const menuItems = [
     description: "Global overview and key metrics"
   },
   {
+    title: "Forex Market",
+    url: "/forex-market",
+    icon: Globe,
+    description: "Real-time forex market data and rates"
+  },
+  {
     title: "FX Exposures",
     url: "/exposures",
     icon: DollarSign,

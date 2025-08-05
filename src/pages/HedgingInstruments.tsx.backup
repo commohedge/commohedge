@@ -70,9 +70,9 @@ const HedgingInstruments = () => {
     const savedState = localStorage.getItem('calculatorState');
     if (savedState) {
       const state = JSON.parse(savedState);
-      return state.barrierPricingModel || 'monte-carlo';
+      return state.barrierPricingModel || 'closed-form';
     }
-    return 'monte-carlo';
+    return 'closed-form';
   });
   
   const [barrierOptionSimulations, setBarrierOptionSimulations] = useState<number>(() => {

@@ -18,6 +18,844 @@
  * - Monte Carlo Drift: (r_d - r_f - 0.5 * σ²) for FX price dynamics
  */
 
+// ===========================
+// EXPORTED PRICING FUNCTIONS
+// ===========================
+
+// Fonction d'erreur pour les calculs statistiques
+export const erf = (x: number): number => {
+  const a1 =  0.254829592;
+  const a2 = -0.284496736;
+  const a3 =  1.421413741;
+  const a4 = -1.453152027;
+  const a5 =  1.061405429;
+  const p  =  0.3275911;
+  
+  const sign = (x < 0) ? -1 : 1;
+  x = Math.abs(x);
+  
+  const t = 1.0/(1.0 + p*x);
+  const y = 1.0 - ((((((a5*t + a4)*t) + a3)*t + a2)*t + a1)*t*Math.exp(-x*x));
+  
+  return sign*y;
+};
+
+// Fonction de distribution normale cumulative
+export const CND = (x: number): number => (1 + erf(x / Math.sqrt(2))) / 2;
+
+// FX Forward Pricing Model
+export const calculateFXForwardPrice = (S: number, r_d: number, r_f: number, t: number): number => {
+  return S * Math.exp((r_d - r_f) * t);
+};
+
+// Garman-Kohlhagen FX Option Pricing Model
+export const calculateGarmanKohlhagenPrice = (type: string, S: number, K: number, r_d: number, r_f: number, t: number, sigma: number): number => {
+  const d1 = (Math.log(S / K) + (r_d - r_f + (sigma * sigma) / 2) * t) / (sigma * Math.sqrt(t));
+  const d2 = d1 - sigma * Math.sqrt(t);
+  
+  if (type === 'call') {
+    return S * Math.exp(-r_f * t) * CND(d1) - K * Math.exp(-r_d * t) * CND(d2);
+  } else {
+    return K * Math.exp(-r_d * t) * CND(-d2) - S * Math.exp(-r_f * t) * CND(-d1);
+  }
+};
+
+// Vanilla option Monte Carlo pricing
+export const calculateVanillaOptionMonteCarlo = (
+  optionType: string,
+  S: number,      // Current price
+  K: number,      // Strike price
+  r_d: number,    // Domestic risk-free rate
+  r_f: number,    // Foreign risk-free rate 
+  t: number,      // Time to maturity in years
+  sigma: number,  // Volatility
+  numSimulations: number = 1000 // Number of simulations
+): number => {
+  let payoffSum = 0;
+  
+  for (let i = 0; i < numSimulations; i++) {
+    // Generate random normal variable (using Box-Muller transform for better accuracy)
+    const u1 = Math.random();
+    const u2 = Math.random();
+    const z = Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
+    
+    // Simulate final FX price using geometric Brownian motion
+    const finalPrice = S * Math.exp(
+      (r_d - r_f - 0.5 * sigma * sigma) * t + 
+      sigma * Math.sqrt(t) * z
+    );
+    
+    // Calculate payoff
+    let payoff = 0;
+    if (optionType === 'call') {
+      payoff = Math.max(finalPrice - K, 0);
+    } else if (optionType === 'put') {
+      payoff = Math.max(K - finalPrice, 0);
+    }
+    
+    payoffSum += payoff;
+  }
+  
+  // Calculate average payoff and discount to present value
+  const averagePayoff = payoffSum / numSimulations;
+  const optionPrice = averagePayoff * Math.exp(-r_d * t);
+  
+  return Math.max(0, optionPrice);
+};
+
+// Barrier option Monte Carlo pricing (complete implementation with path generation)
+export const calculateBarrierOptionPrice = (
+  optionType: string,
+  S: number,      // Current price
+  K: number,      // Strike price
+  r: number,      // Risk-free rate
+  t: number,      // Time to maturity in years
+  sigma: number,  // Volatility
+  barrier: number, // Barrier level
+  secondBarrier?: number, // Second barrier for double barrier options
+  numSimulations: number = 1000 // Number of simulations
+): number => {
+  // Generate a simple price path for this specific option
+  const numSteps = Math.max(252 * t, 50); // At least 50 steps
+  const dt = t / numSteps;
+  
+  // Generate paths for just this one option
+  const paths = [];
+  for (let i = 0; i < numSimulations; i++) {
+    const path = [S]; // Start with current price
+    
+    // Simulate price path
+    for (let step = 0; step < numSteps; step++) {
+      const previousPrice = path[path.length - 1];
+      // Generate random normal variable
+      const randomWalk = Math.random() * 2 - 1; // Simple approximation of normal distribution
+      
+      // Update price using geometric Brownian motion
+      const nextPrice = previousPrice * Math.exp(
+        (r - 0.5 * Math.pow(sigma, 2)) * dt + 
+        sigma * Math.sqrt(dt) * randomWalk
+      );
+      
+      path.push(nextPrice);
+    }
+    
+    paths.push(path);
+  }
+  
+  // Use calculatePricesFromPaths to calculate the price
+  const optionPrice = calculatePricesFromPaths(
+    optionType,
+    S,
+    K,
+    r,
+    numSteps, // The final index in the path
+    paths,
+    barrier,
+    secondBarrier
+  );
+
+  // S'assurer que le prix de l'option n'est jamais négatif
+  return Math.max(0, optionPrice);
+};
+
+// Calculate option prices and payoffs from price paths
+export const calculatePricesFromPaths = (
+  optionType: string, 
+  S: number, 
+  K: number, 
+  r: number, 
+  maturityIndex: number,
+  paths: number[][],
+  barrier?: number,
+  secondBarrier?: number
+): number => {
+  let priceSum = 0;
+  const numSimulations = paths.length;
+  
+  for (let i = 0; i < numSimulations; i++) {
+    const path = paths[i];
+    const finalPrice = path[maturityIndex];
+    let payoff = 0;
+    let barrierHit = false;
+    
+    // Check for barrier events along the path up to maturity
+    if (barrier && (optionType.includes('knockout') || optionType.includes('knockin'))) {
+      for (let step = 0; step <= maturityIndex; step++) {
+        const pathPrice = path[step];
+        
+        // Check barrier logic based on option type
+        const isAboveBarrier = pathPrice >= barrier;
+        const isBelowBarrier = pathPrice <= barrier;
+        
+        // Apply same barrier logic as in the original function
+        if (optionType.includes('knockout')) {
+          if (optionType.includes('reverse')) {
+            if (optionType.includes('put')) {
+              // Put Reverse KO: Knocked out if price goes ABOVE barrier
+              if (isAboveBarrier) {
+                barrierHit = true;
+                break;
+              }
+            } else {
+              // Call Reverse KO: Knocked out if price goes BELOW barrier
+              if (isBelowBarrier) {
+                barrierHit = true;
+                break;
+              }
+            }
+          } else if (optionType.includes('double')) {
+            // Double KO: Knocked out if price crosses either barrier
+            const upperBarrier = Math.max(barrier, secondBarrier || 0);
+            const lowerBarrier = Math.min(barrier, secondBarrier || Infinity);
+            
+            // Vérifier si le prix touche soit la barrière supérieure, soit la barrière inférieure
+            // Pour un Call Double KO, l'option est invalidée si le prix monte trop haut ou descend trop bas
+            if ((pathPrice >= upperBarrier) || (pathPrice <= lowerBarrier)) {
+              barrierHit = true;
+              break;
+            }
+          } else {
+            if (optionType.includes('put')) {
+              // Put KO: Knocked out if price goes BELOW barrier
+              if (isBelowBarrier) {
+                barrierHit = true;
+                break;
+              }
+            } else {
+              // Call KO: Knocked out if price goes ABOVE barrier
+              if (isAboveBarrier) {
+                barrierHit = true;
+                break;
+              }
+            }
+          }
+        } else if (optionType.includes('knockin')) {
+          if (optionType.includes('reverse')) {
+            if (optionType.includes('put')) {
+              // Put Reverse KI: Knocked in if price goes ABOVE barrier
+              if (isAboveBarrier) {
+                barrierHit = true;
+              }
+            } else {
+              // Call Reverse KI: Knocked in if price goes BELOW barrier
+              if (isBelowBarrier) {
+                barrierHit = true;
+              }
+            }
+          } else if (optionType.includes('double')) {
+            // Double KI: Knocked in if price crosses either barrier
+            const upperBarrier = Math.max(barrier, secondBarrier || 0);
+            const lowerBarrier = Math.min(barrier, secondBarrier || Infinity);
+            if (pathPrice >= upperBarrier || pathPrice <= lowerBarrier) {
+              barrierHit = true;
+            }
+          } else {
+            if (optionType.includes('put')) {
+              // Put KI: Knocked in if price goes BELOW barrier
+              if (isBelowBarrier) {
+                barrierHit = true;
+              }
+            } else {
+              // Call KI: Knocked in if price goes ABOVE barrier
+              if (isAboveBarrier) {
+                barrierHit = true;
+              }
+            }
+          }
+        }
+      }
+    }
+    
+    // Calculate payoff
+    const isCall = optionType.includes('call') || (!optionType.includes('put') && !optionType.includes('swap'));
+    const baseOptionPayoff = isCall ? 
+      Math.max(0, finalPrice - K) : 
+      Math.max(0, K - finalPrice);
+    
+    if (!barrier) {
+      // Standard option
+      payoff = baseOptionPayoff;
+    } else if (optionType.includes('knockout')) {
+      // Knockout option
+      // Une fois que la barrière est touchée (barrierHit=true), l'option est invalidée définitivement
+      // et le payoff reste à zéro, même si le prix revient dans la zone favorable
+      if (!barrierHit) {
+        payoff = baseOptionPayoff;
+      }
+    } else if (optionType.includes('knockin')) {
+      // Knockin option
+      if (barrierHit) {
+        payoff = baseOptionPayoff;
+      }
+    }
+    
+    priceSum += payoff;
+  }
+  
+  // Average payoff discounted back to present value
+  const t = maturityIndex / (252 * paths[0].length); // Approximate time to maturity
+  return (priceSum / numSimulations) * Math.exp(-r * t);
+};
+
+// Digital option Monte Carlo pricing (complete implementation)
+export const calculateDigitalOptionPrice = (
+  optionType: string,
+  S: number,      // Current price
+  K: number,      // Strike/Barrier level
+  r: number,      // Risk-free rate
+  t: number,      // Time to maturity
+  sigma: number,  // Volatility
+  barrier?: number,
+  secondBarrier?: number,
+  numSimulations: number = 10000,
+  rebate: number = 1
+): number => {
+  // Conversion du rebate en pourcentage
+  const rebateDecimal = rebate / 100;
+  
+  let payoutSum = 0;
+  // Amélioration de la précision de la simulation
+  const stepsPerDay = 4;
+  const totalSteps = Math.max(252 * t * stepsPerDay, 50);
+  const dt = t / totalSteps;
+  for (let sim = 0; sim < numSimulations; sim++) {
+    let price = S;
+    let touched = false;
+    let touchedSecond = false;
+    for (let step = 0; step < totalSteps; step++) {
+      const z = Math.sqrt(-2 * Math.log(Math.random())) * Math.cos(2 * Math.PI * Math.random());
+      price = price * Math.exp((r - 0.5 * sigma * sigma) * dt + sigma * Math.sqrt(dt) * z);
+      switch (optionType) {
+        case 'one-touch':
+          if (barrier !== undefined && price >= barrier) touched = true;
+          break;
+        case 'no-touch':
+          if (barrier !== undefined && price >= barrier) touched = true;
+          break;
+        case 'double-touch':
+          if (barrier !== undefined && price >= barrier) touched = true;
+          if (secondBarrier !== undefined && price <= secondBarrier) touchedSecond = true;
+          break;
+        case 'double-no-touch':
+          if ((barrier !== undefined && price >= barrier) || (secondBarrier !== undefined && price <= secondBarrier)) touched = true;
+          break;
+        case 'range-binary':
+          if (barrier !== undefined && K !== undefined && price >= K && price <= barrier) touched = true;
+          break;
+        case 'outside-binary':
+          if (barrier !== undefined && K !== undefined && (price <= K || price >= barrier)) touched = true;
+          break;
+      }
+    }
+    switch (optionType) {
+      case 'one-touch':
+        if (touched) payoutSum += rebateDecimal;
+        break;
+      case 'no-touch':
+        if (!touched) payoutSum += rebateDecimal;
+        break;
+      case 'double-touch':
+        if (touched || touchedSecond) payoutSum += rebateDecimal;
+        break;
+      case 'double-no-touch':
+        if (!touched) payoutSum += rebateDecimal;
+        break;
+      case 'range-binary':
+        if (touched) payoutSum += rebateDecimal;
+        break;
+      case 'outside-binary':
+        if (touched) payoutSum += rebateDecimal;
+        break;
+    }
+  }
+  // Retourner le prix sans facteur d'échelle arbitraire
+  return Math.exp(-r * t) * (payoutSum / numSimulations);
+};
+
+// Barrier option closed form pricing (complete VBA implementation)
+export const calculateBarrierOptionClosedForm = (
+  optionType: string,
+  S: number,      // Current price
+  K: number,      // Strike price
+  r: number,      // Risk-free rate
+  t: number,      // Time to maturity in years
+  sigma: number,  // Volatility
+  barrier: number, // Barrier level
+  secondBarrier?: number, // Second barrier for double barrier options
+  r_f: number = 0 // Foreign risk-free rate (not used in this implementation)
+): number => {
+  // Paramètres fondamentaux selon les notations du code VBA
+  const b = r;  // Cost of carry (peut être ajusté pour dividendes)
+  const v = sigma; // Pour garder la même notation que le code VBA
+  const T = t;    // Pour garder la même notation que le code VBA
+  const barrierOptionSimulations = 1000; // Default simulations
+  
+  // PARTIE 1: Options à barrière simple
+  if (!optionType.includes('double')) {
+    // Calcul des paramètres de base
+    const mu = (b - v**2/2) / (v**2);
+    const lambda = Math.sqrt(mu**2 + 2*r/(v**2));
+    
+    // Paramètres pour les options à barrière simple selon le code VBA
+    const X = K; // Le strike price
+    const H = barrier; // La barrière
+    
+    const X1 = Math.log(S/X) / (v * Math.sqrt(T)) + (1 + mu) * v * Math.sqrt(T);
+    const X2 = Math.log(S/H) / (v * Math.sqrt(T)) + (1 + mu) * v * Math.sqrt(T);
+    const y1 = Math.log(H**2/(S*X)) / (v * Math.sqrt(T)) + (1 + mu) * v * Math.sqrt(T);
+    const y2 = Math.log(H/S) / (v * Math.sqrt(T)) + (1 + mu) * v * Math.sqrt(T);
+    const Z = Math.log(H/S) / (v * Math.sqrt(T)) + lambda * v * Math.sqrt(T);
+    
+    // Variables binaires eta et phi selon le type d'option
+    let eta = 0, phi = 0;
+    let TypeFlag = "";
+    
+    // Déterminer le TypeFlag basé sur le type d'option
+    if (optionType === 'call-knockin' && !optionType.includes('reverse') && H < S) {
+      TypeFlag = "cdi"; // Call down-and-in
+      eta = 1;
+      phi = 1;
+    } else if (optionType === 'call-knockin' && !optionType.includes('reverse') && H > S) {
+      TypeFlag = "cui"; // Call up-and-in
+      eta = -1;
+      phi = 1;
+    } else if (optionType === 'put-knockin' && !optionType.includes('reverse') && H < S) {
+      TypeFlag = "pdi"; // Put down-and-in
+      eta = 1;
+      phi = -1;
+    } else if (optionType === 'put-knockin' && !optionType.includes('reverse') && H > S) {
+      TypeFlag = "pui"; // Put up-and-in
+      eta = -1;
+      phi = -1;
+    } else if (optionType === 'call-knockout' && !optionType.includes('reverse') && H < S) {
+      TypeFlag = "cdo"; // Call down-and-out
+      eta = 1;
+      phi = 1;
+    } else if (optionType === 'call-knockout' && !optionType.includes('reverse') && H > S) {
+      TypeFlag = "cuo"; // Call up-and-out
+      eta = -1;
+      phi = 1;
+    } else if (optionType === 'put-knockout' && !optionType.includes('reverse') && H < S) {
+      TypeFlag = "pdo"; // Put down-and-out
+      eta = 1;
+      phi = -1;
+    } else if (optionType === 'put-knockout' && !optionType.includes('reverse') && H > S) {
+      TypeFlag = "puo"; // Put up-and-out
+      eta = -1;
+      phi = -1;
+    } else if (optionType === 'call-reverse-knockin') {
+      // Équivalent à put-up-and-in
+      TypeFlag = "pui";
+      eta = -1;
+      phi = -1;
+    } else if (optionType === 'call-reverse-knockout') {
+      // Équivalent à put-up-and-out
+      TypeFlag = "puo";
+      eta = -1;
+      phi = -1;
+    } else if (optionType === 'put-reverse-knockin') {
+      // Équivalent à call-up-and-in
+      TypeFlag = "cui";
+      eta = -1;
+      phi = 1;
+    } else if (optionType === 'put-reverse-knockout') {
+      // Équivalent à call-up-and-out
+      TypeFlag = "cuo";
+      eta = -1;
+      phi = 1;
+    }
+    
+    // Si le type d'option n'est pas reconnu, utiliser Monte Carlo
+    if (TypeFlag === "") {
+      return calculateBarrierOptionPrice(optionType, S, K, r, t, sigma, barrier, secondBarrier, barrierOptionSimulations);
+    }
+    
+    // Calculer les termes f1-f6 selon le code VBA
+    const f1 = phi * S * Math.exp((b-r)*T) * CND(phi*X1) - 
+              phi * X * Math.exp(-r*T) * CND(phi*X1 - phi*v*Math.sqrt(T));
+              
+    const f2 = phi * S * Math.exp((b-r)*T) * CND(phi*X2) - 
+              phi * X * Math.exp(-r*T) * CND(phi*X2 - phi*v*Math.sqrt(T));
+              
+    const f3 = phi * S * Math.exp((b-r)*T) * (H/S)**(2*(mu+1)) * CND(eta*y1) - 
+              phi * X * Math.exp(-r*T) * (H/S)**(2*mu) * CND(eta*y1 - eta*v*Math.sqrt(T));
+              
+    const f4 = phi * S * Math.exp((b-r)*T) * (H/S)**(2*(mu+1)) * CND(eta*y2) - 
+              phi * X * Math.exp(-r*T) * (H/S)**(2*mu) * CND(eta*y2 - eta*v*Math.sqrt(T));
+    
+    // K représente le cash rebate, généralement 0 pour les options standards
+    const cashRebate = 0;
+    
+    const f5 = cashRebate * Math.exp(-r*T) * (CND(eta*X2 - eta*v*Math.sqrt(T)) - 
+            (H/S)**(2*mu) * CND(eta*y2 - eta*v*Math.sqrt(T)));
+            
+    const f6 = cashRebate * ((H/S)**(mu+lambda) * CND(eta*Z) + 
+            (H/S)**(mu-lambda) * CND(eta*Z - 2*eta*lambda*v*Math.sqrt(T)));
+    
+    // Calculer le prix selon le TypeFlag et la relation entre X et H
+    let optionPrice = 0;
+    
+    if (X > H) {
+      switch (TypeFlag) {
+        case "cdi": optionPrice = f3 + f5; break;
+        case "cui": optionPrice = f1 + f5; break;
+        case "pdi": optionPrice = f2 - f3 + f4 + f5; break;
+        case "pui": optionPrice = f1 - f2 + f4 + f5; break;
+        case "cdo": optionPrice = f1 - f3 + f6; break;
+        case "cuo": optionPrice = f6; break;
+        case "pdo": optionPrice = f1 - f2 + f3 - f4 + f6; break;
+        case "puo": optionPrice = f2 - f4 + f6; break;
+      }
+    } else if (X < H) {
+      switch (TypeFlag) {
+        case "cdi": optionPrice = f1 - f2 + f4 + f5; break;
+        case "cui": optionPrice = f2 - f3 + f4 + f5; break;
+        case "pdi": optionPrice = f1 + f5; break;
+        case "pui": optionPrice = f3 + f5; break;
+        case "cdo": optionPrice = f2 - f4 + f6; break;
+        case "cuo": optionPrice = f1 - f2 + f3 - f4 + f6; break;
+        case "pdo": optionPrice = f6; break;
+        case "puo": optionPrice = f1 - f3 + f6; break;
+      }
+    }
+    
+    // S'assurer que le prix de l'option n'est jamais négatif
+    return Math.max(0, optionPrice);
+  }
+  // PARTIE 2: Options à double barrière
+  else if (secondBarrier) {
+    // Variables pour les options à double barrière selon le code VBA
+    const X = K; // Strike price
+    const L = Math.min(barrier, secondBarrier); // Barrière inférieure
+    const U = Math.max(barrier, secondBarrier); // Barrière supérieure
+    
+    // Paramètres pour les formules de double barrière
+    const delta1 = 0; // Taux de croissance des barrières (généralement 0)
+    const delta2 = 0; // Taux de dividende (dans notre cas, 0)
+    
+    // Déterminer le TypeFlag en fonction du type d'option
+    let TypeFlag = "";
+    if (optionType.includes('call-double-knockout')) {
+      TypeFlag = "co"; // Call double-knockout (out)
+    } else if (optionType.includes('call-double-knockin')) {
+      TypeFlag = "ci"; // Call double-knockin (in)
+    } else if (optionType.includes('put-double-knockout')) {
+      TypeFlag = "po"; // Put double-knockout (out)
+    } else if (optionType.includes('put-double-knockin')) {
+      TypeFlag = "pi"; // Put double-knockin (in)
+    }
+    
+    // Si le type n'est pas reconnu, utiliser Monte Carlo
+    if (TypeFlag === "") {
+      return calculateBarrierOptionPrice(optionType, S, K, r, t, sigma, barrier, secondBarrier, barrierOptionSimulations);
+    }
+    
+    // Calculer les variables F et E selon le code VBA
+    const F = U * Math.exp(delta1 * T);
+    const E = L * Math.exp(delta1 * T);
+    
+    let Sum1 = 0;
+    let Sum2 = 0;
+    
+    // Pour les options call double-barrière (ci/co)
+    if (TypeFlag === "co" || TypeFlag === "ci") {
+      // Somme sur un nombre fini de termes (-5 à 5 dans le code VBA)
+      for (let n = -5; n <= 5; n++) {
+        const d1 = (Math.log(S * U ** (2 * n) / (X * L ** (2 * n))) + (b + v ** 2 / 2) * T) / (v * Math.sqrt(T));
+        const d2 = (Math.log(S * U ** (2 * n) / (F * L ** (2 * n))) + (b + v ** 2 / 2) * T) / (v * Math.sqrt(T));
+        const d3 = (Math.log(L ** (2 * n + 2) / (X * S * U ** (2 * n))) + (b + v ** 2 / 2) * T) / (v * Math.sqrt(T));
+        const d4 = (Math.log(L ** (2 * n + 2) / (F * S * U ** (2 * n))) + (b + v ** 2 / 2) * T) / (v * Math.sqrt(T));
+        
+        const mu1 = 2 * (b - delta2 - n * (delta1 - delta2)) / v ** 2 + 1;
+        const mu2 = 2 * n * (delta1 - delta2) / v ** 2;
+        const mu3 = 2 * (b - delta2 + n * (delta1 - delta2)) / v ** 2 + 1;
+        
+        Sum1 += (U ** n / L ** n) ** mu1 * (L / S) ** mu2 * (CND(d1) - CND(d2)) - 
+              (L ** (n + 1) / (U ** n * S)) ** mu3 * (CND(d3) - CND(d4));
+              
+        Sum2 += (U ** n / L ** n) ** (mu1 - 2) * (L / S) ** mu2 * (CND(d1 - v * Math.sqrt(T)) - CND(d2 - v * Math.sqrt(T))) - 
+              (L ** (n + 1) / (U ** n * S)) ** (mu3 - 2) * (CND(d3 - v * Math.sqrt(T)) - CND(d4 - v * Math.sqrt(T)));
+      }
+    }
+    // Pour les options put double-barrière (pi/po)
+    else if (TypeFlag === "po" || TypeFlag === "pi") {
+      // Somme sur un nombre fini de termes (-5 à 5 dans le code VBA)
+      for (let n = -5; n <= 5; n++) {
+        const d1 = (Math.log(S * U ** (2 * n) / (E * L ** (2 * n))) + (b + v ** 2 / 2) * T) / (v * Math.sqrt(T));
+        const d2 = (Math.log(S * U ** (2 * n) / (X * L ** (2 * n))) + (b + v ** 2 / 2) * T) / (v * Math.sqrt(T));
+        const d3 = (Math.log(L ** (2 * n + 2) / (E * S * U ** (2 * n))) + (b + v ** 2 / 2) * T) / (v * Math.sqrt(T));
+        const d4 = (Math.log(L ** (2 * n + 2) / (X * S * U ** (2 * n))) + (b + v ** 2 / 2) * T) / (v * Math.sqrt(T));
+        
+        const mu1 = 2 * (b - delta2 - n * (delta1 - delta2)) / v ** 2 + 1;
+        const mu2 = 2 * n * (delta1 - delta2) / v ** 2;
+        const mu3 = 2 * (b - delta2 + n * (delta1 - delta2)) / v ** 2 + 1;
+        
+        Sum1 += (U ** n / L ** n) ** mu1 * (L / S) ** mu2 * (CND(d1) - CND(d2)) - 
+              (L ** (n + 1) / (U ** n * S)) ** mu3 * (CND(d3) - CND(d4));
+              
+        Sum2 += (U ** n / L ** n) ** (mu1 - 2) * (L / S) ** mu2 * (CND(d1 - v * Math.sqrt(T)) - CND(d2 - v * Math.sqrt(T))) - 
+              (L ** (n + 1) / (U ** n * S)) ** (mu3 - 2) * (CND(d3 - v * Math.sqrt(T)) - CND(d4 - v * Math.sqrt(T)));
+      }
+    }
+    
+    // Calculer OutValue selon le type d'option
+    let OutValue = 0;
+    if (TypeFlag === "co" || TypeFlag === "ci") {
+      OutValue = S * Math.exp((b - r) * T) * Sum1 - X * Math.exp(-r * T) * Sum2;
+    } else if (TypeFlag === "po" || TypeFlag === "pi") {
+      OutValue = X * Math.exp(-r * T) * Sum2 - S * Math.exp((b - r) * T) * Sum1;
+    }
+    
+    // Fonction pour calculer le prix Black-Scholes standard
+    const GBlackScholes = (type: string, S: number, X: number, T: number, r: number, b: number, v: number) => {
+      const d1 = (Math.log(S / X) + (b + v ** 2 / 2) * T) / (v * Math.sqrt(T));
+      const d2 = d1 - v * Math.sqrt(T);
+      
+      if (type === "c") {
+        return S * Math.exp((b - r) * T) * CND(d1) - X * Math.exp(-r * T) * CND(d2);
+      } else { // type === "p"
+        return X * Math.exp(-r * T) * CND(-d2) - S * Math.exp((b - r) * T) * CND(-d1);
+      }
+    };
+    
+    // Calculer le prix final selon le TypeFlag (appliquer la relation de parité pour les knockin)
+    let optionPrice = 0;
+    if (TypeFlag === "co") {
+      optionPrice = OutValue;
+    } else if (TypeFlag === "po") {
+      optionPrice = OutValue;
+    } else if (TypeFlag === "ci") {
+      // Pour les options knockin, utiliser la relation: knockin + knockout = vanille
+      optionPrice = GBlackScholes("c", S, X, T, r, b, v) - OutValue;
+    } else if (TypeFlag === "pi") {
+      // Pour les options knockin, utiliser la relation: knockin + knockout = vanille
+      optionPrice = GBlackScholes("p", S, X, T, r, b, v) - OutValue;
+    }
+    
+    // S'assurer que le prix de l'option n'est jamais négatif
+    return Math.max(0, optionPrice);
+  }
+  
+  // Si nous arrivons ici, c'est que le type d'option n'est pas supporté
+  return calculateBarrierOptionPrice(optionType, S, K, r, t, sigma, barrier, secondBarrier, barrierOptionSimulations);
+};
+
+// Generic option pricing function
+export const calculateOptionPrice = (
+  type: string,
+  S: number,
+  K: number,
+  r_d: number,
+  r_f: number,
+  t: number,
+  sigma: number,
+  barrier?: number,
+  secondBarrier?: number,
+  rebate?: number,
+  numSimulations: number = 1000
+): number => {
+  if (type === 'call' || type === 'put') {
+    return calculateGarmanKohlhagenPrice(type, S, K, r_d, r_f, t, sigma);
+  } else if (type.includes('knockout') || type.includes('knockin')) {
+    return calculateBarrierOptionClosedForm(type, S, K, r_d, t, sigma, barrier || 0, secondBarrier, r_f);
+  } else {
+    return calculateDigitalOptionPrice(type, S, K, r_d, t, sigma, barrier, secondBarrier, numSimulations, rebate || 1);
+  }
+};
+
+// Implied volatility calculation
+export const calculateImpliedVolatility = (
+  optionType: string,
+  S: number,      // Prix actuel du sous-jacent
+  K: number,      // Prix d'exercice
+  r_d: number,    // Taux domestique sans risque
+  r_f: number,    // Taux étranger sans risque
+  t: number,      // Temps jusqu'à maturité en années
+  marketPrice: number,  // Prix de l'option observé sur le marché
+  tolerance: number = 0.0001, // Précision souhaitée
+  maxIterations: number = 100 // Nombre maximum d'itérations
+): number => {
+  // Pour les options à barrière ou complexes, cette fonction est plus difficile à implémenter
+  // Dans ce cas, nous nous limitons aux calls et puts vanille
+  if (optionType !== 'call' && optionType !== 'put') {
+    return 0; // Retourner une valeur par défaut pour les options non supportées
+  }
+
+  // Méthode de Newton-Raphson pour trouver la volatilité implicite
+  let sigma = 0.20; // Valeur initiale
+  let vega = 0;
+  let price = 0;
+  let diff = 0;
+  let iteration = 0;
+
+  while (iteration < maxIterations) {
+    // Calcul du prix avec la volatilité courante
+    price = calculateGarmanKohlhagenPrice(optionType, S, K, r_d, r_f, t, sigma);
+    
+    // Différence entre le prix calculé et le prix observé
+    diff = price - marketPrice;
+    
+    // Vérifier si la précision souhaitée est atteinte
+    if (Math.abs(diff) < tolerance) {
+      break;
+    }
+    
+    // Calcul de la vega (dérivée du prix par rapport à la volatilité)
+    const d1 = (Math.log(S/K) + (r_d - r_f + sigma*sigma/2)*t) / (sigma*Math.sqrt(t));
+    vega = S * Math.sqrt(t) * Math.exp(-r_f * t) * (1/Math.sqrt(2*Math.PI)) * Math.exp(-d1*d1/2);
+    
+    // Mise à jour de sigma selon la méthode de Newton-Raphson
+    sigma = sigma - diff / vega;
+    
+    // Empêcher sigma de devenir négatif ou trop petit
+    if (sigma <= 0.001) {
+      sigma = 0.001;
+    }
+    
+    // Empêcher sigma de devenir trop grand
+    if (sigma > 5) {
+      sigma = 5;
+    }
+    
+    iteration++;
+  }
+  
+  // Retourner la volatilité implicite
+  return sigma;
+};
+
+// Swap pricing
+export const calculateSwapPrice = (forwards: number[], times: number[], r: number): number => {
+  let sum = 0;
+  for (let i = 0; i < forwards.length; i++) {
+    sum += forwards[i] * Math.exp(-r * times[i]);
+  }
+  return sum / forwards.length;
+};
+
+// Time to maturity calculation utility
+export const calculateTimeToMaturity = (maturityDate: string, valuationDate: string): number => {
+  const maturity = new Date(maturityDate + 'T23:00:00Z');
+  const valuation = new Date(valuationDate + 'T00:00:00Z');
+  const diffTime = Math.abs(maturity.getTime() - valuation.getTime());
+  return diffTime / (365.25 * 24 * 60 * 60 * 1000);
+};
+
+// Strategy payoff calculation utility
+export const calculateStrategyPayoffAtPrice = (components: any[], price: number, spotPrice: number): number => {
+  let totalPayoff = 0;
+  
+  components.forEach(comp => {
+    const strike = comp.strikeType === 'percent' 
+      ? spotPrice * (comp.strike / 100) 
+      : comp.strike;
+    
+    let payoff = 0;
+    
+    if (comp.type === 'swap') {
+      // For swaps, the payoff is the difference between the price and the strike
+      payoff = (price - strike);
+    } else if (comp.type.includes('knockout') || comp.type.includes('knockin')) {
+      // Handle barrier options
+      const barrier = comp.barrierType === 'percent' 
+        ? spotPrice * (comp.barrier / 100) 
+        : comp.barrier;
+      
+      const secondBarrier = comp.type.includes('double') 
+        ? (comp.barrierType === 'percent' 
+          ? spotPrice * (comp.secondBarrier / 100) 
+          : comp.secondBarrier) 
+        : undefined;
+        
+      // Determine if the barrier is breached
+      let isBarrierBroken = false;
+      
+      if (comp.type.includes('double')) {
+        // Double barrier options
+        const upperBarrier = Math.max(barrier, secondBarrier || 0);
+        const lowerBarrier = Math.min(barrier, secondBarrier || Infinity);
+        isBarrierBroken = price >= upperBarrier || price <= lowerBarrier;
+      } else if (comp.type.includes('reverse')) {
+        // Reverse barrier options
+        if (comp.type.includes('put')) {
+          // Put Reverse: barrier breached if price is above
+          isBarrierBroken = price >= barrier;
+        } else {
+          // Call Reverse: barrier breached if price is below
+          isBarrierBroken = price <= barrier;
+        }
+      } else {
+        // Standard barrier options
+        if (comp.type.includes('put')) {
+          // Put: barrier breached if price is below
+          isBarrierBroken = price <= barrier;
+        } else {
+          // Call: barrier breached if price is above
+          isBarrierBroken = price >= barrier;
+        }
+      }
+      
+      // Calculate the base payoff
+      const isCall = comp.type.includes('call');
+      const basePayoff = isCall 
+        ? Math.max(0, price - strike) 
+        : Math.max(0, strike - price);
+      
+      // Determine the final payoff according to the option type
+      if (comp.type.includes('knockout')) {
+        // For knock-out options, the payoff is zero if the barrier is breached
+        payoff = isBarrierBroken ? 0 : basePayoff;
+      } else { // knockin
+        // For knock-in options, the payoff is non-zero only if the barrier is breached
+        payoff = isBarrierBroken ? basePayoff : 0;
+      }
+    } else if (comp.type === 'call') {
+      // Standard call option
+      payoff = Math.max(0, price - strike);
+    } else if (comp.type === 'put') {
+      // Standard put option
+      payoff = Math.max(0, strike - price);
+    } else if (comp.type === 'forward') {
+      // Forward payoff
+      payoff = price - strike;
+    } else if ([
+      'one-touch', 'no-touch', 'double-touch', 'double-no-touch', 'range-binary', 'outside-binary'
+    ].includes(comp.type)) {
+      // Options digitales : payoff = rebate si condition atteinte
+      const barrier = comp.barrierType === 'percent' ? spotPrice * (comp.barrier || 0) / 100 : (comp.barrier || 0);
+      const secondBarrier = comp.barrierType === 'percent' ? spotPrice * (comp.secondBarrier || 0) / 100 : (comp.secondBarrier || 0);
+      const rebate = (comp.rebate || 1) / 100;
+      let conditionMet = false;
+      switch(comp.type) {
+        case 'one-touch':
+          conditionMet = price >= barrier;
+          break;
+        case 'no-touch':
+          conditionMet = price < barrier;
+          break;
+        case 'double-touch':
+          conditionMet = price >= barrier || price <= secondBarrier;
+          break;
+        case 'double-no-touch':
+          conditionMet = price < barrier && price > secondBarrier;
+          break;
+        case 'range-binary':
+          conditionMet = price <= barrier && price >= strike;
+          break;
+        case 'outside-binary':
+          conditionMet = price > barrier || price < strike;
+          break;
+      }
+      payoff = conditionMet ? rebate : 0;
+    }
+    
+    // Add the payoff to the total taking into account the quantity
+    totalPayoff += payoff * (comp.quantity / 100);
+  });
+  
+  return totalPayoff;
+};
+
 import React, { useState, useEffect, useCallback } from 'react';
 import StrategyImportService from '../services/StrategyImportService';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription, CardFooter } from '@/components/ui/card';
@@ -56,7 +894,8 @@ interface CurrencyPair {
 }
 
 interface FXStrategyParams {
-  startDate: string;
+  startDate: string;           // Hedging Start Date (renamed from startDate)
+  strategyStartDate: string;   // Strategy Start Date (new field)
   monthsToHedge: number;
   domesticRate: number;
   foreignRate: number;
@@ -140,7 +979,8 @@ interface SavedScenario {
   name: string;
   timestamp: number;
   params: {
-    startDate: string;
+    startDate: string;           // Hedging Start Date
+    strategyStartDate: string;   // Strategy Start Date
     monthsToHedge: number;
     interestRate: number;
     domesticRate?: number;
@@ -186,6 +1026,8 @@ interface MonthlyStats {
   month: string;
   avgPrice: number;
   volatility: number | null;
+  dataPoints?: number;
+  calculationMethod?: string;
 }
 
 interface PriceRange {
@@ -310,7 +1152,8 @@ const Index = () => {
   const [params, setParams] = useState(() => {
     const savedState = localStorage.getItem('calculatorState');
     const defaultParams = {
-      startDate: new Date().toISOString().split('T')[0],
+      startDate: new Date().toISOString().split('T')[0],           // Hedging Start Date
+      strategyStartDate: new Date().toISOString().split('T')[0],   // Strategy Start Date (same as hedging start by default)
       monthsToHedge: 12,
       interestRate: 2.0, // Domestic rate for backward compatibility
       domesticRate: 1.0, // EUR rate
@@ -333,6 +1176,10 @@ const Index = () => {
       if (!savedParams.quoteVolume) {
         savedParams.quoteVolume = (savedParams.totalVolume || 10000000) * (savedParams.spotPrice || 1.0850);
       }
+      // Ensure backward compatibility - add strategyStartDate if missing
+      if (!savedParams.strategyStartDate) {
+        savedParams.strategyStartDate = savedParams.startDate || new Date().toISOString().split('T')[0];
+      }
       return savedParams;
     }
     
@@ -348,10 +1195,18 @@ const Index = () => {
     return savedState ? JSON.parse(savedState).strategy : [];
   });
 
-  // Results state
+  // Results state - complete results for calculations
   const [results, setResults] = useState(() => {
     const savedState = localStorage.getItem('calculatorState');
     return savedState ? JSON.parse(savedState).results : null;
+  });
+
+  // Display results state - filtered results for user interface
+  const [displayResults, setDisplayResults] = useState(() => {
+    const savedState = localStorage.getItem('calculatorState');
+    const fullResults = savedState ? JSON.parse(savedState).results : null;
+    // Initialize with full results, will be filtered when calculateResults runs
+    return fullResults;
   });
 
   // Manual forward prices state
@@ -719,7 +1574,7 @@ const Index = () => {
 
   // Forex-specific states
   const [optionPricingModel, setOptionPricingModel] = useState<'black-scholes' | 'garman-kohlhagen' | 'monte-carlo'>('garman-kohlhagen');
-  const [barrierPricingModel, setBarrierPricingModel] = useState<'monte-carlo' | 'closed-form'>('monte-carlo');
+  const [barrierPricingModel, setBarrierPricingModel] = useState<'monte-carlo' | 'closed-form'>('closed-form');
 
   // Ajouter cet état
   const [savedRiskMatrices, setSavedRiskMatrices] = useState<SavedRiskMatrix[]>(() => {
@@ -817,9 +1672,15 @@ const Index = () => {
                 undefined;
                 
               if (barrierPricingModel === 'closed-form') {
+                const underlyingResult = PricingService.calculateUnderlyingPrice(
+                  params.spotPrice,
+                  params.domesticRate/100,
+                  params.foreignRate/100,
+                  result.timeToMaturity
+                );
                 option.price = calculateBarrierOptionClosedForm(
                   option.type,
-                  result.forward,
+                  underlyingResult.price,
                   strike,
                   params.domesticRate/100,
                   result.timeToMaturity,
@@ -828,9 +1689,15 @@ const Index = () => {
                   secondBarrier
                 );
               } else {
+                const underlyingResult = PricingService.calculateUnderlyingPrice(
+                  params.spotPrice,
+                  params.domesticRate/100,
+                  params.foreignRate/100,
+                  result.timeToMaturity
+                );
                 option.price = calculateBarrierOptionPrice(
                   option.type,
-                  result.forward,
+                  underlyingResult.price,
                   strike,
                   params.domesticRate/100,
                   result.timeToMaturity,
@@ -862,9 +1729,15 @@ const Index = () => {
                   strategyOption.secondBarrier) : 
                 undefined;
                 
+              const underlyingResult = PricingService.calculateUnderlyingPrice(
+                params.spotPrice,
+                params.domesticRate/100,
+                params.foreignRate/100,
+                result.timeToMaturity
+              );
               option.price = calculateDigitalOptionPrice(
                 option.type,
-                result.forward,
+                underlyingResult.price,
                 strike,
                 params.domesticRate / 100,
                 result.timeToMaturity,
@@ -1682,9 +2555,40 @@ const Index = () => {
     calculatePayoff();
   };
 
+  // Filter results to show only from user's chosen start date onwards
+  const filterResultsForDisplay = (allResults: Result[], hedgingStartDate: string): Result[] | null => {
+    if (!allResults || allResults.length === 0) {
+      return null;
+    }
+
+    const hedgingStartDateObj = new Date(hedgingStartDate);
+    
+    // Filter results to only include periods at or after the user's hedging start date
+    const filteredResults = allResults.filter(result => {
+      const resultDate = new Date(result.date);
+      return resultDate >= hedgingStartDateObj;
+    });
+
+    console.log(`[DISPLAY FILTER] Hedging start date: ${hedgingStartDate}`);
+    console.log(`[DISPLAY FILTER] Total calculated periods: ${allResults.length}, Displayed periods: ${filteredResults.length}`);
+    
+    if (filteredResults.length > 0) {
+      console.log(`[DISPLAY FILTER] First displayed period: ${filteredResults[0].date}`);
+      console.log(`[DISPLAY FILTER] Last displayed period: ${filteredResults[filteredResults.length - 1].date}`);
+    }
+
+    return filteredResults.length > 0 ? filteredResults : null;
+  };
+
   // Calculate detailed results
   const calculateResults = () => {
-    const startDate = new Date(params.startDate);
+    // Use strategy start date for financial calculations (accurate time-to-maturity and forward prices)
+    const strategyStartDate = new Date(params.strategyStartDate);
+    const calculationStartDate = new Date(strategyStartDate.getFullYear(), strategyStartDate.getMonth(), strategyStartDate.getDate());
+    
+    // User's chosen hedging start date for display purposes
+    const userStartDate = new Date(params.startDate);
+    
     let months = [];
     let monthlyVolumes = [];
 
@@ -1701,27 +2605,26 @@ const Index = () => {
       // Use the volumes defined in custom periods
       monthlyVolumes = sortedPeriods.map(period => period.volume);
     } else {
-      // Use the standard month generation logic
-      let currentDate = new Date(startDate);
-    const lastDayOfStartMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
-    const remainingDaysInMonth = lastDayOfStartMonth.getDate() - currentDate.getDate() + 1;
-
-    if (remainingDaysInMonth > 0) {
-      months.push(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0));
-    }
-
-    for (let i = 0; i < params.monthsToHedge - (remainingDaysInMonth > 0 ? 1 : 0); i++) {
-      currentDate.setMonth(currentDate.getMonth() + 1);
-      months.push(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0));
+      // Generate exactly the number of months specified by the user
+      // Start from the strategy start date and add exactly monthsToHedge months
+      let currentDate = new Date(strategyStartDate);
+      
+      // Generate exactly params.monthsToHedge months
+      for (let i = 0; i < params.monthsToHedge; i++) {
+        const monthEnd = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
+        months.push(monthEnd);
+        currentDate.setMonth(currentDate.getMonth() + 1);
       }
+      
+      console.log(`[CALCULATION] Generated exactly ${months.length} periods starting from ${strategyStartDate.toISOString().split('T')[0]}`);
       
       // Use equal volumes for each month
       const monthlyVolume = params.totalVolume / months.length;
       monthlyVolumes = Array(months.length).fill(monthlyVolume);
     }
 
-    // Generate price paths for the entire period
-    const { paths, monthlyIndices } = generatePricePathsForPeriod(months, startDate, realPriceParams.numSimulations);
+    // Generate price paths for the entire period (from today's date for accurate calculations)
+    const { paths, monthlyIndices } = generatePricePathsForPeriod(months, calculationStartDate, realPriceParams.numSimulations);
 
     // If simulation is enabled, generate new real prices using the first path
     if (realPriceParams.useSimulation) {
@@ -1828,8 +2731,9 @@ const Index = () => {
     });
 
     // Continue with the rest of calculateResults
+    // Calculate time to maturity from today (for accurate financial calculations)
     const timeToMaturities = months.map(date => {
-      const diffTime = Math.abs(date.getTime() - startDate.getTime());
+      const diffTime = Math.abs(date.getTime() - calculationStartDate.getTime());
       return diffTime / (365.25 * 24 * 60 * 60 * 1000);
     });
 
@@ -1892,6 +2796,11 @@ const Index = () => {
             }
           }
           
+          // Mettre à jour l'état knocked out si la barrière est franchie
+          if (barrierCrossed) {
+            isKnockedOut = true;
+          }
+          
           // Stocker si l'option est knocked out à ce mois
           barrierCrossings[optionId][monthIndex] = isKnockedOut;
         });
@@ -1944,6 +2853,11 @@ const Index = () => {
                 barrierHit = realPrice >= barrier;
               }
             }
+          }
+          
+          // Mettre à jour l'état knocked in si la barrière est touchée
+          if (barrierHit) {
+            isKnockedIn = true;
           }
           
           // Stocker si l'option est knocked in à ce mois
@@ -2185,9 +3099,15 @@ const Index = () => {
               : option.volatility / 100;
           // For standard options, use appropriate pricing model
           if (optionPricingModel === 'garman-kohlhagen') {
+            const underlyingResult = PricingService.calculateUnderlyingPrice(
+              params.spotPrice,
+              params.domesticRate/100,
+              params.foreignRate/100,
+              t
+            );
             price = calculateGarmanKohlhagenPrice(
               option.type,
-              params.spotPrice,
+              underlyingResult.price,
               strike,
               params.domesticRate/100,
               params.foreignRate/100,
@@ -2196,9 +3116,15 @@ const Index = () => {
             );
           } else if (optionPricingModel === 'monte-carlo') {
             // Use Monte Carlo for vanilla options
+            const underlyingResult = PricingService.calculateUnderlyingPrice(
+              params.spotPrice,
+              params.domesticRate/100,
+              params.foreignRate/100,
+              t
+            );
             price = calculateVanillaOptionMonteCarlo(
               option.type,
-              params.spotPrice,
+              underlyingResult.price,
               strike,
               params.domesticRate / 100,
               params.foreignRate / 100,
@@ -2240,9 +3166,15 @@ const Index = () => {
             
           // Use closed-form solution if enabled (for both simple and double barrier options)
           if (barrierPricingModel === 'closed-form') {
+            const underlyingResult = PricingService.calculateUnderlyingPrice(
+              params.spotPrice,
+              params.domesticRate/100,
+              params.foreignRate/100,
+              t
+            );
             price = calculateBarrierOptionClosedForm(
               option.type,
-              forward,
+              underlyingResult.price,
               strike,
               params.domesticRate/100,
               t,
@@ -2258,8 +3190,15 @@ const Index = () => {
             const numSteps = maturityIndex;
             const dt = t / numSteps;
             
+            const underlyingResult = PricingService.calculateUnderlyingPrice(
+              params.spotPrice,
+              params.domesticRate/100,
+              params.foreignRate/100,
+              t
+            );
+            
             for (let i = 0; i < numLocalSims; i++) {
-              const path = [forward]; // Start with current forward price
+              const path = [underlyingResult.price]; // Start with configured underlying price
               
               for (let step = 0; step < numSteps; step++) {
                 const prevPrice = path[path.length - 1];
@@ -2309,9 +3248,15 @@ const Index = () => {
                 : option.secondBarrier)
             : undefined;
           // Calculer le prix digital
+          const underlyingResult = PricingService.calculateUnderlyingPrice(
+            params.spotPrice,
+            params.domesticRate/100,
+            params.foreignRate/100,
+            t
+          );
           price = calculateDigitalOptionPrice(
             option.type,
-            params.spotPrice,
+            underlyingResult.price,
             strike,
             params.domesticRate / 100,
             t,
@@ -2537,7 +3482,12 @@ const Index = () => {
         };
     });
 
+    // Store complete results for calculations (includes periods before user's start date)
     setResults(detailedResults);
+    
+    // Filter results for display - only show from user's chosen hedging start date onwards
+    const displayResults = filterResultsForDisplay(detailedResults, params.startDate);
+    setDisplayResults(displayResults);
     
     // Après avoir mis à jour toutes les données de résultats, recalculez les simulations Monte Carlo
     // Cette ligne devrait être placée juste avant la fin de la fonction calculateResults
@@ -2545,6 +3495,14 @@ const Index = () => {
       recalculateMonteCarloSimulations();
     }
   };
+
+  // Initialize display results from saved state if needed
+  useEffect(() => {
+    if (results && !displayResults) {
+      const filteredResults = filterResultsForDisplay(results, params.startDate);
+      setDisplayResults(filteredResults);
+    }
+  }, [results, displayResults, params.startDate]);
 
   useEffect(() => {
     if (strategy.length > 0) {
@@ -2573,10 +3531,10 @@ const Index = () => {
     const newRealPrices = {};
       
     const months = [];
-    const startDate = new Date(params.startDate);
+    const strategyStartDate = new Date(params.strategyStartDate);
       
       for (let i = 0; i < params.monthsToHedge; i++) {
-      const date = new Date(startDate);
+      const date = new Date(strategyStartDate);
       date.getMonth() + i;
       
       const monthKey = `${date.getFullYear()}-${date.getMonth() + 1}`;
@@ -2990,7 +3948,8 @@ const Index = () => {
   // Add function to clear loaded scenario
   const clearLoadedScenario = () => {
     setParams({
-      startDate: new Date().toISOString().split('T')[0],
+      startDate: new Date().toISOString().split('T')[0],           // Hedging Start Date
+      strategyStartDate: new Date().toISOString().split('T')[0],   // Strategy Start Date
       monthsToHedge: 12,
       interestRate: 2.0,
       domesticRate: 1.0,
@@ -3199,7 +4158,8 @@ const Index = () => {
         <div class="scenario-info">
           <div class="basic-parameters">
             <p>Type: ${strategy[0]?.type || ''}</p>
-            <p>Start Date: ${params.startDate}</p>
+            <p>Strategy Start Date: ${params.strategyStartDate}</p>
+            <p>Hedging Start Date: ${params.startDate}</p>
             <p>Spot Price: ${params.spotPrice}</p>
                             <p>Base Volume ({params.currencyPair?.base || 'BASE'}): {params.baseVolume.toLocaleString()}</p>
                 <p>Quote Volume ({params.currencyPair?.quote || 'QUOTE'}): {Math.round(params.quoteVolume).toLocaleString()}</p>
@@ -3371,12 +4331,7 @@ const Index = () => {
     }]);
   };
 
-  // Mettre à jour l'interface MonthlyStats pour supporter les volatilités nulles
-  interface MonthlyStats {
-    month: string;
-    avgPrice: number;
-    volatility: number | null;
-  }
+  // Interface moved to top of file - no need to redeclare here
 
   // Mettre à jour la fonction de nettoyage CSV
   const cleanCSVLine = (line: string) => {
@@ -3523,94 +4478,120 @@ const Index = () => {
     calculateResults();
   };
 
-  // Update the monthly statistics calculation
+  // Update the monthly statistics calculation with intelligent calendar system
   const calculateMonthlyStats = (data: HistoricalDataPoint[]) => {
-    const monthlyData: { [key: string]: number[] } = {};
+    // First, validate and filter data
+    const validData = data.filter(point => 
+      point && 
+      point.date && 
+      PricingService.isValidDateString(point.date) && 
+      typeof point.price === 'number' && 
+      !isNaN(point.price)
+    );
     
-    // Group prices by month
-    data.forEach(point => {
+    if (validData.length === 0) {
+      console.warn('[BACKTEST] No valid data points found');
+      setMonthlyStats([]);
+      return;
+    }
+    
+    // Get data range information
+    const dateRange = PricingService.getDataDateRange(validData.map(p => p.date));
+    if (!dateRange) {
+      console.warn('[BACKTEST] Could not determine data range');
+      setMonthlyStats([]);
+      return;
+    }
+    
+    console.log(`[BACKTEST] Data range: ${dateRange.start.toISOString().split('T')[0]} to ${dateRange.end.toISOString().split('T')[0]}`);
+    console.log(`[BACKTEST] Months covered: ${dateRange.months.join(', ')}`);
+    
+    const monthlyData: { [key: string]: { prices: number[], dates: string[] } } = {};
+    
+    // Group prices and dates by month
+    validData.forEach(point => {
         const date = new Date(point.date);
         const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
         if (!monthlyData[monthKey]) {
-            monthlyData[monthKey] = [];
+            monthlyData[monthKey] = { prices: [], dates: [] };
         }
-        monthlyData[monthKey].push(point.price);
+        monthlyData[monthKey].prices.push(point.price);
+        monthlyData[monthKey].dates.push(point.date);
     });
 
-    // Calculate statistics for each month
-    const stats = Object.entries(monthlyData).map(([month, prices]) => {
-      // Simple average: sum of prices divided by number of prices
-        const avgPrice = prices.reduce((sum, price) => sum + price, 0) / prices.length;
+    // Calculate statistics for each month using intelligent calendar system
+    const stats = Object.entries(monthlyData).map(([month, { prices, dates }]) => {
+      // Determine which price to use based on settings
+      const exerciseType = PricingService.getBacktestExerciseType();
+      let avgPrice: number;
+      let calculationMethod = '';
+      
+      if (exerciseType === 'third-friday') {
+        // Use intelligent calendar system to find the 3rd Friday
+        const [year, monthNum] = month.split('-').map(Number);
+        const thirdFriday = PricingService.getThirdFridayOfMonth(year, monthNum);
         
-        const returns = prices.slice(1).map((price, i) => 
-            Math.log(price / prices[i])
-        );
-        
-        let volatility = null;
-        if (returns.length > 0) {
-            const avgReturn = returns.reduce((sum, ret) => sum + ret, 0) / returns.length;
-            const variance = returns.reduce((sum, ret) => 
-                sum + Math.pow(ret - avgReturn, 2), 0
-            ) / (returns.length - 1);
-            volatility = Math.sqrt(variance * 252);
+        if (thirdFriday) {
+          // Use the smart date finder to get the closest date in data
+          const closestResult = PricingService.findClosestDateInData(thirdFriday, dates);
+          
+          if (closestResult) {
+            avgPrice = prices[closestResult.index];
+            calculationMethod = `3rd Friday (${closestResult.date}, ${closestResult.diffDays} days diff)`;
+            
+            if (closestResult.diffDays > 7) {
+              console.warn(`[BACKTEST] ${month}: 3rd Friday data is ${closestResult.diffDays} days away from target date`);
+            }
+          } else {
+            // Fallback to monthly average if no close date found
+            avgPrice = prices.reduce((sum, price) => sum + price, 0) / prices.length;
+            calculationMethod = 'Monthly average (3rd Friday fallback)';
+            console.warn(`[BACKTEST] ${month}: Could not find close date to 3rd Friday, using monthly average`);
+          }
+        } else {
+          // Extremely rare case: no Fridays in month
+          avgPrice = prices.reduce((sum, price) => sum + price, 0) / prices.length;
+          calculationMethod = 'Monthly average (no 3rd Friday found)';
+          console.error(`[BACKTEST] ${month}: No 3rd Friday found, using monthly average`);
         }
+      } else {
+        // Use monthly average (default behavior)
+        avgPrice = prices.reduce((sum, price) => sum + price, 0) / prices.length;
+        calculationMethod = `Monthly average (${prices.length} data points)`;
+      }
+      
+      console.log(`[BACKTEST] ${month}: ${calculationMethod} = ${avgPrice.toFixed(4)}`);
+      
+      // Calculate volatility (same logic as before)
+      const returns = prices.slice(1).map((price, i) => 
+          Math.log(price / prices[i])
+      );
+      
+      let volatility = null;
+      if (returns.length > 0) {
+          const avgReturn = returns.reduce((sum, ret) => sum + ret, 0) / returns.length;
+          const variance = returns.reduce((sum, ret) => 
+              sum + Math.pow(ret - avgReturn, 2), 0
+          ) / (returns.length - 1);
+          volatility = Math.sqrt(variance * 252);
+      }
 
-        return { month, avgPrice, volatility };
+      return { 
+        month, 
+        avgPrice, 
+        volatility,
+        dataPoints: prices.length,
+        calculationMethod
+      };
     });
 
-    setMonthlyStats(stats.sort((a, b) => b.month.localeCompare(a.month)));
+    // Sort by month (most recent first) and set the statistics
+    const sortedStats = stats.sort((a, b) => b.month.localeCompare(a.month));
+    setMonthlyStats(sortedStats);
     
-    // Add this call
-    updateBacktestValues(stats);
+    // Add this call with the sorted stats
+    updateBacktestValues(sortedStats);
   };
-
-  // Update the table display
-  {showHistoricalData && (
-    <div className="overflow-x-auto">
-      <table className="w-full border-collapse">
-        <thead>
-          <tr>
-            <th className="border p-2 bg-gray-50">Date</th>
-            <th className="border p-2 bg-gray-50">Price</th>
-          </tr>
-        </thead>
-        <tbody>
-          {historicalData.map((point, index) => (
-            <tr key={index}>
-              <td className="border p-2">{point.date}</td>
-              <td className="border p-2">{point.price.toFixed(2)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  )}
-
-  {showMonthlyStats && monthlyStats.length > 0 && (
-    <div className="mt-8">
-      <h3 className="text-lg font-semibold mb-4">Monthly Statistics</h3>
-      <table className="w-full border-collapse">
-        <thead>
-          <tr>
-            <th className="border p-2 bg-gray-50">Month</th>
-            <th className="border p-2 bg-gray-50">Average Price</th>
-            <th className="border p-2 bg-gray-50">Historical Volatility</th>
-          </tr>
-        </thead>
-        <tbody>
-          {monthlyStats.map((stat, index) => (
-            <tr key={index}>
-              <td className="border p-2">{stat.month}</td>
-              <td className="border p-2">{stat.avgPrice.toFixed(2)}</td>
-              <td className="border p-2">
-                {stat.volatility ? `${(stat.volatility * 100).toFixed(2)}%` : 'N/A'}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  )}
 
   // Add this function
   const addHistoricalDataRow = () => {
@@ -4196,18 +5177,22 @@ const Index = () => {
     doc.setFontSize(14);
     doc.text('Basic Parameters', 10, 35);
     doc.setFontSize(10);
-    doc.text(`Start Date: ${params.startDate}`, 15, 45);
-    doc.text(`Months to Hedge: ${params.monthsToHedge}`, 15, 50);
-    doc.text(`Domestic Rate: ${params.domesticRate}% | Foreign Rate: ${params.foreignRate}%`, 15, 55);
+    doc.text(`Strategy Start Date: ${params.strategyStartDate}`, 15, 45);
+    doc.text(`Hedging Start Date: ${params.startDate}`, 15, 50);
+    doc.text(`Months to Hedge: ${params.monthsToHedge}`, 15, 55);
+    doc.text(`Domestic Rate: ${params.domesticRate}% | Foreign Rate: ${params.foreignRate}%`, 15, 60);
+    doc.text(`Base Volume (${params.currencyPair?.base || 'BASE'}): ${params.baseVolume.toLocaleString()}`, 15, 65);
+    doc.text(`Quote Volume (${params.currencyPair?.quote || 'QUOTE'}): ${Math.round(params.quoteVolume).toLocaleString()}`, 15, 75);
+    doc.text(`Current Spot Rate: ${params.spotPrice.toFixed(4)}`, 15, 85);
                 doc.text(`Base Volume (${params.currencyPair?.base || 'BASE'}): ${params.baseVolume.toLocaleString()}`, 15, 60);
       doc.text(`Quote Volume (${params.currencyPair?.quote || 'QUOTE'}): ${Math.round(params.quoteVolume).toLocaleString()}`, 15, 70);
       doc.text(`Current Spot Rate: ${params.spotPrice.toFixed(4)}`, 15, 80);
     
     // Strategy
     doc.setFontSize(14);
-    doc.text('Strategy Components', 10, 75);
+    doc.text('Strategy Components', 10, 95);
     strategy.forEach((comp, index) => {
-      const yPos = 85 + (index * 10);
+      const yPos = 105 + (index * 10);
       const strike = comp.strikeType === 'percent' 
         ? `${comp.strike}%` 
         : comp.strike.toString();
@@ -4217,14 +5202,14 @@ const Index = () => {
     
     // Historical Data Summary
     doc.setFontSize(14);
-    doc.text('Historical Data Summary', 10, 120);
+    doc.text('Historical Data Summary', 10, 140);
     doc.setFontSize(10);
-    doc.text(`Number of Data Points: ${historicalData.length}`, 15, 130);
+    doc.text(`Number of Data Points: ${historicalData.length}`, 15, 150);
     if (monthlyStats.length > 0) {
       doc.text(`Average Historical Volatility: ${
         monthlyStats.reduce((sum, stat) => sum + (stat.volatility || 0), 0) / 
         monthlyStats.filter(stat => stat.volatility !== null).length * 100
-      }%`, 15, 135);
+      }%`, 15, 155);
     }
     
     // Total results
@@ -4234,12 +5219,12 @@ const Index = () => {
     const costReduction = (totalPnL / Math.abs(totalUnhedgedCost)) * 100;
     
     doc.setFontSize(14);
-    doc.text('Total Results', 10, 150);
+    doc.text('Total Results', 10, 170);
     doc.setFontSize(10);
-    doc.text(`Total Cost with Hedging: ${totalHedgedCost.toFixed(2)}`, 15, 160);
-    doc.text(`Total Cost without Hedging: ${totalUnhedgedCost.toFixed(2)}`, 15, 165);
-    doc.text(`Total P&L: ${totalPnL.toFixed(2)}`, 15, 170);
-    doc.text(`Cost Reduction: ${costReduction.toFixed(2)}%`, 15, 175);
+    doc.text(`Total Cost with Hedging: ${totalHedgedCost.toFixed(2)}`, 15, 180);
+    doc.text(`Total Cost without Hedging: ${totalUnhedgedCost.toFixed(2)}`, 15, 185);
+    doc.text(`Total P&L: ${totalPnL.toFixed(2)}`, 15, 190);
+    doc.text(`Cost Reduction: ${costReduction.toFixed(2)}%`, 15, 195);
     
     // Capture the P&L chart and add it
     const pnlChartContainer = document.getElementById('historical-backtest-pnl-chart');
@@ -4398,7 +5383,7 @@ const Index = () => {
   const [showMonteCarloVisualization, setShowMonteCarloVisualization] = useState<boolean>(false);
   
   // Generate months and startDate for simulations
-  const startDate = new Date(params.startDate);
+  const startDate = new Date(params.strategyStartDate);
   const months = Array.from({ length: params.monthsToHedge }, (_, i) => {
     const date = new Date(startDate);
     date.setMonth(date.getMonth() + i + 1);
@@ -4416,7 +5401,7 @@ const Index = () => {
     setIsRunningSimulation(true);
 
     // Récupérer les mois et date de début pour les simulations
-    const startDate = new Date(params.startDate);
+    const startDate = new Date(params.strategyStartDate);
     let months = [];
     
     // Check if using custom periods
@@ -4621,8 +5606,8 @@ const Index = () => {
   
   // Function to add a new custom period
   const addCustomPeriod = () => {
-    // Calculate a default maturity date one month from the start date
-    const startDate = new Date(params.startDate);
+    // Calculate a default maturity date one month from the strategy start date
+    const startDate = new Date(params.strategyStartDate);
     startDate.setMonth(startDate.getMonth() + params.customPeriods.length + 1);
     
     // Create a new custom period with default values
@@ -4667,7 +5652,7 @@ const Index = () => {
   const toggleCustomPeriods = () => {
     // If switching to custom periods for the first time, initialize with one period
     if (!params.useCustomPeriods && params.customPeriods.length === 0) {
-      const startDate = new Date(params.startDate);
+      const startDate = new Date(params.strategyStartDate);
       startDate.setMonth(startDate.getMonth() + 1);
       
       setParams({
@@ -5066,9 +6051,15 @@ const Index = () => {
           // Pour les options standards (call/put)
           if (option.type === 'call' || option.type === 'put') {
           // Calculer la volatilité implicite à partir du prix personnalisé
+          const underlyingResult = PricingService.calculateUnderlyingPrice(
+            params.spotPrice,
+            params.domesticRate/100,
+            params.foreignRate/100,
+            monthResult.timeToMaturity
+          );
           const impliedVol = calculateImpliedVolatility(
             option.type,
-            monthResult.forward,  // Utiliser le prix forward comme S
+            underlyingResult.price,  // Utiliser le prix sous-jacent configuré
             option.strike,        // Prix d'exercice
             params.domesticRate / 100, // Taux domestique sans risque (conversion en décimal)
             monthResult.timeToMaturity, // Temps jusqu'à maturité
@@ -5098,9 +6089,15 @@ const Index = () => {
                 const steps = 50;
                 for (let i = 0; i <= steps; i++) {
                   const testSigma = 0.01 + (i / steps) * 0.99; // Test de volatilité entre 1% et 100%
+                  const underlyingResult = PricingService.calculateUnderlyingPrice(
+                    params.spotPrice,
+                    params.domesticRate/100,
+                    params.foreignRate/100,
+                    monthResult.timeToMaturity
+                  );
                   const testPrice = calculateOptionPrice(
                     option.type,
-                    monthResult.forward,
+                    underlyingResult.price,
                     option.strike,
                     params.domesticRate / 100,
                     monthResult.timeToMaturity,
@@ -5148,7 +6145,7 @@ const pricingFunctions = {
   CND: (x: number) => (1 + erf(x / Math.sqrt(2))) / 2
 };
 
-PricingService.initializePricingFunctions(pricingFunctions);
+// PricingService now directly imports functions from this module - no initialization needed
 
   // Fonction pour initialiser les volatilités implicites à partir des prix actuels
   const initializeImpliedVolatilities = () => {
@@ -5179,9 +6176,15 @@ PricingService.initializePricingFunctions(pricingFunctions);
         
         // Pour les options standard (call/put), calculer une vraie IV
         if (option.type === 'call' || option.type === 'put') {
+          const underlyingResult = PricingService.calculateUnderlyingPrice(
+            params.spotPrice,
+            params.domesticRate/100,
+            params.foreignRate/100,
+            monthResult.timeToMaturity
+          );
           const calculatedIV = calculateImpliedVolatility(
             option.type,
-            monthResult.forward,
+            underlyingResult.price,
             option.strike,
             params.domesticRate / 100,
             monthResult.timeToMaturity,
@@ -5304,7 +6307,7 @@ PricingService.initializePricingFunctions(pricingFunctions);
         `}
       </style>
       {/* Add Clear Scenario button if a scenario is loaded */}
-      {results && (
+      {displayResults && (
         <div className="flex justify-end">
           <Button
             variant="destructive"
@@ -5545,7 +6548,16 @@ PricingService.initializePricingFunctions(pricingFunctions);
                   </div>
                 </div>
                 <div className="compact-form-group">
-                  <label className="compact-label">Start Date</label>
+                  <label className="compact-label">Strategy Start Date</label>
+                  <Input
+                    type="date"
+                    value={params.strategyStartDate}
+                    onChange={(e) => setParams({...params, strategyStartDate: e.target.value})}
+                    className="compact-input"
+                  />
+                </div>
+                <div className="compact-form-group">
+                  <label className="compact-label">Hedging Start Date</label>
                   <Input
                     type="date"
                     value={params.startDate}
@@ -6459,7 +7471,7 @@ PricingService.initializePricingFunctions(pricingFunctions);
             <Button onClick={calculateResults} className="flex-1">
               Calculate Results
             </Button>
-            {results && (
+            {displayResults && (
               <>
                 <Button onClick={saveScenario} className="flex items-center gap-2">
                   <Save size={16} /> Save Scenario
@@ -6564,7 +7576,7 @@ PricingService.initializePricingFunctions(pricingFunctions);
             </CardContent>
           </Card>
           
-          {results && (
+          {displayResults && (
             <div>
               {/* Affichage des résultats... */}
               
@@ -6877,7 +7889,7 @@ PricingService.initializePricingFunctions(pricingFunctions);
         </TabsContent>
       </Tabs>
 
-      {results && (
+      {displayResults && (
         <div className="mt-6">
           <Tabs value={activeResultsTab} onValueChange={setActiveResultsTab} className="w-full">
             <TabsList className="grid w-full grid-cols-4 lg:grid-cols-8 mb-6">
@@ -6900,7 +7912,7 @@ PricingService.initializePricingFunctions(pricingFunctions);
                   </CardTitle>
                 </CardHeader>
             <CardContent className="p-0">
-              {results.length > 0 && (
+              {displayResults.length > 0 && (
                 <div>
                   <div className="flex items-center p-4 bg-muted/30">
                     <div className="flex items-center">
@@ -6943,7 +7955,7 @@ PricingService.initializePricingFunctions(pricingFunctions);
                           <th className="px-3 py-3 text-left font-medium text-foreground/70 border-b bg-primary/5">Spot FX Rate</th>
                           
                           {/* Ajouter des colonnes pour les strikes dynamiques si présents */}
-                          {strategy.some(opt => opt.dynamicStrike) && results && results.length > 0 && 
+                          {strategy.some(opt => opt.dynamicStrike) && displayResults && displayResults.length > 0 && 
                             strategy.map((opt, idx) => 
                               opt.dynamicStrike ? (
                                 <th key={`dyn-strike-${idx}`} className="px-3 py-3 text-left font-medium text-foreground/70 border-b bg-yellow-500/10">
@@ -6960,7 +7972,7 @@ PricingService.initializePricingFunctions(pricingFunctions);
                           </th>
                         )
                       ))}
-                      {results[0].optionPrices.map((opt, i) => (
+                      {displayResults[0].optionPrices.map((opt, i) => (
                             <th key={`opt-header-${i}`} className="px-3 py-3 text-left font-medium text-foreground/70 border-b">{opt.label}</th>
                           ))}
                           <th className="px-3 py-3 text-left font-medium text-foreground/70 border-b bg-green-500/5">Strategy Price</th>
@@ -6972,7 +7984,7 @@ PricingService.initializePricingFunctions(pricingFunctions);
                     </tr>
                   </thead>
                   <tbody>
-                    {results.map((row, i) => {
+                    {displayResults.map((row, i) => {
                       const date = new Date(row.date);
                       const monthKey = `${date.getFullYear()}-${date.getMonth() + 1}`;
                           const isEven = i % 2 === 0;
@@ -7164,7 +8176,7 @@ PricingService.initializePricingFunctions(pricingFunctions);
             <CardContent>
               <div className="h-96">
                 <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={results}>
+                  <LineChart data={displayResults}>
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="date" />
                     <YAxis />
@@ -7186,7 +8198,7 @@ PricingService.initializePricingFunctions(pricingFunctions);
             <CardContent>
               <div className="h-96">
                 <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={results}>
+                  <LineChart data={displayResults}>
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="date" />
                     <YAxis />
@@ -7423,7 +8435,7 @@ PricingService.initializePricingFunctions(pricingFunctions);
                     <tr>
                       <td className="border p-2 font-medium">Total Cost with Hedging</td>
                       <td className="border p-2 text-right">
-                        {results.reduce((sum, row) => sum + row.hedgedCost, 0).toLocaleString(undefined, {
+                        {displayResults.reduce((sum, row) => sum + row.hedgedCost, 0).toLocaleString(undefined, {
                           minimumFractionDigits: 2,
                           maximumFractionDigits: 2
                         })}
@@ -7432,7 +8444,7 @@ PricingService.initializePricingFunctions(pricingFunctions);
                     <tr>
                       <td className="border p-2 font-medium">Total Cost without Hedging</td>
                       <td className="border p-2 text-right">
-                        {results.reduce((sum, row) => sum + row.unhedgedCost, 0).toLocaleString(undefined, {
+                        {displayResults.reduce((sum, row) => sum + row.unhedgedCost, 0).toLocaleString(undefined, {
                           minimumFractionDigits: 2,
                           maximumFractionDigits: 2
                         })}
@@ -7441,7 +8453,7 @@ PricingService.initializePricingFunctions(pricingFunctions);
                     <tr>
                       <td className="border p-2 font-medium">Total P&L</td>
                       <td className="border p-2 text-right">
-                        {results.reduce((sum, row) => sum + row.deltaPnL, 0).toLocaleString(undefined, {
+                        {displayResults.reduce((sum, row) => sum + row.deltaPnL, 0).toLocaleString(undefined, {
                           minimumFractionDigits: 2,
                           maximumFractionDigits: 2
                         })}
@@ -7450,7 +8462,7 @@ PricingService.initializePricingFunctions(pricingFunctions);
                     <tr>
                       <td className="border p-2 font-medium">Total Strategy Premium</td>
                       <td className="border p-2 text-right">
-                        {results.reduce((sum, row) => sum + (row.strategyPrice * row.monthlyVolume), 0).toLocaleString(undefined, {
+                        {displayResults.reduce((sum, row) => sum + (row.strategyPrice * row.monthlyVolume), 0).toLocaleString(undefined, {
                           minimumFractionDigits: 2,
                           maximumFractionDigits: 2
                         })}
@@ -7495,7 +8507,7 @@ PricingService.initializePricingFunctions(pricingFunctions);
                 </CardHeader>
             <CardContent>
               <div className="overflow-x-auto">
-                {results.length > 0 && (() => {
+                {displayResults.length > 0 && (() => {
                   // Organiser les données par année et par mois
                   const pnlByYearMonth: Record<string, Record<string, number>> = {};
                   const yearTotals: Record<string, number> = {};

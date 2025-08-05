@@ -25,6 +25,7 @@ interface PayoffChartProps {
   currencyPair: any;
   includePremium?: boolean;
   className?: string;
+  showPremiumToggle?: boolean;
 }
 
 // Generate FX hedging payoff data based on strategy
@@ -367,15 +368,17 @@ const PayoffChart: React.FC<PayoffChartProps> = ({
   spot, 
   currencyPair,
   includePremium = false,
-  className = ""
+  className = "",
+  showPremiumToggle = false
 }) => {
   const [activeTab, setActiveTab] = useState<"payoff" | "hedging">("payoff");
+  const [showPremium, setShowPremium] = useState(includePremium);
   const { theme } = useThemeContext();
   const isBloombergTheme = theme === 'bloomberg';
   
   const fxHedgingData = useMemo(() => {
-    return generateFXHedgingData(strategy, spot, includePremium);
-  }, [strategy, spot, includePremium]);
+    return generateFXHedgingData(strategy, spot, showPremium);
+  }, [strategy, spot, showPremium]);
   
   // Get strategy type for display
   const getStrategyName = () => {
@@ -589,18 +592,31 @@ const PayoffChart: React.FC<PayoffChartProps> = ({
         <div className="flex items-center justify-between">
           <CardTitle className="text-xl font-semibold">
             {activeTab === "payoff" ? "Payoff Chart" : "FX Hedging Profile"}
-        </CardTitle>
-          <Tabs 
-            value={activeTab} 
-            onValueChange={(value) => setActiveTab(value as "payoff" | "hedging")}
-            className="ml-auto"
-          >
-            <TabsList>
-              <TabsTrigger value="payoff">Payoff</TabsTrigger>
-              <TabsTrigger value="hedging">FX Hedging</TabsTrigger>
-            </TabsList>
-          </Tabs>
-            </div>
+          </CardTitle>
+          <div className="flex items-center gap-4">
+            {showPremiumToggle && (
+              <div className="flex items-center space-x-2">
+                <Switch
+                  id="premium-toggle"
+                  checked={showPremium}
+                  onCheckedChange={setShowPremium}
+                />
+                <Label htmlFor="premium-toggle" className="text-sm">
+                  Inclure Prime
+                </Label>
+              </div>
+            )}
+            <Tabs 
+              value={activeTab} 
+              onValueChange={(value) => setActiveTab(value as "payoff" | "hedging")}
+            >
+              <TabsList>
+                <TabsTrigger value="payoff">Payoff</TabsTrigger>
+                <TabsTrigger value="hedging">FX Hedging</TabsTrigger>
+              </TabsList>
+            </Tabs>
+          </div>
+        </div>
         <div className="text-sm text-muted-foreground mt-1">
           {getStrategyName()}
         </div>

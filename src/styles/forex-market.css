@@ -1,0 +1,57 @@
+/* Hide TradingView branding */
+.tradingview-widget-copyright {
+  display: none !important;
+}
+
+/* Custom styling for TradingView widget container */
+.tradingview-widget-container {
+  border-radius: 8px;
+  overflow: hidden;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+.tradingview-widget-container__widget {
+  border: none !important;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+/* Ensure proper height and width */
+.tradingview-widget-container iframe {
+  border: none !important;
+  border-radius: 8px;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+/* Full height for advanced data tab */
+[data-state="active"][value="advanced-data"] {
+  height: 100vh !important;
+  min-height: 600px !important;
+}
+
+/* Ensure the widget takes full space */
+.tradingview-widget-container {
+  border-radius: 8px;
+  overflow: hidden;
+  width: 100% !important;
+  height: 100% !important;
+  min-height: 600px !important;
+}
+
+.tradingview-widget-container__widget {
+  border: none !important;
+  width: 100% !important;
+  height: 100% !important;
+  min-height: 600px !important;
+}
+
+/* Ensure proper height and width */
+.tradingview-widget-container iframe {
+  border: none !important;
+  border-radius: 8px;
+  width: 100% !important;
+  height: 100% !important;
+  min-height: 600px !important;
+} 

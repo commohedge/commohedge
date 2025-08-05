@@ -18,6 +18,7 @@ import Reports from "./pages/Reports";
 import Performance from "./pages/Performance";
 import Analytics from "./pages/Analytics";
 import MarketData from "./pages/MarketData";
+import ForexMarket from "./pages/ForexMarket";
 import UserManagement from "./pages/UserManagement";
 import Settings from "./pages/Settings";
 import SavedScenarios from "./pages/SavedScenarios";
@@ -53,6 +54,7 @@ const App = () => (
             <Route path="/performance" element={<Performance />} />
             <Route path="/analytics" element={<Analytics />} />
             <Route path="/market-data" element={<MarketData />} />
+            <Route path="/forex-market" element={<ForexMarket />} />
             <Route path="/users" element={<UserManagement />} />
             <Route path="/settings" element={<Settings />} />
             
