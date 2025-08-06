@@ -8,7 +8,8 @@ export interface ImportedStrategy {
   spotPrice: number;
   components: StrategyComponent[];
   params: {
-    startDate: string;
+    startDate: string;           // Hedging Start Date
+    strategyStartDate: string;   // Strategy Start Date
     monthsToHedge: number;
     baseVolume: number;
     quoteVolume: number;
@@ -63,6 +64,9 @@ export interface HedgingInstrument {
   exportVolatility?: number;      // Volatility used during export
   exportTimeToMaturity?: number;  // Time to maturity used during export
   exportForwardPrice?: number;    // Forward price used during export
+  // ✅ Export dates from Strategy Builder
+  exportStrategyStartDate?: string;  // Strategy Start Date from export
+  exportHedgingStartDate?: string;   // Hedging Start Date from export
   // ✅ NOUVEAUX CHAMPS : Quantité de couverture et volumes
   hedgeQuantity?: number;         // Quantité de couverture (quantity du composant)
   exposureVolume?: number;        // Volume d'exposition de la période (monthlyVolume du detailed results)
@@ -132,7 +136,8 @@ class StrategyImportService {
     params: {
       currencyPair: { symbol: string; base: string; quote: string };
       spotPrice: number;
-      startDate: string;
+      startDate: string;           // Hedging Start Date
+      strategyStartDate: string;   // Strategy Start Date
       monthsToHedge: number;
       baseVolume: number;
       quoteVolume: number;
@@ -155,7 +160,8 @@ class StrategyImportService {
       spotPrice: params.spotPrice,
       components,
       params: {
-        startDate: params.startDate,
+        startDate: params.startDate,           // Hedging Start Date
+        strategyStartDate: params.strategyStartDate,   // Strategy Start Date
         monthsToHedge: params.monthsToHedge,
         baseVolume: params.baseVolume,
         quoteVolume: params.quoteVolume,
@@ -191,7 +197,8 @@ class StrategyImportService {
     params: {
       currencyPair: { symbol: string; base: string; quote: string };
       spotPrice: number;
-      startDate: string;
+      startDate: string;           // Hedging Start Date
+      strategyStartDate: string;   // Strategy Start Date
       monthsToHedge: number;
       baseVolume: number;
       quoteVolume: number;
@@ -247,7 +254,10 @@ class StrategyImportService {
           // ✅ NOUVEAUX CHAMPS : Quantité de couverture et volumes
           hedgeQuantity: hedgeQuantity,
           exposureVolume: exposureVolume,
-          rawVolume: rawVolume
+          rawVolume: rawVolume,
+          // ✅ Export dates from Strategy Builder
+          exportStrategyStartDate: params.strategyStartDate,
+          exportHedgingStartDate: params.startDate
         };
 
         if (component.type === 'call' || component.type === 'put' || 
@@ -359,6 +369,9 @@ class StrategyImportService {
             exportVolatility: effectiveVolatility, // Volatilité utilisée lors de l'export
             exportTimeToMaturity: periodResult.timeToMaturity, // Time to maturity exact utilisé lors de l'export
             exportForwardPrice: periodResult.forward, // Forward exact utilisé lors de l'export
+            // ✅ Export dates from Strategy Builder
+            exportStrategyStartDate: params.strategyStartDate, // Strategy Start Date from export
+            exportHedgingStartDate: params.startDate, // Hedging Start Date from export
             // ✅ NOUVEAUX CHAMPS : Quantité de couverture et volumes
             hedgeQuantity: hedgeQuantity, // Quantité de couverture du composant
             exposureVolume: exposureVolume, // Volume d'exposition de cette période (après modifications)

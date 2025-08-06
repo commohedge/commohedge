@@ -423,6 +423,23 @@ const Pricers = () => {
     showGreeks // ✅ Recalculer quand l'affichage des grecques change
   ]);
 
+  // ✅ AJOUT: Recalculer les données de prix automatiquement quand les paramètres changent
+  useEffect(() => {
+    // Recalculer les données de prix seulement si on a déjà calculé au moins une fois
+    if (pricingResults.length > 0) {
+      // Les données se mettent à jour automatiquement via generatePriceData()
+      // car elles dépendent des mêmes paramètres que le prix principal
+      console.log('Price data updated automatically');
+    }
+  }, [
+    strategyComponent,
+    pricingInputs,
+    barrierPricingModel,
+    underlyingPriceType,
+    showGreeks,
+    pricingResults // ✅ Recalculer quand les résultats de pricing changent
+  ]);
+
   // Formatage des résultats
   const formatPrice = (price: number) => {
     return new Intl.NumberFormat('fr-FR', {
@@ -489,14 +506,209 @@ const Pricers = () => {
   const generatePayoffData = () => {
     const spot = pricingInputs.spotPrice;
     const priceRange = Array.from({length: 101}, (_, i) => spot * (0.7 + i * 0.006)); // -30% à +30%
+    const premium = pricingResults.length > 0 ? pricingResults[0].price : 0; // ✅ Vraie prime calculée
+    
     return priceRange.map(price => {
       // ✅ UTILISER STRICTEMENT PricingService.calculateStrategyPayoffAtPrice
-      const totalPayoff = PricingService.calculateStrategyPayoffAtPrice([strategyComponent], price, spot);
+      let totalPayoff = PricingService.calculateStrategyPayoffAtPrice([strategyComponent], price, spot);
+      
+      // ✅ Intégrer la vraie prime dans le payoff
+      // Pour un achat d'option (quantity > 0), on soustrait la prime payée
+      // Pour une vente d'option (quantity < 0), on ajoute la prime reçue
+      if (premium !== 0 && strategyComponent.quantity !== 0) {
+        const quantity = strategyComponent.quantity / 100;
+        if (quantity > 0) {
+          totalPayoff -= premium; // Achat: on paie la prime
+        } else if (quantity < 0) {
+          totalPayoff += premium; // Vente: on reçoit la prime
+        }
+      }
+      
       return { price, payoff: totalPayoff };
     });
   };
 
   const payoffData = generatePayoffData();
+
+  // ✅ AJOUT: Génération des données de prix et grecques en fonction du spot
+  const generatePriceData = () => {
+    const currentSpot = pricingInputs.spotPrice;
+    const spotRange = Array.from({length: 101}, (_, i) => currentSpot * (0.7 + i * 0.006)); // -30% à +30%
+    
+    return spotRange.map(spot => {
+      try {
+        // Calculer le strike selon le type
+        const strike = strategyComponent.strikeType === 'percent' 
+          ? currentSpot * (strategyComponent.strike / 100)  // Utiliser le spot original pour le strike
+          : strategyComponent.strike;
+          
+        // Calculer les barrières selon le type
+        const barrier = strategyComponent.barrier ? (
+          strategyComponent.barrierType === 'percent'
+            ? currentSpot * (strategyComponent.barrier / 100)
+            : strategyComponent.barrier
+        ) : undefined;
+
+        const secondBarrier = strategyComponent.secondBarrier ? (
+          strategyComponent.barrierType === 'percent'
+            ? currentSpot * (strategyComponent.secondBarrier / 100)
+            : strategyComponent.secondBarrier
+        ) : undefined;
+
+        // ✅ CALCUL DU PRIX SOUS-JACENT POUR TOUTES LES OPTIONS
+        let underlyingPrice: number;
+        
+        if (underlyingPriceType === 'forward') {
+          underlyingPrice = PricingService.calculateFXForwardPrice(
+            spot, // Utiliser le spot variable pour le forward
+            pricingInputs.domesticRate / 100,
+            pricingInputs.foreignRate / 100,
+            pricingInputs.timeToMaturity
+          );
+        } else {
+          underlyingPrice = spot; // Utiliser le spot variable
+        }
+        
+        let price = 0;
+        let greeks: Greeks | undefined;
+        
+        if (strategyComponent.type === 'forward') {
+          price = PricingService.calculateFXForwardPrice(
+            spot,
+            pricingInputs.domesticRate / 100,
+            pricingInputs.foreignRate / 100,
+            pricingInputs.timeToMaturity
+          ) - strike;
+        } else if (strategyComponent.type === 'swap') {
+          const forward = PricingService.calculateFXForwardPrice(
+            spot,
+            pricingInputs.domesticRate / 100,
+            pricingInputs.foreignRate / 100,
+            pricingInputs.timeToMaturity
+          );
+          price = PricingService.calculateSwapPrice(
+            [forward],
+            [pricingInputs.timeToMaturity],
+            pricingInputs.domesticRate / 100
+          );
+        } else if (strategyComponent.type === 'call' || strategyComponent.type === 'put') {
+          // ✅ VANILLA OPTIONS
+          price = PricingService.calculateGarmanKohlhagenPrice(
+            strategyComponent.type,
+            underlyingPrice,
+            strike,
+            pricingInputs.domesticRate / 100,
+            pricingInputs.foreignRate / 100,
+            pricingInputs.timeToMaturity,
+            strategyComponent.volatility / 100
+          );
+          
+          // Calculer les grecques
+          if (showGreeks) {
+            greeks = PricingService.calculateGreeks(
+              strategyComponent.type,
+              underlyingPrice,
+              strike,
+              pricingInputs.domesticRate / 100,
+              pricingInputs.foreignRate / 100,
+              pricingInputs.timeToMaturity,
+              strategyComponent.volatility / 100,
+              barrier,
+              secondBarrier,
+              strategyComponent.rebate || 1
+            );
+          }
+        } else if (strategyComponent.type.includes('knockout') || strategyComponent.type.includes('knockin')) {
+          // ✅ BARRIER OPTIONS
+          if (barrierPricingModel === 'closed-form') {
+            price = PricingService.calculateBarrierOptionClosedForm(
+              strategyComponent.type,
+              underlyingPrice,
+              strike,
+              pricingInputs.domesticRate / 100,
+              pricingInputs.timeToMaturity,
+              strategyComponent.volatility / 100,
+              barrier || 0,
+              secondBarrier
+            );
+          } else {
+            price = PricingService.calculateBarrierOptionPrice(
+              strategyComponent.type,
+              underlyingPrice,
+              strike,
+              pricingInputs.domesticRate / 100,
+              pricingInputs.timeToMaturity,
+              strategyComponent.volatility / 100,
+              barrier || 0,
+              secondBarrier,
+              1000
+            );
+          }
+          
+          // Calculer les grecques pour les barrières
+          if (showGreeks) {
+            try {
+              greeks = PricingService.calculateGreeks(
+                strategyComponent.type,
+                underlyingPrice,
+                strike,
+                pricingInputs.domesticRate / 100,
+                pricingInputs.foreignRate / 100,
+                pricingInputs.timeToMaturity,
+                strategyComponent.volatility / 100,
+                barrier,
+                secondBarrier,
+                strategyComponent.rebate || 1
+              );
+            } catch (error) {
+              console.warn('Error calculating Greeks for barrier option at spot', spot, error);
+            }
+          }
+        } else {
+          // ✅ DIGITAL OPTIONS
+          price = PricingService.calculateDigitalOptionPrice(
+            strategyComponent.type,
+            underlyingPrice,
+            strike,
+            pricingInputs.domesticRate / 100,
+            pricingInputs.timeToMaturity,
+            strategyComponent.volatility / 100,
+            barrier,
+            secondBarrier,
+            pricingInputs.numSimulations,
+            strategyComponent.rebate || 1
+          );
+        }
+        
+        // Ajuster le prix par la quantité
+        const adjustedPrice = price * strategyComponent.quantity / 100;
+        
+        return { 
+          spot: parseFloat(spot.toFixed(4)), 
+          price: adjustedPrice,
+          delta: greeks?.delta || 0,
+          gamma: greeks?.gamma || 0,
+          theta: greeks?.theta || 0,
+          vega: greeks?.vega || 0,
+          rho: greeks?.rho || 0
+        };
+      } catch (error) {
+        console.warn('Error calculating price/greeks at spot', spot, error);
+        return { 
+          spot: parseFloat(spot.toFixed(4)), 
+          price: 0,
+          delta: 0,
+          gamma: 0,
+          theta: 0,
+          vega: 0,
+          rho: 0
+        };
+      }
+    });
+  };
+
+  // Calculer les données de prix et grecques
+  const priceData = generatePriceData();
 
   return (
     <Layout 
@@ -506,42 +718,43 @@ const Pricers = () => {
         { label: "Pricers" }
       ]}
     >
-      <div className="space-y-6">
-        {/* En-tête */}
+      <div className="space-y-8">
+        {/* En-tête moderne */}
         <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold">FX Pricers</h1>
-            <p className="text-muted-foreground">
-              Advanced pricing for options, swaps and forwards with centralized PricingService
+          <div className="space-y-2">
+            <h1 className="text-4xl font-bold tracking-tight">FX Pricers</h1>
+            <p className="text-lg text-muted-foreground">
+              Advanced pricing engine for options, swaps and forwards
             </p>
           </div>
           <Button 
             onClick={handleCalculateClick} 
             disabled={isCalculating}
-            className="flex items-center gap-2"
+            size="lg"
+            className="flex items-center gap-3 px-8 py-3 text-base font-medium"
           >
             {isCalculating ? (
               <>
-                <Clock className="w-4 h-4 animate-spin" />
+                <Clock className="w-5 h-5 animate-spin" />
                 Calculating...
               </>
             ) : (
               <>
-                <Calculator className="w-4 h-4" />
+                <Calculator className="w-5 h-5" />
                 Calculate
               </>
             )}
           </Button>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 xl:grid-cols-4 gap-8">
           {/* Panneau de configuration */}
-          <div className="lg:col-span-1 space-y-6">
+          <div className="xl:col-span-1 space-y-6">
             {/* Sélection de l'instrument */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Settings className="w-5 h-5" />
+            <Card className="border-0 shadow-lg">
+              <CardHeader className="pb-4">
+                <CardTitle className="flex items-center gap-3 text-xl">
+                  <Settings className="w-6 h-6 text-primary" />
                   Configuration
                 </CardTitle>
               </CardHeader>
@@ -669,10 +882,10 @@ const Pricers = () => {
             </Card>
 
             {/* Dates (cohérent avec Strategy Builder) */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Calendar className="w-5 h-5" />
+            <Card className="border-0 shadow-lg">
+              <CardHeader className="pb-4">
+                <CardTitle className="flex items-center gap-3 text-xl">
+                  <Calendar className="w-6 h-6 text-primary" />
                   Dates
                 </CardTitle>
               </CardHeader>
@@ -712,9 +925,9 @@ const Pricers = () => {
             </Card>
 
             {/* Paramètres de base */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Basic Parameters</CardTitle>
+            <Card className="border-0 shadow-lg">
+              <CardHeader className="pb-4">
+                <CardTitle className="text-xl">Basic Parameters</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 {/* Prix spot */}
@@ -983,9 +1196,9 @@ const Pricers = () => {
             </Card>
 
             {/* Paramètres avancés */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center justify-between">
+            <Card className="border-0 shadow-lg">
+              <CardHeader className="pb-4">
+                <CardTitle className="flex items-center justify-between text-xl">
                   Advanced Parameters
                   <Switch
                     checked={showAdvanced}
@@ -1014,20 +1227,20 @@ const Pricers = () => {
           </div>
 
           {/* Résultats */}
-          <div className="lg:col-span-2 space-y-6">
+          <div className="xl:col-span-3 space-y-8">
             {/* Résultats de pricing */}
             {pricingResults.length > 0 && (
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <CheckCircle className="w-5 h-5 text-green-600" />
+              <Card className="border-0 shadow-lg">
+                <CardHeader className="pb-4">
+                  <CardTitle className="flex items-center gap-3 text-xl">
+                    <CheckCircle className="w-6 h-6 text-green-600" />
                     Pricing Results
                   </CardTitle>
                 </CardHeader>
-                <CardContent>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <CardContent className="pt-2">
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                     {pricingResults.map((result, index) => (
-                      <Card key={index} className="p-4">
+                      <Card key={index} className="p-6 border-0 shadow-md">
                         <div className="flex items-center justify-between mb-3">
                           <Badge className={getMethodColor(result.method)}>
                             <div className="flex items-center gap-1">
@@ -1089,159 +1302,102 @@ const Pricers = () => {
             )}
 
             {/* Résumé de la transaction */}
-            <Card className="mt-4">
-              <CardHeader>
-                <CardTitle>Transaction Summary</CardTitle>
+            <Card className="border-0 shadow-lg">
+              <CardHeader className="pb-4">
+                <CardTitle className="text-xl">Transaction Summary</CardTitle>
               </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
-                  <div>
-                    <span className="font-semibold">Notional {base} :</span><br/>
-                    {notional.toLocaleString()} {base}
+              <CardContent className="pt-2">
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-6 text-sm">
+                  <div className="p-4 bg-muted/30 rounded-lg">
+                    <span className="font-semibold text-sm text-muted-foreground">Notional {base}</span><br/>
+                    <span className="text-lg font-semibold">{notional.toLocaleString()} {base}</span>
                   </div>
-                  <div>
-                    <span className="font-semibold">Notional {quote} :</span><br/>
-                    {notionalQuote.toLocaleString(undefined, {maximumFractionDigits:2})} {quote}
+                  <div className="p-4 bg-muted/30 rounded-lg">
+                    <span className="font-semibold text-sm text-muted-foreground">Notional {quote}</span><br/>
+                    <span className="text-lg font-semibold">{notionalQuote.toLocaleString(undefined, {maximumFractionDigits:2})} {quote}</span>
                   </div>
-                  <div>
-                    <span className="font-semibold">Prix spot :</span><br/>
-                    {spot} {quote}/{base}
+                  <div className="p-4 bg-muted/30 rounded-lg">
+                    <span className="font-semibold text-sm text-muted-foreground">Spot Price</span><br/>
+                    <span className="text-lg font-semibold">{spot} {quote}/{base}</span>
                   </div>
                   {(selectedInstrument !== 'forward' && selectedInstrument !== 'swap') && (
-                                      <div>
-                    <span className="font-semibold">Underlying Price:</span><br/>
-                    {underlyingPriceType === 'forward' 
-                      ? `${(spot * Math.exp((pricingInputs.domesticRate - pricingInputs.foreignRate)/100 * pricingInputs.timeToMaturity)).toFixed(4)} (Forward)`
-                      : `${spot} (Spot)`
-                    }
-                  </div>
+                    <div className="p-4 bg-muted/30 rounded-lg">
+                      <span className="font-semibold text-sm text-muted-foreground">Underlying Price</span><br/>
+                      <span className="text-lg font-semibold">
+                        {underlyingPriceType === 'forward' 
+                          ? `${(spot * Math.exp((pricingInputs.domesticRate - pricingInputs.foreignRate)/100 * pricingInputs.timeToMaturity)).toFixed(4)} (Forward)`
+                          : `${spot} (Spot)`
+                        }
+                      </span>
+                    </div>
                   )}
-                  <div>
-                    <span className="font-semibold">Absolute Strike:</span><br/>
-                    {strikeAbs.toFixed(4)} {quote}
+                  <div className="p-4 bg-muted/30 rounded-lg">
+                    <span className="font-semibold text-sm text-muted-foreground">Absolute Strike</span><br/>
+                    <span className="text-lg font-semibold">{strikeAbs.toFixed(4)} {quote}</span>
                   </div>
-                  <div>
-                    <span className="font-semibold">Barrier 1:</span><br/>
-                    {barrierAbs ? barrierAbs.toFixed(4) + ' ' + quote : '-'}
+                  {/* ✅ Afficher les barrières selon le type d'option */}
+                  {(selectedInstrument.includes('knockout') || selectedInstrument.includes('knockin') || selectedInstrument.includes('touch') || selectedInstrument.includes('binary')) && (
+                    <>
+                      {/* ✅ Barrier 1 - toujours affiché pour les options avec barrières */}
+                      <div className="p-4 bg-muted/30 rounded-lg">
+                        <span className="font-semibold text-sm text-muted-foreground">Barrier 1</span><br/>
+                        <span className="text-lg font-semibold">{barrierAbs ? barrierAbs.toFixed(4) + ' ' + quote : '-'}</span>
+                      </div>
+                      
+                      {/* ✅ Barrier 2 - seulement pour les options double barrière */}
+                      {selectedInstrument.includes('double') && (
+                        <div className="p-4 bg-muted/30 rounded-lg">
+                          <span className="font-semibold text-sm text-muted-foreground">Barrier 2</span><br/>
+                          <span className="text-lg font-semibold">{secondBarrierAbs ? secondBarrierAbs.toFixed(4) + ' ' + quote : '-'}</span>
+                        </div>
+                      )}
+                    </>
+                  )}
+                  <div className="p-4 bg-muted/30 rounded-lg">
+                    <span className="font-semibold text-sm text-muted-foreground">{quote} Rate</span><br/>
+                    <span className="text-lg font-semibold">{pricingInputs.domesticRate}%</span>
                   </div>
-                  <div>
-                    <span className="font-semibold">Barrier 2:</span><br/>
-                    {secondBarrierAbs ? secondBarrierAbs.toFixed(4) + ' ' + quote : '-'}
+                  <div className="p-4 bg-muted/30 rounded-lg">
+                    <span className="font-semibold text-sm text-muted-foreground">{base} Rate</span><br/>
+                    <span className="text-lg font-semibold">{pricingInputs.foreignRate}%</span>
                   </div>
-                  <div>
-                    <span className="font-semibold">{quote} Rate:</span><br/>
-                    {pricingInputs.domesticRate} %
+                  <div className="p-4 bg-muted/30 rounded-lg">
+                    <span className="font-semibold text-sm text-muted-foreground">Volatility</span><br/>
+                    <span className="text-lg font-semibold">{strategyComponent.volatility}%</span>
                   </div>
-                  <div>
-                    <span className="font-semibold">{base} Rate:</span><br/>
-                    {pricingInputs.foreignRate} %
-                  </div>
-                  <div>
-                    <span className="font-semibold">Volatility:</span><br/>
-                    {strategyComponent.volatility} %
-                  </div>
-                  <div>
-                    <span className="font-semibold">Maturity:</span><br/>
-                    {pricingInputs.timeToMaturity.toFixed(2)} years
+                  <div className="p-4 bg-muted/30 rounded-lg">
+                    <span className="font-semibold text-sm text-muted-foreground">Maturity</span><br/>
+                    <span className="text-lg font-semibold">{pricingInputs.timeToMaturity.toFixed(2)} years</span>
                   </div>
                 </div>
               </CardContent>
             </Card>
 
-            {/* Informations sur les méthodes */}
-            <Card>
-              <CardHeader>
-                                  <CardTitle className="flex items-center gap-2">
-                    <Info className="w-5 h-5" />
-                    PricingService Information
-                  </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  <div>
-                    <h4 className="font-medium mb-2">Garman-Kohlhagen (Vanilla Options)</h4>
-                    <p className="text-sm text-muted-foreground">
-                      Exact analytical model for FX vanilla options. Takes into account interest rate differentials.
-                      <strong>Uses the chosen price (Forward or Spot) as underlying</strong>.
-                    </p>
-                  </div>
-                  
-                  <div>
-                    <h4 className="font-medium mb-2">Barrier Closed-Form</h4>
-                    <p className="text-sm text-muted-foreground">
-                      Exact analytical formulas for barrier options. Complete VBA model implementation 
-                      with all cases (knock-in/out, up/down, call/put, reverse). 
-                      <strong>Uses the chosen price (Forward or Spot) as underlying</strong>.
-                    </p>
-                  </div>
-                  
-                  <div>
-                    <h4 className="font-medium mb-2">Barrier Monte Carlo</h4>
-                    <p className="text-sm text-muted-foreground">
-                      1000 price path simulations to evaluate barrier options. 
-                      More flexible for complex barriers. 
-                      <strong>Uses the chosen price (Forward or Spot) as underlying</strong>.
-                    </p>
-                  </div>
-                  
-                  <div>
-                    <h4 className="font-medium mb-2">Forward vs Spot Price</h4>
-                    <p className="text-sm text-muted-foreground">
-                      <strong>Forward (Recommended)</strong> : Price adjusted by interest rate differentials. 
-                      Consistent with Strategy Builder.<br/>
-                      <strong>Spot</strong> : Current market price without adjustment. 
-                      Can be used for comparisons or specific needs.
-                    </p>
-                  </div>
-                  
-                  <div>
-                    <h4 className="font-medium mb-2">Digital Monte Carlo</h4>
-                    <p className="text-sm text-muted-foreground">
-                      Monte Carlo simulation for digital options (one-touch, no-touch, range-binary).
-                      <strong>Uses the chosen price (Forward or Spot) as underlying</strong> and the configured number of simulations.
-                    </p>
-                  </div>
-                  
-                  <div>
-                    <h4 className="font-medium mb-2">Analytical Greeks Calculation</h4>
-                    <p className="text-sm text-muted-foreground">
-                      <strong>Vanilla Options</strong> : Exact Garman-Kohlhagen formulas for Delta, Gamma, Theta, Vega and Rho.<br/>
-                      <strong>Barrier Options</strong> : Analytical approximations based on vanilla Greeks with adjustments according to barrier distance.<br/>
-                      <strong>Digital Options</strong> : Approximations based on vanilla spreads.<br/>
-                      <strong>FX Formulas</strong> : Takes into account interest rate differentials (r_d - r_f).
-                    </p>
-                  </div>
-                  
-                  <div>
-                    <h4 className="font-medium mb-2">Forward & Swap Pricing</h4>
-                    <p className="text-sm text-muted-foreground">
-                      Directly uses PricingService.calculateFXForwardPrice and PricingService.calculateSwapPrice
-                      with exactly the same parameters as Strategy Builder.
-                    </p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+
 
             {/* Prime totale */}
             {pricingResults.length > 0 && (
-              <div className="mt-4">
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Total Premium</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="flex flex-col gap-2 text-lg">
-                      <div><span className="font-semibold">Premium ({base}) :</span> {premiumBase.toLocaleString(undefined, {maximumFractionDigits:2})} {base}</div>
-                      <div><span className="font-semibold">Premium ({quote}) :</span> {premiumQuote.toLocaleString(undefined, {maximumFractionDigits:2})} {quote}</div>
+              <Card className="border-0 shadow-lg">
+                <CardHeader className="pb-4">
+                  <CardTitle className="text-xl">Total Premium</CardTitle>
+                </CardHeader>
+                <CardContent className="pt-2">
+                  <div className="flex flex-col gap-3 text-lg">
+                    <div className="flex justify-between items-center p-4 bg-muted/50 rounded-lg">
+                      <span className="font-semibold">Premium ({base}):</span>
+                      <span className="font-mono text-xl">{premiumBase.toLocaleString(undefined, {maximumFractionDigits:2})} {base}</span>
                     </div>
-                  </CardContent>
-                </Card>
-              </div>
+                    <div className="flex justify-between items-center p-4 bg-muted/50 rounded-lg">
+                      <span className="font-semibold">Premium ({quote}):</span>
+                      <span className="font-mono text-xl">{premiumQuote.toLocaleString(undefined, {maximumFractionDigits:2})} {quote}</span>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
             )}
 
-            {/* Affichage du graphique Payoff/FX Hedging */}
-            <Card className="mt-6">
+            {/* Affichage du graphique Payoff/FX Hedging/Price/Greeks */}
+            <Card className="border-0 shadow-lg">
               <PayoffChart
                 data={payoffData}
                 strategy={[strategyComponent]}
@@ -1249,6 +1405,8 @@ const Pricers = () => {
                 currencyPair={selectedPair}
                 includePremium={true}
                 showPremiumToggle={true}
+                realPremium={pricingResults.length > 0 ? pricingResults[0].price : undefined}
+                priceData={priceData}
               />
             </Card>
           </div>

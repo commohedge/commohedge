@@ -26,10 +26,12 @@ interface PayoffChartProps {
   includePremium?: boolean;
   className?: string;
   showPremiumToggle?: boolean;
+  realPremium?: number; // ✅ Vraie prime calculée par PricingService
+  priceData?: Array<{ spot: number; price: number; delta: number; gamma: number; theta: number; vega: number; rho: number }>; // ✅ Données de prix et grecques
 }
 
 // Generate FX hedging payoff data based on strategy
-const generateFXHedgingData = (strategy: any[], spot: number, includePremium: boolean = false) => {
+const generateFXHedgingData = (strategy: any[], spot: number, includePremium: boolean = false, realPremium?: number) => {
   const data = [];
   const minSpot = spot * 0.7;  // -30% du spot
   const maxSpot = spot * 1.3;  // +30% du spot
@@ -49,27 +51,33 @@ const generateFXHedgingData = (strategy: any[], spot: number, includePremium: bo
       // Utilise la quantité avec son signe (+ pour achat, - pour vente)
       const quantity = option.quantity / 100;
       
-      // Calculate option premium (more realistic)
-      let premium = 0.01 * Math.abs(quantity); // Fallback simple premium
+      // ✅ Use real premium calculated by PricingService if available
+      let premium = realPremium || 0.01 * Math.abs(quantity); // Fallback to simple premium if no real premium
       
-      // For digital options, try to use more realistic premium calculation
-      if (['one-touch', 'no-touch', 'double-touch', 'double-no-touch', 'range-binary', 'outside-binary'].includes(option.type)) {
-        const barrier = option.barrierType === 'percent' 
-          ? spot * (option.barrier / 100) 
-          : option.barrier;
-        const rebateDecimal = (option.rebate || 5) / 100;
-        
-        // Approximation simple: premium = probability * rebate * discount factor
-        // Plus proche de la barrière = plus de probabilité d'activation
-        let probApprox = 0.5; // Probabilité par défaut
-        
-        if (option.type === 'one-touch') {
-          probApprox = currentSpot >= barrier ? 1 : Math.min(0.8, (currentSpot / barrier) * 0.6);
-        } else if (option.type === 'no-touch') {
-          probApprox = currentSpot < barrier ? Math.max(0.2, 1 - (currentSpot / barrier) * 0.6) : 0;
+      // ✅ Adjust premium based on quantity (same premium for all scenarios when using realPremium)
+      if (realPremium) {
+        // Real premium already calculated for the exact option, just use it
+        premium = realPremium;
+      } else {
+        // Fallback: For digital options, try to use more realistic premium calculation
+        if (['one-touch', 'no-touch', 'double-touch', 'double-no-touch', 'range-binary', 'outside-binary'].includes(option.type)) {
+          const barrier = option.barrierType === 'percent' 
+            ? spot * (option.barrier / 100) 
+            : option.barrier;
+          const rebateDecimal = (option.rebate || 5) / 100;
+          
+          // Approximation simple: premium = probability * rebate * discount factor
+          // Plus proche de la barrière = plus de probabilité d'activation
+          let probApprox = 0.5; // Probabilité par défaut
+          
+          if (option.type === 'one-touch') {
+            probApprox = currentSpot >= barrier ? 1 : Math.min(0.8, (currentSpot / barrier) * 0.6);
+          } else if (option.type === 'no-touch') {
+            probApprox = currentSpot < barrier ? Math.max(0.2, 1 - (currentSpot / barrier) * 0.6) : 0;
+          }
+          
+          premium = probApprox * rebateDecimal * 0.95; // 5% discount factor
         }
-        
-        premium = probApprox * rebateDecimal * 0.95; // 5% discount factor
       }
       
       if (option.type === 'put') {
@@ -369,16 +377,18 @@ const PayoffChart: React.FC<PayoffChartProps> = ({
   currencyPair,
   includePremium = false,
   className = "",
-  showPremiumToggle = false
+  showPremiumToggle = false,
+  realPremium, // ✅ Receive real premium
+  priceData // ✅ Receive price and Greeks data
 }) => {
-  const [activeTab, setActiveTab] = useState<"payoff" | "hedging">("payoff");
+  const [activeTab, setActiveTab] = useState<"payoff" | "hedging" | "delta" | "gamma" | "theta" | "vega" | "rho">("payoff");
   const [showPremium, setShowPremium] = useState(includePremium);
   const { theme } = useThemeContext();
   const isBloombergTheme = theme === 'bloomberg';
   
   const fxHedgingData = useMemo(() => {
-    return generateFXHedgingData(strategy, spot, showPremium);
-  }, [strategy, spot, showPremium]);
+    return generateFXHedgingData(strategy, spot, showPremium, realPremium); // ✅ Pass real premium
+  }, [strategy, spot, showPremium, realPremium]); // ✅ Add realPremium to dependencies
   
   // Get strategy type for display
   const getStrategyName = () => {
@@ -608,21 +618,26 @@ const PayoffChart: React.FC<PayoffChartProps> = ({
             )}
             <Tabs 
               value={activeTab} 
-              onValueChange={(value) => setActiveTab(value as "payoff" | "hedging")}
+              onValueChange={(value) => setActiveTab(value as "payoff" | "hedging" | "delta" | "gamma" | "theta" | "vega" | "rho")}
             >
               <TabsList>
                 <TabsTrigger value="payoff">Payoff</TabsTrigger>
                 <TabsTrigger value="hedging">FX Hedging</TabsTrigger>
+                <TabsTrigger value="delta">Delta</TabsTrigger>
+                <TabsTrigger value="gamma">Gamma</TabsTrigger>
+                <TabsTrigger value="theta">Theta</TabsTrigger>
+                <TabsTrigger value="vega">Vega</TabsTrigger>
+                <TabsTrigger value="rho">Rho</TabsTrigger>
               </TabsList>
             </Tabs>
           </div>
         </div>
         <div className="text-sm text-muted-foreground mt-1">
-          {getStrategyName()}
+          {activeTab === "payoff" || activeTab === "hedging" ? getStrategyName() : `Graphs : ${getStrategyName()}`}
         </div>
       </CardHeader>
       <CardContent className="pt-4 px-2">
-        {activeTab === "payoff" ? (
+        {activeTab === "payoff" && (
           <ResponsiveContainer width="100%" height={400}>
             <LineChart data={data} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" />
@@ -651,7 +666,9 @@ const PayoffChart: React.FC<PayoffChartProps> = ({
               />
             </LineChart>
           </ResponsiveContainer>
-        ) : (
+        )}
+
+        {activeTab === "hedging" && (
           <ResponsiveContainer width="100%" height={400}>
             <LineChart data={fxHedgingData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" />
@@ -700,6 +717,257 @@ const PayoffChart: React.FC<PayoffChartProps> = ({
               />
             </LineChart>
           </ResponsiveContainer>
+        )}
+
+        {/* ✅ NOUVEAU: Graphiques individuels pour chaque Grec */}
+        {activeTab === "delta" && priceData && (
+          <ResponsiveContainer width="100%" height={400}>
+            <LineChart data={priceData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis 
+                dataKey="spot" 
+                label={{ value: 'spot', position: 'insideBottomRight', offset: -5 }}
+              />
+              <YAxis
+                label={{
+                  value: 'delta', 
+                  angle: -90,
+                  position: 'insideLeft',
+                  style: { textAnchor: 'middle' }
+                }}
+              />
+              <Tooltip 
+                formatter={(value: number) => [
+                  value.toFixed(6),
+                  'Delta'
+                ]}
+                labelFormatter={(label: number) => `Spot: ${label.toFixed(4)}`}
+              />
+              <Legend />
+              <ReferenceLine
+                x={spot}
+                stroke="#22C55E"
+                strokeDasharray="3 3"
+                label={{
+                  value: 'strike',
+                  position: 'top',
+                  fill: "#22C55E",
+                  fontSize: 12,
+                }}
+              />
+              <Line
+                type="monotone"
+                dataKey="delta"
+                stroke="#000000"
+                strokeWidth={2}
+                dot={false}
+                activeDot={{ r: 4, fill: "#EF4444" }}
+                name="Delta"
+              />
+            </LineChart>
+          </ResponsiveContainer>
+        )}
+
+        {activeTab === "gamma" && priceData && (
+          <ResponsiveContainer width="100%" height={400}>
+            <LineChart data={priceData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis 
+                dataKey="spot" 
+                label={{ value: 'spot', position: 'insideBottomRight', offset: -5 }}
+              />
+              <YAxis
+                label={{
+                  value: 'gamma', 
+                  angle: -90,
+                  position: 'insideLeft',
+                  style: { textAnchor: 'middle' }
+                }}
+              />
+              <Tooltip 
+                formatter={(value: number) => [
+                  value.toFixed(6),
+                  'Gamma'
+                ]}
+                labelFormatter={(label: number) => `Spot: ${label.toFixed(4)}`}
+              />
+              <Legend />
+              <ReferenceLine
+                x={spot}
+                stroke="#22C55E"
+                strokeDasharray="3 3"
+                label={{
+                  value: 'strike',
+                  position: 'top',
+                  fill: "#22C55E",
+                  fontSize: 12,
+                }}
+              />
+              <Line
+                type="monotone"
+                dataKey="gamma"
+                stroke="#000000"
+                strokeWidth={2}
+                dot={false}
+                activeDot={{ r: 4, fill: "#EF4444" }}
+                name="Gamma"
+              />
+            </LineChart>
+          </ResponsiveContainer>
+        )}
+
+        {activeTab === "theta" && priceData && (
+          <ResponsiveContainer width="100%" height={400}>
+            <LineChart data={priceData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis 
+                dataKey="spot" 
+                label={{ value: 'spot', position: 'insideBottomRight', offset: -5 }}
+              />
+              <YAxis
+                label={{
+                  value: 'theta', 
+                  angle: -90,
+                  position: 'insideLeft',
+                  style: { textAnchor: 'middle' }
+                }}
+              />
+              <Tooltip 
+                formatter={(value: number) => [
+                  value.toFixed(6),
+                  'Theta'
+                ]}
+                labelFormatter={(label: number) => `Spot: ${label.toFixed(4)}`}
+              />
+              <Legend />
+              <ReferenceLine
+                x={spot}
+                stroke="#22C55E"
+                strokeDasharray="3 3"
+                label={{
+                  value: 'strike',
+                  position: 'top',
+                  fill: "#22C55E",
+                  fontSize: 12,
+                }}
+              />
+              <Line
+                type="monotone"
+                dataKey="theta"
+                stroke="#000000"
+                strokeWidth={2}
+                dot={false}
+                activeDot={{ r: 4, fill: "#EF4444" }}
+                name="Theta"
+              />
+            </LineChart>
+          </ResponsiveContainer>
+        )}
+
+        {activeTab === "vega" && priceData && (
+          <ResponsiveContainer width="100%" height={400}>
+            <LineChart data={priceData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis 
+                dataKey="spot" 
+                label={{ value: 'spot', position: 'insideBottomRight', offset: -5 }}
+              />
+              <YAxis
+                label={{
+                  value: 'vega', 
+                  angle: -90,
+                  position: 'insideLeft',
+                  style: { textAnchor: 'middle' }
+                }}
+              />
+              <Tooltip 
+                formatter={(value: number) => [
+                  value.toFixed(6),
+                  'Vega'
+                ]}
+                labelFormatter={(label: number) => `Spot: ${label.toFixed(4)}`}
+              />
+              <Legend />
+              <ReferenceLine
+                x={spot}
+                stroke="#22C55E"
+                strokeDasharray="3 3"
+                label={{
+                  value: 'strike',
+                  position: 'top',
+                  fill: "#22C55E",
+                  fontSize: 12,
+                }}
+              />
+              <Line
+                type="monotone"
+                dataKey="vega"
+                stroke="#000000"
+                strokeWidth={2}
+                dot={false}
+                activeDot={{ r: 4, fill: "#EF4444" }}
+                name="Vega"
+              />
+            </LineChart>
+          </ResponsiveContainer>
+        )}
+
+        {activeTab === "rho" && priceData && (
+          <ResponsiveContainer width="100%" height={400}>
+            <LineChart data={priceData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis 
+                dataKey="spot" 
+                label={{ value: 'spot', position: 'insideBottomRight', offset: -5 }}
+              />
+              <YAxis
+                label={{
+                  value: 'rho', 
+                  angle: -90,
+                  position: 'insideLeft',
+                  style: { textAnchor: 'middle' }
+                }}
+              />
+              <Tooltip 
+                formatter={(value: number) => [
+                  value.toFixed(6),
+                  'Rho'
+                ]}
+                labelFormatter={(label: number) => `Spot: ${label.toFixed(4)}`}
+              />
+              <Legend />
+              <ReferenceLine
+                x={spot}
+                stroke="#22C55E"
+                strokeDasharray="3 3"
+                label={{
+                  value: 'strike',
+                  position: 'top',
+                  fill: "#22C55E",
+                  fontSize: 12,
+                }}
+              />
+              <Line
+                type="monotone"
+                dataKey="rho"
+                stroke="#000000"
+                strokeWidth={2}
+                dot={false}
+                activeDot={{ r: 4, fill: "#EF4444" }}
+                name="Rho"
+              />
+            </LineChart>
+          </ResponsiveContainer>
+        )}
+
+        {/* Message si pas de données de prix */}
+        {(activeTab === "delta" || activeTab === "gamma" || activeTab === "theta" || activeTab === "vega" || activeTab === "rho") && !priceData && (
+          <div className="flex items-center justify-center h-96 text-muted-foreground">
+            <div className="text-center">
+              <p className="text-lg font-medium mb-2">Aucune donnée de prix disponible</p>
+              <p className="text-sm">Cliquez sur "Calculate" pour générer les courbes de grecques</p>
+            </div>
+          </div>
         )}
       </CardContent>
     </Card>

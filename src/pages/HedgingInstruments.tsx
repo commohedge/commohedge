@@ -53,7 +53,54 @@ const HedgingInstruments = () => {
   });
   const [importService] = useState(() => StrategyImportService.getInstance());
   
-  // MTM Calculation states - maintenant par devise
+  // ✅ MTM Calculation states - maintenant par devise avec logique Strategy Builder
+  const [strategyStartDate, setStrategyStartDate] = useState(() => {
+    // Récupérer depuis Strategy Builder si disponible
+    try {
+      const savedState = localStorage.getItem('calculatorState');
+      if (savedState) {
+        const state = JSON.parse(savedState);
+        return state.strategyStartDate || new Date().toISOString().split('T')[0];
+      }
+    } catch (error) {
+      console.warn('Error loading strategy start date from Strategy Builder:', error);
+    }
+    return new Date().toISOString().split('T')[0];
+  });
+  
+  const [hedgingStartDate, setHedgingStartDate] = useState(() => {
+    // Récupérer depuis Strategy Builder si disponible
+    try {
+      const savedState = localStorage.getItem('calculatorState');
+      if (savedState) {
+        const state = JSON.parse(savedState);
+        return state.startDate || new Date().toISOString().split('T')[0];
+      }
+    } catch (error) {
+      console.warn('Error loading hedging start date from Strategy Builder:', error);
+    }
+    return new Date().toISOString().split('T')[0];
+  });
+
+  // ✅ Fonction pour récupérer les dates depuis les instruments exportés
+  const getExportDatesFromInstruments = () => {
+    if (instruments.length === 0) return null;
+    
+    // Chercher un instrument avec des dates d'export
+    const instrumentWithDates = instruments.find(inst => 
+      inst.exportStrategyStartDate && inst.exportHedgingStartDate
+    );
+    
+    if (instrumentWithDates) {
+      return {
+        strategyStartDate: instrumentWithDates.exportStrategyStartDate,
+        hedgingStartDate: instrumentWithDates.exportHedgingStartDate
+      };
+    }
+    
+    return null;
+  };
+  
   const [valuationDate, setValuationDate] = useState(new Date().toISOString().split('T')[0]);
   const [currencyMarketData, setCurrencyMarketData] = useState<{ [currency: string]: CurrencyMarketData }>(() => {
     // Charger les données de marché depuis localStorage
@@ -233,13 +280,73 @@ const HedgingInstruments = () => {
     }
   }, [currencyMarketData]);
 
-  // Utiliser exactement la même logique de pricing que Strategy Builder
+  // ✅ Synchroniser les dates avec Strategy Builder et instruments exportés
+  useEffect(() => {
+    const handleStrategyBuilderUpdate = () => {
+      try {
+        const savedState = localStorage.getItem('calculatorState');
+        if (savedState) {
+          const state = JSON.parse(savedState);
+          if (state.strategyStartDate) {
+            setStrategyStartDate(state.strategyStartDate);
+          }
+          if (state.startDate) {
+            setHedgingStartDate(state.startDate);
+          }
+        }
+      } catch (error) {
+        console.warn('Error syncing dates with Strategy Builder:', error);
+      }
+    };
 
-  // Utiliser PricingService.calculateTimeToMaturity au lieu d'une implémentation locale
+    // ✅ Synchroniser avec les dates d'export des instruments
+    const handleExportDatesSync = () => {
+      const exportDates = getExportDatesFromInstruments();
+      if (exportDates) {
+        console.log('[HEDGING] Syncing with export dates:', exportDates);
+        setStrategyStartDate(exportDates.strategyStartDate);
+        setHedgingStartDate(exportDates.hedgingStartDate);
+      }
+    };
+
+    // Écouter les changements dans Strategy Builder
+    window.addEventListener('storage', handleStrategyBuilderUpdate);
+    
+    // Vérifier au chargement
+    handleStrategyBuilderUpdate();
+    handleExportDatesSync();
+
+    return () => {
+      window.removeEventListener('storage', handleStrategyBuilderUpdate);
+    };
+  }, [instruments]); // ✅ Ajouter instruments comme dépendance
+
+  // ✅ Recalculer automatiquement quand les dates changent
+  useEffect(() => {
+    if (instruments.length > 0) {
+      console.log('[HEDGING] Dates changed - Strategy Start:', strategyStartDate, 'Hedging Start:', hedgingStartDate);
+      // Force re-render pour recalculer les MTM
+      setInstruments([...instruments]);
+    }
+  }, [strategyStartDate, hedgingStartDate]);
+
+  // ✅ Utiliser exactement la même logique de pricing que Strategy Builder
+
+  // ✅ Calcul de maturité avec logique Strategy Builder
   const calculateTimeToMaturity = (maturityDate: string, valuationDate: string): number => {
     const result = PricingService.calculateTimeToMaturity(maturityDate, valuationDate);
     console.log('[HEDGING] maturity:', maturityDate, 'valuation:', valuationDate, 'result:', result.toFixed(6), 'years');
     return result;
+  };
+
+  // ✅ Calcul de maturité depuis Strategy Start Date (comme Strategy Builder)
+  const calculateTimeToMaturityFromStrategyStart = (maturityDate: string): number => {
+    return PricingService.calculateTimeToMaturity(maturityDate, strategyStartDate);
+  };
+
+  // ✅ Calcul de maturité depuis Hedging Start Date (pour affichage)
+  const calculateTimeToMaturityFromHedgingStart = (maturityDate: string): number => {
+    return PricingService.calculateTimeToMaturity(maturityDate, hedgingStartDate);
   };
 
   // Utiliser le PricingService centralisé au lieu de redéfinir erf
@@ -363,10 +470,24 @@ const HedgingInstruments = () => {
   // avec une implémentation complète pour les options à double barrière
 
   const calculateTodayPrice = (instrument: HedgingInstrument): number => {
-    // STRATÉGIE : Utiliser les valeurs CURRENT affichées dans le tableau (modifiables par l'utilisateur)
+    // ✅ STRATÉGIE : Utiliser les valeurs CURRENT affichées dans le tableau (modifiables par l'utilisateur)
     
-    // 1. TIME TO MATURITY : Toujours utiliser la valeur CURRENT (recalculée avec la date de valorisation actuelle)
-    const calculationTimeToMaturity = calculateTimeToMaturity(instrument.maturity, valuationDate);
+    // ✅ 1. TIME TO MATURITY : Utiliser la logique Strategy Builder avec dates d'export
+    // Priorité : dates d'export > dates actuelles
+    let effectiveStrategyStartDate = strategyStartDate;
+    let effectiveHedgingStartDate = hedgingStartDate;
+    
+    if (instrument.exportStrategyStartDate && instrument.exportHedgingStartDate) {
+      effectiveStrategyStartDate = instrument.exportStrategyStartDate;
+      effectiveHedgingStartDate = instrument.exportHedgingStartDate;
+      console.log(`[DEBUG] ${instrument.id}: Using export dates - Strategy: ${effectiveStrategyStartDate}, Hedging: ${effectiveHedgingStartDate}`);
+    }
+    
+    // Pour le pricing, utiliser Strategy Start Date (comme Strategy Builder)
+    const calculationTimeToMaturity = PricingService.calculateTimeToMaturity(instrument.maturity, effectiveStrategyStartDate);
+    
+    // Pour l'affichage MTM, utiliser Hedging Start Date (comme Strategy Builder)
+    const displayTimeToMaturity = PricingService.calculateTimeToMaturity(instrument.maturity, effectiveHedgingStartDate);
     
     // 2. PARAMÈTRES DE MARCHÉ : Utiliser les valeurs CURRENT des données de marché
     const marketData = currencyMarketData[instrument.currency] || getMarketDataFromInstruments(instrument.currency) || { spot: 1.0000, volatility: 20, domesticRate: 1.0, foreignRate: 1.0 };
@@ -412,7 +533,7 @@ const HedgingInstruments = () => {
     // 5. STRIKE ANALYSIS : Vérifier la cohérence du strike
     console.log(`[DEBUG] ${instrument.id}: Strike analysis - Strike: ${instrument.strike}, Type: ${instrument.originalComponent?.strikeType || 'unknown'}, Original Strike: ${instrument.originalComponent?.strike || 'N/A'}, Spot: ${spotRate}`);
     
-         console.log(`[DEBUG] ${instrument.id}: Time to maturity calculated from valuation date ${valuationDate} to maturity ${instrument.maturity}: ${calculationTimeToMaturity.toFixed(4)} years`);
+         console.log(`[DEBUG] ${instrument.id}: Time to maturity - Strategy Start: ${calculationTimeToMaturity.toFixed(4)} years, Hedging Start: ${displayTimeToMaturity.toFixed(4)} years (Export dates: ${instrument.exportStrategyStartDate ? 'Yes' : 'No'})`);
      console.log(`[DEBUG] ${instrument.id}: Using current spot ${spotRate.toFixed(4)} -> forward ${S.toFixed(4)} (r_d=${(r_d*100).toFixed(1)}%, r_f=${(r_f*100).toFixed(1)}%, t=${calculationTimeToMaturity.toFixed(4)})`);
     
     // Vérifier l'expiration
@@ -909,7 +1030,7 @@ const HedgingInstruments = () => {
       
       toast({
         title: "MTM Recalculated",
-        description: `Updated prices for ${instruments.length} instruments using valuation date ${valuationDate}`,
+        description: `Updated prices for ${instruments.length} instruments using Strategy Start Date ${strategyStartDate} and Hedging Start Date ${hedgingStartDate}`,
       });
     } catch (error) {
       toast({
@@ -1104,13 +1225,35 @@ const HedgingInstruments = () => {
             MTM Valuation Parameters
           </CardTitle>
           <CardDescription>
-            Configure market parameters for Mark-to-Market calculations
+            Configure market parameters for Mark-to-Market calculations using Strategy Builder date logic
           </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
-            {/* Valuation Date - Global */}
+            {/* ✅ Strategy Builder Date Logic */}
             <div className="grid gap-4 md:grid-cols-3">
+              <div className="space-y-2">
+                <Label htmlFor="strategy-start-date">Strategy Start Date</Label>
+                <Input
+                  id="strategy-start-date"
+                  type="date"
+                  value={strategyStartDate}
+                  onChange={(e) => setStrategyStartDate(e.target.value)}
+                  className="font-mono"
+                />
+                <p className="text-xs text-muted-foreground">Used for pricing calculations</p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="hedging-start-date">Hedging Start Date</Label>
+                <Input
+                  id="hedging-start-date"
+                  type="date"
+                  value={hedgingStartDate}
+                  onChange={(e) => setHedgingStartDate(e.target.value)}
+                  className="font-mono"
+                />
+                <p className="text-xs text-muted-foreground">Used for MTM display</p>
+              </div>
               <div className="space-y-2">
                 <Label htmlFor="valuation-date">Valuation Date</Label>
                 <Input
@@ -1120,14 +1263,16 @@ const HedgingInstruments = () => {
                   onChange={(e) => setValuationDate(e.target.value)}
                   className="font-mono"
                 />
+                <p className="text-xs text-muted-foreground">Current market date</p>
               </div>
-              <div className="space-y-2 md:col-span-2">
-                <Label>&nbsp;</Label>
-                <div className="flex gap-2">
+            </div>
+            <div className="space-y-2 md:col-span-3">
+              <Label>&nbsp;</Label>
+              <div className="flex gap-2">
                 <Button 
                   onClick={recalculateAllMTM}
                   disabled={isRecalculating}
-                    className="flex-1"
+                  className="flex-1"
                 >
                   {isRecalculating ? (
                     <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
@@ -1136,21 +1281,20 @@ const HedgingInstruments = () => {
                   )}
                   {isRecalculating ? "Calculating..." : "Recalculate All MTM"}
                 </Button>
-                  
-                  {/* BOUTON DE TEST POUR DIAGNOSTIC */}
-                  <Button 
-                    onClick={() => {
-                      console.log('[DEBUG TEST] localStorage hedgingInstruments:', 
-                        JSON.parse(localStorage.getItem('hedgingInstruments') || '[]'));
-                      console.log('[DEBUG TEST] instruments state:', instruments);
-                    }} 
-                    variant="outline" 
-                    size="sm"
-                    className="px-3"
-                  >
-                    🔍
-                  </Button>
-                </div>
+                
+                {/* BOUTON DE TEST POUR DIAGNOSTIC */}
+                <Button 
+                  onClick={() => {
+                    console.log('[DEBUG TEST] localStorage hedgingInstruments:', 
+                      JSON.parse(localStorage.getItem('hedgingInstruments') || '[]'));
+                    console.log('[DEBUG TEST] instruments state:', instruments);
+                  }} 
+                  variant="outline" 
+                  size="sm"
+                  className="px-3"
+                >
+                  🔍
+                </Button>
               </div>
             </div>
 

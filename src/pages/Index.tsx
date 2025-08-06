@@ -3728,9 +3728,23 @@ const Index = () => {
     try {
       const importService = StrategyImportService.getInstance();
       
-      // Préparer TOUTES les données de résultats détaillés pour l'import
+      // ✅ FILTRER les résultats détaillés comme dans Detailed Results
+      // Seulement exporter les périodes à partir de la Hedging Start Date
+      const filteredResults = filterResultsForDisplay(results, params.startDate);
+      
+      if (!filteredResults || filteredResults.length === 0) {
+        alert('Aucune période à exporter. Vérifiez que la Hedging Start Date est correcte.');
+        return;
+      }
+      
+      console.log(`[EXPORT] Hedging Start Date: ${params.startDate}`);
+      console.log(`[EXPORT] Total calculated periods: ${results.length}, Exported periods: ${filteredResults.length}`);
+      console.log(`[EXPORT] First exported period: ${filteredResults[0].date}`);
+      console.log(`[EXPORT] Last exported period: ${filteredResults[filteredResults.length - 1].date}`);
+      
+      // Préparer les données de résultats détaillés FILTRÉES pour l'import
       // avec informations enrichies pour le re-pricing
-      const enrichedDetailedResults = results.map((result, periodIndex) => {
+      const enrichedDetailedResults = filteredResults.map((result, periodIndex) => {
         const monthKey = `${new Date(result.date).getFullYear()}-${new Date(result.date).getMonth() + 1}`;
         
         // Enrichir chaque résultat avec des informations supplémentaires
@@ -3847,7 +3861,8 @@ const Index = () => {
       const strategyId = importService.importStrategy(strategyName, strategy, {
         currencyPair: params.currencyPair,
         spotPrice: params.spotPrice,
-        startDate: params.startDate,
+        startDate: params.startDate,           // Hedging Start Date
+        strategyStartDate: params.strategyStartDate,   // Strategy Start Date
         monthsToHedge: params.monthsToHedge,
         baseVolume: params.baseVolume,
         quoteVolume: params.quoteVolume,
@@ -3865,7 +3880,8 @@ const Index = () => {
       const totalComponents = strategy.length;
       alert(`Stratégie "${strategyName}" exportée avec succès vers Instruments de Couverture!\n` +
             `ID de la stratégie: ${strategyId}\n` +
-            `Périodes exportées: ${totalPeriods}\n` +
+            `Hedging Start Date: ${params.startDate}\n` +
+            `Périodes exportées: ${totalPeriods} (filtrées à partir de ${params.startDate})\n` +
             `Composants par période: ${totalComponents}\n` +
             `Total d'instruments créés: ${totalPeriods * totalComponents}`);
     } catch (error) {
