@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Search, TrendingUp, TrendingDown, Minus, RefreshCw, ChevronUp, ChevronDown } from 'lucide-react';
+import { Search, RefreshCw, ChevronUp, ChevronDown, Globe, TrendingUp, TrendingDown, Minus } from 'lucide-react';
 import ExchangeRateService from '@/services/ExchangeRateService';
 import FinancialDataService from '@/services/FinancialDataService';
 import { useTheme } from '@/hooks/useTheme';
@@ -16,9 +16,6 @@ interface CurrencyData {
   code: string;
   name: string;
   rate: number;
-  change24h: number;
-  changePercent: number;
-  trend: 'up' | 'down' | 'stable';
 }
 
 const ForexMarket: React.FC = () => {
@@ -28,7 +25,7 @@ const ForexMarket: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
   const [baseCurrency, setBaseCurrency] = useState('USD');
-  const [sortField, setSortField] = useState<'code' | 'rate' | 'change24h' | 'changePercent'>('code');
+  const [sortField, setSortField] = useState<'code' | 'name' | 'rate'>('code');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
   const [activeTab, setActiveTab] = useState('market-data');
   const [widgetKey, setWidgetKey] = useState(0);
@@ -51,7 +48,7 @@ const ForexMarket: React.FC = () => {
     setFilteredCurrencies(filtered);
   }, [searchTerm, currencies]);
 
-    useEffect(() => {
+  useEffect(() => {
     // Force widget reload when theme changes
     if (activeTab === 'advanced-data') {
       setWidgetKey(prev => prev + 1);
@@ -106,24 +103,12 @@ const ForexMarket: React.FC = () => {
       const exchangeData = await exchangeRateService.getExchangeRates(baseCurrency);
       const formattedData = exchangeRateService.formatCurrencyData(exchangeData);
       
-      // Get market data from FinancialDataService
-      const marketData = financialDataService.getMarketData();
-      
-      // Combine and enhance data
-      const enhancedCurrencies: CurrencyData[] = formattedData.map(currency => {
-        const change24h = generateRandomChange(); // Simulated 24h change
-        const changePercent = (change24h / currency.rate) * 100;
-        const trend = changePercent > 0.1 ? 'up' : changePercent < -0.1 ? 'down' : 'stable';
-        
-        return {
-          code: currency.code,
-          name: currency.name,
-          rate: currency.rate,
-          change24h,
-          changePercent,
-          trend
-        };
-      });
+      // Transform to CurrencyData format (only code, name, rate)
+      const enhancedCurrencies: CurrencyData[] = formattedData.map(currency => ({
+        code: currency.code,
+        name: currency.name,
+        rate: currency.rate
+      }));
 
       setCurrencies(enhancedCurrencies);
       setLastUpdated(new Date());
@@ -134,46 +119,10 @@ const ForexMarket: React.FC = () => {
     }
   };
 
-  const generateRandomChange = (): number => {
-    return (Math.random() - 0.5) * 0.02; // Random change between -1% and +1%
-  };
-
-  const getTrendIcon = (trend: 'up' | 'down' | 'stable') => {
-    switch (trend) {
-      case 'up':
-        return <TrendingUp className="h-4 w-4 text-green-500" />;
-      case 'down':
-        return <TrendingDown className="h-4 w-4 text-red-500" />;
-      default:
-        return <Minus className="h-4 w-4 text-gray-500" />;
-    }
-  };
-
-  const getTrendColor = (trend: 'up' | 'down' | 'stable') => {
-    switch (trend) {
-      case 'up':
-        return 'text-green-600';
-      case 'down':
-        return 'text-red-600';
-      default:
-        return 'text-gray-600';
-    }
-  };
-
   const formatRate = (rate: number): string => {
     if (rate > 100) return rate.toFixed(2);
     if (rate > 10) return rate.toFixed(3);
     return rate.toFixed(4);
-  };
-
-  const formatChange = (change: number): string => {
-    const sign = change >= 0 ? '+' : '';
-    return `${sign}${change.toFixed(4)}`;
-  };
-
-  const formatChangePercent = (percent: number): string => {
-    const sign = percent >= 0 ? '+' : '';
-    return `${sign}${percent.toFixed(2)}%`;
   };
 
   const getMajorPairs = () => {
@@ -181,12 +130,7 @@ const ForexMarket: React.FC = () => {
     return filteredCurrencies.filter(currency => majorPairs.includes(currency.code));
   };
 
-  const getOtherPairs = () => {
-    const majorPairs = ['EUR', 'GBP', 'JPY', 'AUD', 'CAD', 'CHF', 'NZD', 'CNY'];
-    return filteredCurrencies.filter(currency => !majorPairs.includes(currency.code));
-  };
-
-  const handleSort = (field: 'code' | 'rate' | 'change24h' | 'changePercent') => {
+  const handleSort = (field: 'code' | 'name' | 'rate') => {
     if (sortField === field) {
       setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
     } else {
@@ -205,17 +149,13 @@ const ForexMarket: React.FC = () => {
           aValue = a.code;
           bValue = b.code;
           break;
+        case 'name':
+          aValue = a.name;
+          bValue = b.name;
+          break;
         case 'rate':
           aValue = a.rate;
           bValue = b.rate;
-          break;
-        case 'change24h':
-          aValue = a.change24h;
-          bValue = b.change24h;
-          break;
-        case 'changePercent':
-          aValue = a.changePercent;
-          bValue = b.changePercent;
           break;
         default:
           aValue = a.code;
@@ -235,13 +175,14 @@ const ForexMarket: React.FC = () => {
   };
 
   return (
-        <Layout title="Forex Market">
+    <Layout title="Forex Market">
       <div className="space-y-6">
         {/* Status Bar */}
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
           <div>
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Forex Market Data</h1>
             <p className="text-gray-600 dark:text-gray-400">
-              Real-time currency exchange rates and market data
+              Real-time currency exchange rates from global markets
             </p>
           </div>
           
@@ -264,248 +205,209 @@ const ForexMarket: React.FC = () => {
           </div>
         </div>
 
-             {/* Tabs */}
-       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-         <TabsList className="grid w-full grid-cols-2">
-           <TabsTrigger value="market-data">Market Data</TabsTrigger>
-           <TabsTrigger value="advanced-data">Advanced Forex Data</TabsTrigger>
-         </TabsList>
+        {/* Tabs */}
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="market-data">Market Data</TabsTrigger>
+            <TabsTrigger value="advanced-data">Advanced Forex Data</TabsTrigger>
+          </TabsList>
 
-         {/* Market Data Tab */}
-         <TabsContent value="market-data" className="space-y-6">
-           {/* Search and Filters */}
-           <Card>
-             <CardContent className="p-6">
-               <div className="flex flex-col lg:flex-row gap-4">
-                 <div className="flex-1 relative">
-                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                   <Input
-                     placeholder="Search currencies..."
-                     value={searchTerm}
-                     onChange={(e) => setSearchTerm(e.target.value)}
-                     className="pl-10"
-                   />
-                 </div>
-                 
-                 <div className="flex items-center gap-2">
-                   <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Base:</span>
-                   <select
-                     value={baseCurrency}
-                     onChange={(e) => setBaseCurrency(e.target.value)}
-                     className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                   >
-                     <option value="USD">USD</option>
-                     <option value="EUR">EUR</option>
-                     <option value="GBP">GBP</option>
-                     <option value="JPY">JPY</option>
-                   </select>
-                 </div>
-               </div>
-             </CardContent>
-           </Card>
+          {/* Market Data Tab */}
+          <TabsContent value="market-data" className="space-y-6">
+            {/* Search and Filters */}
+            <Card>
+              <CardContent className="p-6">
+                <div className="flex flex-col lg:flex-row gap-4">
+                  <div className="flex-1 relative">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                    <Input
+                      placeholder="Search currencies by code or name..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="pl-10"
+                    />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Base Currency:</span>
+                    <select
+                      value={baseCurrency}
+                      onChange={(e) => setBaseCurrency(e.target.value)}
+                      className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-800 dark:border-gray-600"
+                    >
+                      <option value="USD">USD</option>
+                      <option value="EUR">EUR</option>
+                      <option value="GBP">GBP</option>
+                      <option value="JPY">JPY</option>
+                    </select>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
 
-           {/* Market Overview */}
-           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Total Pairs</p>
-                <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                  {filteredCurrencies.length}
-                </p>
-              </div>
-              <div className="h-8 w-8 bg-blue-100 dark:bg-blue-900 rounded-lg flex items-center justify-center">
-                <span className="text-blue-600 dark:text-blue-400 text-sm font-bold">FX</span>
-              </div>
+            {/* Market Overview */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <Card>
+                <CardContent className="p-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Total Currencies</p>
+                      <p className="text-2xl font-bold text-gray-900 dark:text-white">
+                        {filteredCurrencies.length}
+                      </p>
+                    </div>
+                    <div className="h-8 w-8 bg-blue-100 dark:bg-blue-900 rounded-lg flex items-center justify-center">
+                      <Globe className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardContent className="p-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Major Pairs</p>
+                      <p className="text-2xl font-bold text-green-600">
+                        {getMajorPairs().length}
+                      </p>
+                    </div>
+                    <div className="h-8 w-8 bg-green-100 dark:bg-green-900 rounded-lg flex items-center justify-center">
+                      <TrendingUp className="h-4 w-4 text-green-600 dark:text-green-400" />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardContent className="p-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Other Pairs</p>
+                      <p className="text-2xl font-bold text-purple-600">
+                        {filteredCurrencies.length - getMajorPairs().length}
+                      </p>
+                    </div>
+                    <div className="h-8 w-8 bg-purple-100 dark:bg-purple-900 rounded-lg flex items-center justify-center">
+                      <Minus className="h-4 w-4 text-purple-600 dark:text-purple-400" />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
             </div>
-          </CardContent>
-        </Card>
 
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Gainers</p>
-                <p className="text-2xl font-bold text-green-600">
-                  {filteredCurrencies.filter(c => c.trend === 'up').length}
-                </p>
-              </div>
-              <div className="h-8 w-8 bg-green-100 dark:bg-green-900 rounded-lg flex items-center justify-center">
-                <TrendingUp className="h-4 w-4 text-green-600 dark:text-green-400" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+            {/* Currency Rates Table */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  Currency Exchange Rates
+                  <Badge variant="secondary" className="text-sm">{filteredCurrencies.length}</Badge>
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="rounded-md border overflow-hidden">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="bg-gray-50 dark:bg-gray-800">
+                        <TableHead 
+                          className="w-[120px] cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                          onClick={() => handleSort('code')}
+                        >
+                          <div className="flex items-center gap-1 font-semibold">
+                            Currency
+                            {sortField === 'code' && (
+                              sortDirection === 'asc' ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
+                            )}
+                          </div>
+                        </TableHead>
+                        <TableHead 
+                          className="cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                          onClick={() => handleSort('name')}
+                        >
+                          <div className="flex items-center gap-1 font-semibold">
+                            Name
+                            {sortField === 'name' && (
+                              sortDirection === 'asc' ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
+                            )}
+                          </div>
+                        </TableHead>
+                        <TableHead 
+                          className="text-right cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                          onClick={() => handleSort('rate')}
+                        >
+                          <div className="flex items-center justify-end gap-1 font-semibold">
+                            Rate ({baseCurrency})
+                            {sortField === 'rate' && (
+                              sortDirection === 'asc' ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
+                            )}
+                          </div>
+                        </TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {getSortedCurrencies().map((currency) => (
+                        <TableRow key={currency.code} className="hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+                          <TableCell className="font-medium">
+                            <div className="flex items-center gap-2">
+                              <span className="font-bold text-gray-900 dark:text-white">{currency.code}</span>
+                              {getMajorPairs().some(p => p.code === currency.code) && (
+                                <Badge variant="secondary" className="text-xs bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">Major</Badge>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-gray-600 dark:text-gray-400">
+                            {currency.name}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <span className="font-mono font-semibold text-gray-900 dark:text-white">
+                              {formatRate(currency.rate)}
+                            </span>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </CardContent>
+            </Card>
 
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Losers</p>
-                <p className="text-2xl font-bold text-red-600">
-                  {filteredCurrencies.filter(c => c.trend === 'down').length}
-                </p>
-              </div>
-              <div className="h-8 w-8 bg-red-100 dark:bg-red-900 rounded-lg flex items-center justify-center">
-                <TrendingDown className="h-4 w-4 text-red-600 dark:text-red-400" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+            {/* Loading State */}
+            {loading && (
+              <Card>
+                <CardContent className="p-12">
+                  <div className="flex items-center justify-center">
+                    <RefreshCw className="h-8 w-8 animate-spin text-blue-600" />
+                    <span className="ml-2 text-gray-600">Loading market data...</span>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
 
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Stable</p>
-                <p className="text-2xl font-bold text-gray-600">
-                  {filteredCurrencies.filter(c => c.trend === 'stable').length}
-                </p>
-              </div>
-              <div className="h-8 w-8 bg-gray-100 dark:bg-gray-900 rounded-lg flex items-center justify-center">
-                <Minus className="h-4 w-4 text-gray-600 dark:text-gray-400" />
-              </div>
+            {/* No Results */}
+            {!loading && filteredCurrencies.length === 0 && (
+              <Card>
+                <CardContent className="p-12">
+                  <div className="text-center">
+                    <Search className="h-12 w-12 mx-auto text-gray-400 mb-4" />
+                    <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
+                      No currencies found
+                    </h3>
+                    <p className="text-gray-600 dark:text-gray-400">
+                      Try adjusting your search terms or base currency.
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+          </TabsContent>
+
+          {/* Advanced Forex Data Tab */}
+          <TabsContent value="advanced-data" className="h-screen">
+            <div key={widgetKey} className="tradingview-widget-container" style={{ height: '80vh', width: '100%', minHeight: '600px' }}>
+              <div className="tradingview-widget-container__widget"></div>
             </div>
-          </CardContent>
-        </Card>
+          </TabsContent>
+        </Tabs>
       </div>
-
-             {/* Currency Rates Table */}
-       <Card>
-         <CardHeader>
-           <CardTitle className="flex items-center gap-2">
-             Currency Exchange Rates
-             <Badge variant="secondary">{filteredCurrencies.length}</Badge>
-           </CardTitle>
-         </CardHeader>
-         <CardContent>
-           <div className="rounded-md border">
-             <Table>
-               <TableHeader>
-                 <TableRow>
-                   <TableHead 
-                     className="w-[100px] cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800"
-                     onClick={() => handleSort('code')}
-                   >
-                     <div className="flex items-center gap-1">
-                       Currency
-                       {sortField === 'code' && (
-                         sortDirection === 'asc' ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
-                       )}
-                     </div>
-                   </TableHead>
-                   <TableHead className="w-[200px]">Name</TableHead>
-                   <TableHead 
-                     className="text-right cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800"
-                     onClick={() => handleSort('rate')}
-                   >
-                     <div className="flex items-center justify-end gap-1">
-                       Rate
-                       {sortField === 'rate' && (
-                         sortDirection === 'asc' ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
-                       )}
-                     </div>
-                   </TableHead>
-                   <TableHead 
-                     className="text-right cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800"
-                     onClick={() => handleSort('change24h')}
-                   >
-                     <div className="flex items-center justify-end gap-1">
-                       24h Change
-                       {sortField === 'change24h' && (
-                         sortDirection === 'asc' ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
-                       )}
-                     </div>
-                   </TableHead>
-                   <TableHead 
-                     className="text-right cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800"
-                     onClick={() => handleSort('changePercent')}
-                   >
-                     <div className="flex items-center justify-end gap-1">
-                       % Change
-                       {sortField === 'changePercent' && (
-                         sortDirection === 'asc' ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />
-                       )}
-                     </div>
-                   </TableHead>
-                   <TableHead className="text-center">Trend</TableHead>
-                 </TableRow>
-               </TableHeader>
-               <TableBody>
-                 {getSortedCurrencies().map((currency) => (
-                   <TableRow key={currency.code} className="hover:bg-gray-50 dark:hover:bg-gray-800">
-                     <TableCell className="font-medium">
-                       <div className="flex items-center gap-2">
-                         <span className="font-bold">{currency.code}</span>
-                         {getMajorPairs().some(p => p.code === currency.code) && (
-                           <Badge variant="secondary" className="text-xs">Major</Badge>
-                         )}
-                       </div>
-                     </TableCell>
-                     <TableCell className="text-gray-600 dark:text-gray-400">
-                       {currency.name}
-                     </TableCell>
-                     <TableCell className="text-right font-mono">
-                       {formatRate(currency.rate)}
-                     </TableCell>
-                     <TableCell className={`text-right font-mono ${getTrendColor(currency.trend)}`}>
-                       {formatChange(currency.change24h)}
-                     </TableCell>
-                     <TableCell className={`text-right font-mono ${getTrendColor(currency.trend)}`}>
-                       {formatChangePercent(currency.changePercent)}
-                     </TableCell>
-                     <TableCell className="text-center">
-                       <div className="flex items-center justify-center">
-                         {getTrendIcon(currency.trend)}
-                       </div>
-                     </TableCell>
-                   </TableRow>
-                 ))}
-               </TableBody>
-             </Table>
-           </div>
-         </CardContent>
-       </Card>
-
-                 {/* Loading State */}
-           {loading && (
-             <Card>
-               <CardContent className="p-12">
-                 <div className="flex items-center justify-center">
-                   <RefreshCw className="h-8 w-8 animate-spin text-blue-600" />
-                   <span className="ml-2 text-gray-600">Loading market data...</span>
-                 </div>
-               </CardContent>
-             </Card>
-           )}
-
-           {/* No Results */}
-           {!loading && filteredCurrencies.length === 0 && (
-             <Card>
-               <CardContent className="p-12">
-                 <div className="text-center">
-                   <Search className="h-12 w-12 mx-auto text-gray-400 mb-4" />
-                   <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
-                     No currencies found
-                   </h3>
-                   <p className="text-gray-600 dark:text-gray-400">
-                     Try adjusting your search terms or base currency.
-                   </p>
-                 </div>
-               </CardContent>
-             </Card>
-           )}
-         </TabsContent>
-
-         {/* Advanced Forex Data Tab */}
-         <TabsContent value="advanced-data" className="h-screen">
-           <div key={widgetKey} className="tradingview-widget-container" style={{ height: '80vh', width: '100%', minHeight: '600px' }}>
-             <div className="tradingview-widget-container__widget"></div>
-           </div>
-         </TabsContent>
-       </Tabs>
-       </div>
     </Layout>
   );
 };
