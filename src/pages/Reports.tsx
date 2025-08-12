@@ -1,17 +1,1902 @@
-import React from 'react';
-import { Layout } from "@/components/Layout";
-import Index from "./Index";
+import React, { useState, useEffect } from 'react';
+import { Layout } from '@/components/Layout';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
+import { 
+  FileText, 
+  BarChart3, 
+  TrendingUp, 
+  Clock, 
+  Download, 
+  Trash2, 
+  Eye, 
+  Search,
+  RefreshCw,
+  Archive,
+  Activity,
+  XCircle,
+  ChevronUp,
+  ChevronDown
+} from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { SavedScenario } from '@/types/Scenario';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine } from 'recharts';
+import ScenariosPdfExport from '@/components/ScenariosPdfExport';
+import jsPDF from 'jspdf';
+import 'jspdf-autotable';
+import html2canvas from 'html2canvas';
+
+// Extend jsPDF type to include autoTable
+declare module 'jspdf' {
+  interface jsPDF {
+    autoTable: (options: any) => jsPDF;
+    lastAutoTable: {
+      finalY: number;
+    };
+  }
+}
+
+// Interfaces pour les différents types de rapports
+interface SavedRiskMatrix {
+  id: string;
+  name: string;
+  timestamp: number;
+  priceRanges: Array<{ min: number; max: number; probability: number }>;
+  strategies: Array<{
+    components: any[];
+    coverageRatio: number;
+    name: string;
+  }>;
+  results: Array<{
+    strategy: any[];
+    coverageRatio: number;
+    costs: Record<string, number>;
+    differences: Record<string, number>;
+    hedgingCost: number;
+    name: string;
+  }>;
+}
+
+interface SavedBacktest {
+  id: string;
+  name: string;
+  timestamp: number;
+  type: 'historical' | 'stress-test' | 'scenario';
+  params: any;
+  results: any[];
+  historicalData?: Array<{ date: string; price: number }>;
+  monthlyStats?: Array<{
+    month: string;
+    avgPrice: number;
+    volatility: number;
+    dataPoints: number;
+    calculationMethod: string;
+  }>;
+}
+
+interface ReportStats {
+  totalScenarios: number;
+  totalRiskMatrices: number;
+  totalBacktests: number;
+  totalSize: number;
+  lastUpdated: Date;
+  scenariosByCurrency: Record<string, number>;
+  scenariosByType: Record<string, number>;
+  averageScenarioSize: number;
+  oldestReport: Date;
+  newestReport: Date;
+}
+
+// Add this interface for yearly results
+interface YearlyResult {
+  hedgedCost: number;
+  unhedgedCost: number;
+  deltaPnL: number;
+  strategyPremium: number;
+  volume: number;
+}
 
 const Reports = () => {
+  const navigate = useNavigate();
+  const [activeTab, setActiveTab] = useState('overview');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterType, setFilterType] = useState('all');
+  const [dateRange, setDateRange] = useState('all');
+  
+  // États pour les différents types de rapports
+  const [savedScenarios, setSavedScenarios] = useState<SavedScenario[]>([]);
+  const [savedRiskMatrices, setSavedRiskMatrices] = useState<SavedRiskMatrix[]>([]);
+  const [savedBacktests, setSavedBacktests] = useState<SavedBacktest[]>([]);
+  const [reportStats, setReportStats] = useState<ReportStats>({
+    totalScenarios: 0,
+    totalRiskMatrices: 0,
+    totalBacktests: 0,
+    totalSize: 0,
+    lastUpdated: new Date(),
+    scenariosByCurrency: {},
+    scenariosByType: {},
+    averageScenarioSize: 0,
+    oldestReport: new Date(),
+    newestReport: new Date()
+  });
+
+  // États pour les dialogues
+  const [selectedReport, setSelectedReport] = useState<any>(null);
+  const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [selectedReports, setSelectedReports] = useState<string[]>([]);
+  const [expandedSections, setExpandedSections] = useState<Record<string, Record<string, boolean>>>({});
+
+  // Charger tous les rapports au montage du composant
+  useEffect(() => {
+    loadAllReports();
+  }, []);
+
+  const loadAllReports = () => {
+    try {
+      // Charger les scénarios sauvegardés
+      const scenariosData = localStorage.getItem('optionScenarios');
+      const scenarios = scenariosData ? JSON.parse(scenariosData) : [];
+      setSavedScenarios(scenarios);
+
+      // Charger les matrices de risque
+      const riskMatricesData = localStorage.getItem('savedRiskMatrices');
+      const riskMatrices = riskMatricesData ? JSON.parse(riskMatricesData) : [];
+      setSavedRiskMatrices(riskMatrices);
+
+      // Charger les backtests (ils sont aussi dans optionScenarios mais marqués différemment)
+      const backtests = scenarios.filter((scenario: SavedScenario) => 
+        scenario.stressTest?.isHistorical || scenario.stressTest?.name === 'Historical Backtest'
+      );
+      setSavedBacktests(backtests);
+
+      // Calculer les statistiques détaillées
+      const totalSize = JSON.stringify(scenarios).length + 
+                       JSON.stringify(riskMatrices).length + 
+                       JSON.stringify(backtests).length;
+      
+      // Statistiques par devise
+      const scenariosByCurrency: Record<string, number> = {};
+      scenarios.forEach((scenario: SavedScenario) => {
+        const currency = scenario.params.currencyPair?.symbol || 'Unknown';
+        scenariosByCurrency[currency] = (scenariosByCurrency[currency] || 0) + 1;
+      });
+
+      // Statistiques par type de scénario
+      const scenariosByType: Record<string, number> = {};
+      scenarios.forEach((scenario: SavedScenario) => {
+        const type = scenario.stressTest?.name || 'Base Calculation';
+        scenariosByType[type] = (scenariosByType[type] || 0) + 1;
+      });
+
+      // Calculer les dates
+      const allTimestamps = [
+        ...scenarios.map(s => s.timestamp),
+        ...riskMatrices.map(r => r.timestamp),
+        ...backtests.map(b => b.timestamp)
+      ];
+      
+      const oldestReport = allTimestamps.length > 0 ? new Date(Math.min(...allTimestamps)) : new Date();
+      const newestReport = allTimestamps.length > 0 ? new Date(Math.max(...allTimestamps)) : new Date();
+      
+      // Taille moyenne des scénarios
+      const averageScenarioSize = scenarios.length > 0 ? 
+        scenarios.reduce((sum, s) => sum + JSON.stringify(s).length, 0) / scenarios.length : 0;
+      
+      setReportStats({
+        totalScenarios: scenarios.length,
+        totalRiskMatrices: riskMatrices.length,
+        totalBacktests: backtests.length,
+        totalSize,
+        lastUpdated: new Date(),
+        scenariosByCurrency,
+        scenariosByType,
+        averageScenarioSize,
+        oldestReport,
+        newestReport
+      });
+    } catch (error) {
+      console.error('Error loading reports:', error);
+    }
+  };
+
+  // Fonctions utilitaires
+  const formatDate = (timestamp: number) => {
+    return new Date(timestamp).toLocaleString();
+  };
+
+  const formatFileSize = (bytes: number) => {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  };
+
+  const getReportTypeIcon = (type: string) => {
+    switch (type) {
+      case 'scenario': return <FileText className="h-4 w-4" />;
+      case 'risk-matrix': return <BarChart3 className="h-4 w-4" />;
+      case 'backtest': return <TrendingUp className="h-4 w-4" />;
+      default: return <FileText className="h-4 w-4" />;
+    }
+  };
+
+  const getReportTypeColor = (type: string) => {
+    switch (type) {
+      case 'scenario': return 'bg-blue-100 text-blue-800';
+      case 'risk-matrix': return 'bg-green-100 text-green-800';
+      case 'backtest': return 'bg-purple-100 text-purple-800';
+      default: return 'bg-gray-100 text-gray-800';
+    }
+  };
+
+  // Fonctions de filtrage
+  const filteredReports = () => {
+    let reports = [
+      ...savedScenarios.map(s => ({ ...s, type: 'scenario' })),
+      ...savedRiskMatrices.map(r => ({ ...r, type: 'risk-matrix' })),
+      ...savedBacktests.map(b => ({ ...b, type: 'backtest' }))
+    ];
+
+    // Filtre par recherche
+    if (searchTerm) {
+      reports = reports.filter(report => 
+        report.name.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+    }
+
+    // Filtre par type
+    if (filterType !== 'all') {
+      reports = reports.filter(report => report.type === filterType);
+    }
+
+    // Filtre par date
+    if (dateRange !== 'all') {
+      const now = Date.now();
+      const ranges = {
+        'today': 24 * 60 * 60 * 1000,
+        'week': 7 * 24 * 60 * 60 * 1000,
+        'month': 30 * 24 * 60 * 60 * 1000,
+        'year': 365 * 24 * 60 * 60 * 1000
+      };
+      
+      if (ranges[dateRange as keyof typeof ranges]) {
+        reports = reports.filter(report => 
+          (now - report.timestamp) < ranges[dateRange as keyof typeof ranges]
+        );
+      }
+    }
+
+    return reports.sort((a, b) => b.timestamp - a.timestamp);
+  };
+
+  // Fonctions d'action
+  const viewReport = (report: any) => {
+    setSelectedReport(report);
+    setIsViewDialogOpen(true);
+  };
+
+  const deleteReport = (report: any) => {
+    setSelectedReport(report);
+    setIsDeleteDialogOpen(true);
+  };
+
+  const confirmDelete = () => {
+    if (!selectedReport) return;
+
+    try {
+      if (selectedReport.type === 'scenario') {
+        const updatedScenarios = savedScenarios.filter(s => s.id !== selectedReport.id);
+        setSavedScenarios(updatedScenarios);
+        localStorage.setItem('optionScenarios', JSON.stringify(updatedScenarios));
+      } else if (selectedReport.type === 'risk-matrix') {
+        const updatedMatrices = savedRiskMatrices.filter(m => m.id !== selectedReport.id);
+        setSavedRiskMatrices(updatedMatrices);
+        localStorage.setItem('savedRiskMatrices', JSON.stringify(updatedMatrices));
+      }
+
+      loadAllReports(); // Recharger les statistiques
+      setIsDeleteDialogOpen(false);
+      setSelectedReport(null);
+    } catch (error) {
+      console.error('Error deleting report:', error);
+    }
+  };
+
+  const exportReport = (report: any) => {
+    // Utiliser la fonction PDF pour l'export
+    exportToPdf(report);
+  };
+
+  const clearAllReports = () => {
+    if (confirm('Are you sure you want to delete ALL reports? This action cannot be undone.')) {
+      localStorage.removeItem('optionScenarios');
+      localStorage.removeItem('savedRiskMatrices');
+      loadAllReports();
+    }
+  };
+
+  // Fonctions pour la sélection multiple
+  const toggleReportSelection = (reportId: string) => {
+    setSelectedReports(prev => 
+      prev.includes(reportId) 
+        ? prev.filter(id => id !== reportId)
+        : [...prev, reportId]
+    );
+  };
+
+  const selectAllReports = () => {
+    const allReportIds = filteredReports().map(report => `${report.type}-${report.id}`);
+    setSelectedReports(allReportIds);
+  };
+
+  const clearSelection = () => {
+    setSelectedReports([]);
+  };
+
+  const importReports = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const importData = JSON.parse(e.target?.result as string);
+        
+        if (importData.reports && Array.isArray(importData.reports)) {
+          // Importer les rapports
+          importData.reports.forEach((report: any) => {
+            if (report.type === 'scenario') {
+              const existingScenarios = JSON.parse(localStorage.getItem('optionScenarios') || '[]');
+              existingScenarios.push(report);
+              localStorage.setItem('optionScenarios', JSON.stringify(existingScenarios));
+            } else if (report.type === 'risk-matrix') {
+              const existingMatrices = JSON.parse(localStorage.getItem('savedRiskMatrices') || '[]');
+              existingMatrices.push(report);
+              localStorage.setItem('savedRiskMatrices', JSON.stringify(existingMatrices));
+            }
+          });
+          
+          loadAllReports();
+          alert(`Successfully imported ${importData.reports.length} reports`);
+        }
+      } catch (error) {
+        console.error('Error importing reports:', error);
+        alert('Error importing reports. Please check the file format.');
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  const exportSelectedReports = () => {
+    if (selectedReports.length === 0) return;
+
+    try {
+      const reportsToExport = filteredReports().filter(report => 
+        selectedReports.includes(`${report.type}-${report.id}`)
+      );
+
+      const exportData = {
+        exportDate: new Date().toISOString(),
+        totalReports: reportsToExport.length,
+        reports: reportsToExport
+      };
+
+      const dataStr = JSON.stringify(exportData, null, 2);
+      const dataBlob = new Blob([dataStr], { type: 'application/json' });
+      
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(dataBlob);
+      link.download = `reports_export_${new Date().toISOString().split('T')[0]}.json`;
+      link.click();
+      
+      URL.revokeObjectURL(link.href);
+    } catch (error) {
+      console.error('Error exporting selected reports:', error);
+    }
+  };
+
+  // Fonctions pour la visualisation détaillée
+  const initializeExpandedState = (reportId: string) => ({
+    strategy: false,
+    detailedResults: false,
+    yearlyStats: false,
+    totalStats: false,
+    monthlyPnL: false
+  });
+
+  const toggleSection = (reportId: string, section: string) => {
+    setExpandedSections(prev => ({
+      ...prev,
+      [reportId]: {
+        ...(prev[reportId] || initializeExpandedState(reportId)),
+        [section]: !(prev[reportId]?.[section] ?? false)
+      }
+    }));
+  };
+
+  const getScenarioTypeName = (scenario: SavedScenario) => {
+    if (!scenario.stressTest) return 'Base Calculation';
+    return scenario.stressTest.name;
+  };
+
+  const calculateYearlyResults = (results: SavedScenario['results']): Record<string, YearlyResult> => {
+    const yearlyData: Record<string, YearlyResult> = {};
+    
+    results.forEach(result => {
+      const year = new Date(result.date).getFullYear().toString();
+      
+      if (!yearlyData[year]) {
+        yearlyData[year] = {
+          hedgedCost: 0,
+          unhedgedCost: 0,
+          deltaPnL: 0,
+          strategyPremium: 0,
+          volume: 0
+        };
+      }
+      
+      yearlyData[year].hedgedCost += result.hedgedCost;
+      yearlyData[year].unhedgedCost += result.unhedgedCost;
+      yearlyData[year].deltaPnL += result.deltaPnL;
+      yearlyData[year].strategyPremium += result.strategyPrice * result.monthlyVolume;
+      yearlyData[year].volume += result.monthlyVolume;
+    });
+    
+    return yearlyData;
+  };
+
+  // Fonction pour générer les données du profil de couverture FX
+  const generateFXHedgingData = (strategy: any[], spot: number, includePremium: boolean = false) => {
+    const data = [];
+    const minSpot = spot * 0.7;  // -30% du spot
+    const maxSpot = spot * 1.3;  // +30% du spot
+    const step = (maxSpot - minSpot) / 100; // 100 points
+
+    for (let currentSpot = minSpot; currentSpot <= maxSpot; currentSpot += step) {
+      const unhedgedRate = currentSpot;
+      let hedgedRate = currentSpot;
+      let totalPremium = 0;
+
+      // Process each option in the strategy
+      strategy.forEach(option => {
+        const strike = option.strikeType === 'percent' 
+          ? spot * (option.strike / 100) 
+          : option.strike;
+        
+        // Utilise la quantité avec son signe (+ pour achat, - pour vente)
+        const quantity = option.quantity / 100;
+        
+        // Calculate option premium (simplified)
+        const premium = 0.01 * Math.abs(quantity); // Prime simplifiée, toujours positive
+        
+        if (option.type === 'put') {
+          // PUT: La logique change selon achat ou vente
+          if (currentSpot < strike) {
+            // Dans la monnaie
+            if (quantity > 0) {
+              // ACHAT PUT: Protection contre la baisse
+              hedgedRate = currentSpot - ((strike - currentSpot) * Math.abs(quantity));
+            } else if (quantity < 0) {
+              // VENTE PUT: Obligation d'achat à un prix élevé
+              hedgedRate = currentSpot + ((strike - currentSpot) * Math.abs(quantity));
+            }
+          }
+          // Hors de la monnaie: pas d'effet sur le taux (sauf prime)
+        } 
+        else if (option.type === 'call') {
+          // CALL: La logique change selon achat ou vente
+          if (currentSpot > strike) {
+            // Dans la monnaie
+            if (quantity > 0) {
+              // ACHAT CALL: Protection contre la hausse
+              hedgedRate = currentSpot - ((currentSpot - strike) * Math.abs(quantity));
+            } else if (quantity < 0) {
+              // VENTE CALL: Obligation de vente à un prix bas
+              hedgedRate = currentSpot + ((currentSpot - strike) * Math.abs(quantity));
+            }
+          }
+          // Hors de la monnaie: pas d'effet sur le taux (sauf prime)
+        }
+        else if (option.type === 'forward') {
+          // FORWARD: Taux fixe peu importe le spot
+          hedgedRate = strike * Math.abs(quantity) + currentSpot * (1 - Math.abs(quantity));
+        }
+        else if (option.type === 'swap') {
+          // SWAP: Échange à taux fixe
+          hedgedRate = strike;
+        }
+        
+        // Barrier options (simplified logic)
+        else if (option.type.includes('knockout') || option.type.includes('knockin')) {
+          const barrier = option.barrierType === 'percent' 
+            ? spot * (option.barrier / 100) 
+            : option.barrier;
+          
+          let isBarrierBroken = false;
+          
+          if (option.type.includes('knockout')) {
+            if (option.type.includes('call')) {
+              isBarrierBroken = currentSpot >= barrier;
+            } else if (option.type.includes('put')) {
+              isBarrierBroken = currentSpot <= barrier;
+            }
+          } else if (option.type.includes('knockin')) {
+            if (option.type.includes('call')) {
+              isBarrierBroken = currentSpot >= barrier;
+            } else if (option.type.includes('put')) {
+              isBarrierBroken = currentSpot <= barrier;
+            }
+          }
+          
+          if (isBarrierBroken) {
+            if (option.type.includes('knockout')) {
+              // Knockout: l'option expire
+              hedgedRate = currentSpot;
+            } else if (option.type.includes('knockin')) {
+              // Knockin: l'option devient active
+              if (option.type.includes('call') && currentSpot > strike) {
+                hedgedRate = currentSpot - ((currentSpot - strike) * Math.abs(quantity));
+              } else if (option.type.includes('put') && currentSpot < strike) {
+                hedgedRate = currentSpot - ((strike - currentSpot) * Math.abs(quantity));
+              }
+            }
+          }
+        }
+        
+        if (includePremium) {
+          totalPremium += premium;
+        }
+      });
+      
+      data.push({
+        spot: currentSpot,
+        unhedged: unhedgedRate,
+        hedged: hedgedRate,
+        premium: totalPremium
+      });
+    }
+    
+    return data;
+  };
+
+  // Fonction pour exporter en PDF
+  const exportToPdf = async (report: any) => {
+    if (report.type === 'scenario') {
+      // Utiliser directement le composant ScenariosPdfExport existant
+      // Créer une fonction temporaire pour l'export
+      const tempExport = async () => {
+        const pdf = new jsPDF({
+          orientation: 'p',
+          unit: 'mm',
+          format: 'a4',
+          putOnlyUsedFonts: true,
+          compress: true
+        });
+
+        const contentPadding = 8;
+        let yOffset = contentPadding;
+        
+        const tableOptions = {
+          headStyles: { 
+            fillColor: [60, 60, 80],
+            textColor: 255,
+            fontStyle: 'bold',
+            halign: 'center'
+          },
+          bodyStyles: {
+            minCellWidth: 8,
+            cellPadding: 1.5
+          },
+          alternateRowStyles: {
+            fillColor: [245, 245, 250]
+          },
+          margin: { 
+            left: contentPadding,
+            right: contentPadding,
+            top: 2,
+            bottom: 2
+          },
+          tableWidth: 'auto'
+        };
+
+        // En-tête du document
+        const pageWidth = pdf.internal.pageSize.width;
+        pdf.setFillColor(60, 60, 80);
+        pdf.rect(0, 0, pageWidth, 16, 'F');
+        
+        pdf.setFont('helvetica', 'bold');
+        pdf.setTextColor(255);
+        pdf.setFontSize(12);
+        pdf.text(report.name, pageWidth / 2, 10, { align: 'center' });
+        pdf.setFont('helvetica', 'normal');
+        pdf.setFontSize(8);
+        pdf.text(`Generated: ${new Date(report.timestamp).toLocaleDateString()}`, pageWidth / 2, 14, { align: 'center' });
+        
+        yOffset = 20;
+
+        // Paramètres principaux
+        pdf.setTextColor(0);
+        pdf.setFontSize(10);
+        pdf.setFont('helvetica', 'bold');
+        pdf.text('Strategy Overview', contentPadding, yOffset);
+        yOffset += 4;
+        
+        const halfWidth = (pageWidth - (3 * contentPadding)) / 2;
+        
+        // Paramètres de base
+        const basicParams = [
+          ['Start Date', report.params.startDate],
+          ['Months to Hedge', report.params.monthsToHedge.toString()],
+          ['Interest Rate', `${report.params.interestRate}%`],
+          ['Base Volume', `${report.params.baseVolume?.toLocaleString() || 'N/A'}`],
+          ['Quote Volume', `${report.params.quoteVolume?.toLocaleString() || 'N/A'}`],
+          ['Rate', report.params.spotPrice?.toFixed(4) || 'N/A']
+        ];
+
+        pdf.autoTable({
+          ...tableOptions,
+          startY: yOffset,
+          head: [['Parameter', 'Value']],
+          body: basicParams,
+          tableWidth: halfWidth
+        });
+
+        yOffset = (pdf as any).lastAutoTable.finalY + 5;
+
+        // Composants de stratégie
+        if (report.strategy && report.strategy.length > 0) {
+          pdf.setFont('helvetica', 'bold');
+          pdf.text('Strategy Components', contentPadding, yOffset);
+          yOffset += 4;
+
+          const strategyData = report.strategy.map((comp: any, index: number) => [
+            `Component ${index + 1}`,
+            `${comp.type.toUpperCase()}`,
+            comp.strikeType === 'percent' ? `${comp.strike}%` : comp.strike.toString(),
+            `${comp.volatility}%`,
+            `${comp.quantity}%`
+          ]);
+
+          pdf.autoTable({
+            ...tableOptions,
+            startY: yOffset,
+            head: [['Component', 'Type', 'Strike', 'Volatility', 'Quantity']],
+            body: strategyData
+          });
+
+          yOffset = (pdf as any).lastAutoTable.finalY + 5;
+        }
+
+        // Résultats détaillés
+        if (report.results && report.results.length > 0) {
+          pdf.setFont('helvetica', 'bold');
+          pdf.text('Detailed Results', contentPadding, yOffset);
+          yOffset += 4;
+
+          const resultsData = report.results.slice(0, 10).map((result: any) => [
+            new Date(result.date).toLocaleDateString(),
+            result.monthlyVolume.toLocaleString(),
+            result.strategyPrice.toFixed(4),
+            result.hedgedCost.toFixed(2),
+            result.unhedgedCost.toFixed(2),
+            result.deltaPnL.toFixed(2)
+          ]);
+
+          pdf.autoTable({
+            ...tableOptions,
+            startY: yOffset,
+            head: [['Date', 'Volume', 'Strategy Price', 'Hedged Cost', 'Unhedged Cost', 'Delta P&L']],
+            body: resultsData
+          });
+        }
+
+        pdf.save(`${report.name}_detailed_report.pdf`);
+      };
+
+      tempExport();
+    } else if (report.type === 'risk-matrix') {
+      // Export pour les matrices de risque
+      const pdf = new jsPDF('landscape', 'pt', 'a4');
+      
+      const tempDiv = document.createElement('div');
+      tempDiv.className = 'p-8 bg-white';
+      tempDiv.innerHTML = `
+        <h1 class="text-2xl font-bold mb-4">Risk Matrix: ${report.name}</h1>
+        <div class="mb-4">
+          <h2 class="text-lg font-semibold">Strategies</h2>
+          <p>${report.strategies?.length || 0} strategies analyzed</p>
+        </div>
+        <div class="mb-4">
+          <h2 class="text-lg font-semibold">Price Ranges</h2>
+          <p>${report.priceRanges?.length || 0} price ranges</p>
+        </div>
+      `;
+
+      const canvas = await html2canvas(tempDiv, {
+        scale: 2,
+        useCORS: true,
+        logging: false
+      });
+      
+      const imgData = canvas.toDataURL('image/png');
+      const imgWidth = pdf.internal.pageSize.getWidth();
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      
+      pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight);
+      pdf.save(`${report.name}_risk_matrix.pdf`);
+    } else if (report.type === 'backtest') {
+      // Export pour les backtests
+      const pdf = new jsPDF('p', 'pt', 'a4');
+      
+      const tempDiv = document.createElement('div');
+      tempDiv.className = 'p-8 bg-white';
+      tempDiv.innerHTML = `
+        <h1 class="text-2xl font-bold mb-4">Historical Backtest: ${report.name}</h1>
+        <div class="mb-4">
+          <h2 class="text-lg font-semibold">Historical Data</h2>
+          <p>${report.historicalData?.length || 0} data points</p>
+        </div>
+        <div class="mb-4">
+          <h2 class="text-lg font-semibold">Results</h2>
+          <p>${report.results?.length || 0} periods analyzed</p>
+        </div>
+      `;
+
+      const canvas = await html2canvas(tempDiv, {
+        scale: 2,
+        useCORS: true,
+        logging: false
+      });
+      
+      const imgData = canvas.toDataURL('image/png');
+      const imgWidth = pdf.internal.pageSize.getWidth();
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      
+      pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight);
+      pdf.save(`${report.name}_backtest.pdf`);
+    }
+  };
+
   return (
     <Layout 
-      title="Reports"
       breadcrumbs={[
         { label: "Dashboard", href: "/" },
         { label: "Reports" }
       ]}
     >
-      <Index />
+      {/* Header avec statistiques */}
+      <div className="mb-6">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h1 className="text-3xl font-bold">Reports & Analytics</h1>
+            <p className="text-muted-foreground">
+              View and manage all saved reports, scenarios, and analytics
+            </p>
+          </div>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={loadAllReports}>
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Refresh
+            </Button>
+            <div className="relative">
+              <input
+                type="file"
+                accept=".json"
+                onChange={importReports}
+                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                id="import-reports"
+              />
+              <Button variant="outline" asChild>
+                <label htmlFor="import-reports" className="cursor-pointer">
+                  <Archive className="h-4 w-4 mr-2" />
+                  Import
+                </label>
+              </Button>
+            </div>
+            {selectedReports.length > 0 && (
+              <>
+                <Button variant="outline" onClick={exportSelectedReports}>
+                  <Download className="h-4 w-4 mr-2" />
+                  Export Selected ({selectedReports.length})
+                </Button>
+                <Button variant="outline" onClick={clearSelection}>
+                  <XCircle className="h-4 w-4 mr-2" />
+                  Clear Selection
+                </Button>
+              </>
+            )}
+            <Button variant="destructive" onClick={clearAllReports}>
+              <Trash2 className="h-4 w-4 mr-2" />
+              Clear All
+            </Button>
+          </div>
+        </div>
+
+        {/* Statistiques générales */}
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
+          <Card>
+            <CardContent className="p-4">
+              <div className="flex items-center gap-2">
+                <FileText className="h-5 w-5 text-blue-600" />
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Scenarios</p>
+                  <p className="text-2xl font-bold">{reportStats.totalScenarios}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="p-4">
+              <div className="flex items-center gap-2">
+                <BarChart3 className="h-5 w-5 text-green-600" />
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Risk Matrices</p>
+                  <p className="text-2xl font-bold">{reportStats.totalRiskMatrices}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="p-4">
+              <div className="flex items-center gap-2">
+                <TrendingUp className="h-5 w-5 text-purple-600" />
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Backtests</p>
+                  <p className="text-2xl font-bold">{reportStats.totalBacktests}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="p-4">
+              <div className="flex items-center gap-2">
+                <Activity className="h-5 w-5 text-orange-600" />
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Total Size</p>
+                  <p className="text-2xl font-bold">{formatFileSize(reportStats.totalSize)}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="p-4">
+              <div className="flex items-center gap-2">
+                <Clock className="h-5 w-5 text-gray-600" />
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Last Updated</p>
+                  <p className="text-sm font-bold">{reportStats.lastUpdated.toLocaleTimeString()}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Statistiques détaillées */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Currency Distribution</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2">
+                {Object.entries(reportStats.scenariosByCurrency).map(([currency, count]) => (
+                  <div key={currency} className="flex justify-between items-center">
+                    <span className="text-sm font-medium">{currency}</span>
+                    <Badge variant="outline">{count}</Badge>
+                  </div>
+                ))}
+                {Object.keys(reportStats.scenariosByCurrency).length === 0 && (
+                  <p className="text-sm text-muted-foreground">No scenarios found</p>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Scenario Types</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2">
+                {Object.entries(reportStats.scenariosByType).map(([type, count]) => (
+                  <div key={type} className="flex justify-between items-center">
+                    <span className="text-sm font-medium">{type}</span>
+                    <Badge variant="outline">{count}</Badge>
+                  </div>
+                ))}
+                {Object.keys(reportStats.scenariosByType).length === 0 && (
+                  <p className="text-sm text-muted-foreground">No scenarios found</p>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Report Timeline</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2">
+                <div className="flex justify-between items-center">
+                  <span className="text-sm font-medium">Oldest Report</span>
+                  <span className="text-sm">{reportStats.oldestReport.toLocaleDateString()}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm font-medium">Newest Report</span>
+                  <span className="text-sm">{reportStats.newestReport.toLocaleDateString()}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm font-medium">Avg Size</span>
+                  <span className="text-sm">{formatFileSize(reportStats.averageScenarioSize)}</span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+
+      {/* Filtres et recherche */}
+      <Card className="mb-6">
+        <CardContent className="p-4">
+          <div className="flex flex-col md:flex-row gap-4">
+            <div className="flex-1">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search reports..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
+            </div>
+            
+            <div className="flex gap-2">
+              <select
+                value={filterType}
+                onChange={(e) => setFilterType(e.target.value)}
+                className="px-3 py-2 border rounded-md"
+              >
+                <option value="all">All Types</option>
+                <option value="scenario">Scenarios</option>
+                <option value="risk-matrix">Risk Matrices</option>
+                <option value="backtest">Backtests</option>
+              </select>
+
+              <select
+                value={dateRange}
+                onChange={(e) => setDateRange(e.target.value)}
+                className="px-3 py-2 border rounded-md"
+              >
+                <option value="all">All Time</option>
+                <option value="today">Today</option>
+                <option value="week">This Week</option>
+                <option value="month">This Month</option>
+                <option value="year">This Year</option>
+              </select>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Onglets principaux */}
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <TabsList className="grid w-full grid-cols-4">
+          <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="scenarios">Scenarios</TabsTrigger>
+          <TabsTrigger value="risk-matrices">Risk Matrices</TabsTrigger>
+          <TabsTrigger value="backtests">Backtests</TabsTrigger>
+        </TabsList>
+
+        {/* Vue d'ensemble */}
+        <TabsContent value="overview" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>All Reports</CardTitle>
+              <CardDescription>
+                Complete list of all saved reports and analytics
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center gap-4 mb-4">
+                <Checkbox
+                  checked={selectedReports.length === filteredReports().length && filteredReports().length > 0}
+                  onCheckedChange={(checked) => {
+                    if (checked) {
+                      selectAllReports();
+                    } else {
+                      clearSelection();
+                    }
+                  }}
+                  id="select-all-reports"
+                />
+                <Label htmlFor="select-all-reports">Select All</Label>
+                {selectedReports.length > 0 && (
+                  <Badge variant="secondary">
+                    {selectedReports.length} selected
+                  </Badge>
+                )}
+              </div>
+
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-12">
+                      <Checkbox
+                        checked={selectedReports.length === filteredReports().length && filteredReports().length > 0}
+                        onCheckedChange={(checked) => {
+                          if (checked) {
+                            selectAllReports();
+                          } else {
+                            clearSelection();
+                          }
+                        }}
+                      />
+                    </TableHead>
+                    <TableHead>Name</TableHead>
+                    <TableHead>Type</TableHead>
+                    <TableHead>Created</TableHead>
+                    <TableHead>Size</TableHead>
+                    <TableHead>Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredReports().map((report) => (
+                    <TableRow key={`${report.type}-${report.id}`}>
+                      <TableCell>
+                        <Checkbox
+                          checked={selectedReports.includes(`${report.type}-${report.id}`)}
+                          onCheckedChange={() => toggleReportSelection(`${report.type}-${report.id}`)}
+                        />
+                      </TableCell>
+                      <TableCell className="font-medium">
+                        <div className="flex items-center gap-2">
+                          {getReportTypeIcon(report.type)}
+                          {report.name}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge className={getReportTypeColor(report.type)}>
+                          {report.type.replace('-', ' ')}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>{formatDate(report.timestamp)}</TableCell>
+                      <TableCell>{formatFileSize(JSON.stringify(report).length)}</TableCell>
+                      <TableCell>
+                        <div className="flex gap-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => viewReport(report)}
+                          >
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => exportReport(report)}
+                          >
+                            <Download className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => deleteReport(report)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Scénarios */}
+        <TabsContent value="scenarios" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Saved Scenarios</CardTitle>
+              <CardDescription>
+                Strategy scenarios with detailed calculations and results
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {savedScenarios.length === 0 ? (
+                <div className="p-6 text-center">
+                  <p>No saved scenarios found.</p>
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  <ScenariosPdfExport
+                    scenarios={savedScenarios}
+                    selectedScenarios={selectedReports.filter(id => id.includes('scenario-'))}
+                    setSelectedScenarios={(ids) => setSelectedReports(ids)}
+                  />
+                  {savedScenarios.map(scenario => (
+                    <Card key={scenario.id} className="mb-6">
+                      <CardHeader className="flex flex-row items-center justify-between">
+                        <div>
+                          <CardTitle>{scenario.name}</CardTitle>
+                          <p className="text-sm text-gray-500">{formatDate(scenario.timestamp)}</p>
+                          <p className="text-sm font-medium mt-1">Type: {getScenarioTypeName(scenario)}</p>
+                        </div>
+                        <div className="flex gap-2">
+                          <Button
+                            variant="outline"
+                            onClick={() => exportToPdf({ ...scenario, type: 'scenario' })}
+                            className="flex items-center gap-2"
+                          >
+                            <Download size={16} /> Export PDF
+                          </Button>
+                          <Button
+                            variant="destructive"
+                            onClick={() => deleteReport({ ...scenario, type: 'scenario' })}
+                            className="flex items-center gap-2"
+                          >
+                            <Trash2 size={16} /> Delete
+                          </Button>
+                        </div>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="grid grid-cols-2 gap-4 mb-4">
+                          <div>
+                            <h3 className="font-semibold mb-2">Basic Parameters</h3>
+                            <ul className="space-y-1">
+                              <li>Start Date: {scenario.params.startDate}</li>
+                              <li>Months to Hedge: {scenario.params.monthsToHedge}</li>
+                              <li>Interest Rate: {scenario.params.interestRate}%</li>
+                              {scenario.params.baseVolume && scenario.params.quoteVolume ? (
+                                <>
+                                  <li>Base Volume ({scenario.params.currencyPair?.base || 'BASE'}): {scenario.params.baseVolume.toLocaleString()}</li>
+                                  <li>Quote Volume ({scenario.params.currencyPair?.quote || 'QUOTE'}): {Math.round(scenario.params.quoteVolume).toLocaleString()}</li>
+                                  <li>Rate: {scenario.params.spotPrice?.toFixed(4)}</li>
+                                </>
+                              ) : (
+                                <>
+                                  <li>Total Volume: {scenario.params.totalVolume?.toLocaleString()}</li>
+                                  <li>Spot Price: {scenario.params.spotPrice}</li>
+                                </>
+                              )}
+                            </ul>
+                          </div>
+                          {scenario.stressTest && (
+                            <div>
+                              <h3 className="font-semibold mb-2">Stress Test Parameters</h3>
+                              <ul className="space-y-1">
+                                <li>Volatility: {(scenario.stressTest.volatility * 100).toFixed(1)}%</li>
+                                <li>Drift: {(scenario.stressTest.drift * 100).toFixed(1)}%</li>
+                                <li>Price Shock: {(scenario.stressTest.priceShock * 100).toFixed(1)}%</li>
+                                {scenario.stressTest.forwardBasis && (
+                                  <li>Forward Basis: {(scenario.stressTest.forwardBasis * 100).toFixed(1)}%</li>
+                                )}
+                              </ul>
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="mb-6">
+                          <Button
+                            variant="outline"
+                            onClick={() => toggleSection(scenario.id, 'strategy')}
+                            className="flex items-center gap-2 mb-2"
+                          >
+                            {expandedSections[scenario.id]?.strategy ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                            Strategy Components
+                          </Button>
+                          
+                          {expandedSections[scenario.id]?.strategy && (
+                            <div className="mt-2">
+                              {scenario.strategy.map((option, index) => (
+                                <div key={index} className="grid grid-cols-5 gap-4 p-2 border-b">
+                                  <div>Type: {option.type}</div>
+                                  <div>Strike: {option.strike} ({option.strikeType})</div>
+                                  <div>Volatility: {option.volatility}%</div>
+                                  <div>Quantity: {option.quantity}%</div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="space-y-6">
+                          <div className="h-64" id={`pnl-chart-${scenario.id}`}>
+                            <h3 className="font-semibold mb-2">P&L Evolution</h3>
+                            <ResponsiveContainer width="100%" height="100%">
+                              <LineChart data={scenario.results}>
+                                <CartesianGrid strokeDasharray="3 3" />
+                                <XAxis dataKey="date" />
+                                <YAxis />
+                                <Tooltip />
+                                <Legend />
+                                <Line type="monotone" dataKey="deltaPnL" name="Delta P&L" stroke="#8884d8" />
+                              </LineChart>
+                            </ResponsiveContainer>
+                          </div>
+
+                          <div className="h-80" id={`fx-hedging-chart-${scenario.id}`}>
+                            <h3 className="font-semibold mb-2">FX Hedging Profile</h3>
+                            <div className="text-sm text-muted-foreground mb-2">
+                              Hedged vs Unhedged {scenario.params.currencyPair?.symbol || 'FX'} rates across market scenarios
+                            </div>
+                            <ResponsiveContainer width="100%" height="100%">
+                              <LineChart 
+                                data={generateFXHedgingData(scenario.strategy, scenario.params.spotPrice, false)}
+                                margin={{ top: 20, right: 30, left: 20, bottom: 20 }}
+                              >
+                                <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+                                <XAxis
+                                  dataKey="spot"
+                                  domain={["dataMin", "dataMax"]}
+                                  tickFormatter={(value) => value.toFixed(3)}
+                                  label={{
+                                    value: `${scenario.params.currencyPair?.symbol || 'FX'} Rate`,
+                                    position: "insideBottom",
+                                    offset: -10,
+                                  }}
+                                />
+                                <YAxis
+                                  tickFormatter={(value) => value.toFixed(3)}
+                                  label={{
+                                    value: `Effective Rate (${scenario.params.currencyPair?.quote || 'Quote Currency'})`,
+                                    angle: -90,
+                                    position: "insideLeft",
+                                  }}
+                                />
+                                <Tooltip />
+                                <Legend 
+                                  verticalAlign="top" 
+                                  height={36}
+                                />
+                                
+                                {/* Unhedged rate line (reference) */}
+                                <Line
+                                  type="monotone"
+                                  dataKey="unhedgedRate"
+                                  stroke="#9CA3AF"
+                                  strokeWidth={2}
+                                  strokeDasharray="4 4"
+                                  dot={false}
+                                  name="Unhedged Rate"
+                                />
+                                
+                                {/* Hedged rate line */}
+                                <Line
+                                  type="monotone"
+                                  dataKey="hedgedRate"
+                                  stroke="#3B82F6"
+                                  strokeWidth={3}
+                                  dot={false}
+                                  activeDot={{ r: 6, fill: "#3B82F6" }}
+                                  name="Hedged Rate"
+                                />
+                                
+                                {/* Reference line for current spot */}
+                                <ReferenceLine
+                                  x={scenario.params.spotPrice}
+                                  stroke="#059669"
+                                  strokeWidth={2}
+                                  strokeDasharray="5 5"
+                                  label={{
+                                    value: "Current Spot",
+                                    position: "top",
+                                    fill: "#059669",
+                                    fontSize: 11,
+                                  }}
+                                />
+                              </LineChart>
+                            </ResponsiveContainer>
+                          </div>
+                        </div>
+
+                        <div className="mt-6">
+                          <Button
+                            variant="outline"
+                            onClick={() => toggleSection(scenario.id, 'detailedResults')}
+                            className="flex items-center gap-2 mb-2"
+                          >
+                            {expandedSections[scenario.id]?.detailedResults ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                            Detailed Results
+                          </Button>
+                          
+                          {expandedSections[scenario.id]?.detailedResults && (
+                            <div className="overflow-x-auto">
+                              <table className="min-w-full border-collapse">
+                                <thead>
+                                  <tr>
+                                    <th className="border p-2">Maturity</th>
+                                    <th className="border p-2">Time to Maturity</th>
+                                    <th className="border p-2">Forward Price</th>
+                                    <th className="border p-2">Real Price</th>
+                                    <th className="border p-2">IV (%)</th>
+                                    {scenario.results[0]?.optionPrices?.map((option, idx) => (
+                                      <th key={idx} className="border p-2">{option.label || `${option.type.charAt(0).toUpperCase() + option.type.slice(1)} Price ${idx + 1}`}</th>
+                                    ))}
+                                    <th className="border p-2">Strategy Price</th>
+                                    <th className="border p-2">Payoff</th>
+                                    <th className="border p-2">Volume</th>
+                                    <th className="border p-2">Hedged Cost</th>
+                                    <th className="border p-2">Unhedged Cost</th>
+                                    <th className="border p-2">Delta P&L</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {scenario.results.map((row, i) => {
+                                    // Récupération de la volatilité implicite pour cette date
+                                    const date = row.date;
+                                    let impliedVol = null;
+                                    
+                                    // 1. Vérifier si l'utilisateur a entré des valeurs manuelles d'IV
+                                    if (scenario.useImpliedVol && scenario.impliedVolatilities && scenario.impliedVolatilities[date]) {
+                                      impliedVol = scenario.impliedVolatilities[date];
+                                    }
+                                    // 2. Utiliser la volatilité de la stratégie comme dernier recours
+                                    else if (scenario.strategy && scenario.strategy.length > 0) {
+                                      impliedVol = scenario.strategy[0].volatility / 100;
+                                    }
+                                    
+                                    return (
+                                      <tr key={i}>
+                                        <td className="border p-2">{row.date}</td>
+                                        <td className="border p-2">{row.timeToMaturity.toFixed(4)}</td>
+                                        <td className="border p-2">{row.forward.toFixed(4)}</td>
+                                        <td className="border p-2">{row.realPrice.toFixed(4)}</td>
+                                        <td className="border p-2">
+                                          {impliedVol !== null 
+                                            ? (impliedVol * 100).toFixed(0) 
+                                            : ""}
+                                        </td>
+                                        {/* S'assurer que toutes les options sont affichées */}
+                                        {row.optionPrices && Array.isArray(row.optionPrices) 
+                                          ? row.optionPrices.map((option, idx) => (
+                                              <td key={idx} className="border p-2">{option.price.toFixed(2)}</td>
+                                            ))
+                                          : scenario.strategy.map((_, idx) => (
+                                              <td key={idx} className="border p-2">-</td>
+                                            ))
+                                        }
+                                        <td className="border p-2">{row.strategyPrice.toFixed(2)}</td>
+                                        <td className="border p-2">{row.totalPayoff.toFixed(2)}</td>
+                                        <td className="border p-2">{row.monthlyVolume.toFixed(0)}</td>
+                                        <td className="border p-2">{row.hedgedCost.toFixed(2)}</td>
+                                        <td className="border p-2">{row.unhedgedCost.toFixed(2)}</td>
+                                        <td className="border p-2">{row.deltaPnL.toFixed(2)}</td>
+                                      </tr>
+                                    );
+                                  })}
+                                </tbody>
+                              </table>
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="mt-6">
+                          <Button
+                            variant="outline"
+                            onClick={() => toggleSection(scenario.id, 'yearlyStats')}
+                            className="flex items-center gap-2 mb-2"
+                          >
+                            {expandedSections[scenario.id]?.yearlyStats ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                            Summary Statistics by Year
+                          </Button>
+                          
+                          {expandedSections[scenario.id]?.yearlyStats && (
+                            <div className="overflow-x-auto">
+                              <table className="min-w-full border-collapse">
+                                <thead>
+                                  <tr>
+                                    <th className="border p-2">Year</th>
+                                    <th className="border p-2">Volume</th>
+                                    <th className="border p-2">Strategy Premium</th>
+                                    <th className="border p-2">Hedged Cost</th>
+                                    <th className="border p-2">Unhedged Cost</th>
+                                    <th className="border p-2">Delta P&L</th>
+                                    <th className="border p-2">Cost Reduction (%)</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {Object.entries(calculateYearlyResults(scenario.results)).map(([year, data]) => (
+                                    <tr key={year}>
+                                      <td className="border p-2">{year}</td>
+                                      <td className="border p-2">{data.volume.toLocaleString()}</td>
+                                      <td className="border p-2">{data.strategyPremium.toFixed(2)}</td>
+                                      <td className="border p-2">{data.hedgedCost.toFixed(2)}</td>
+                                      <td className="border p-2">{data.unhedgedCost.toFixed(2)}</td>
+                                      <td className="border p-2">{data.deltaPnL.toFixed(2)}</td>
+                                      <td className="border p-2">
+                                        {((data.deltaPnL / Math.abs(data.unhedgedCost)) * 100).toFixed(2)}%
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="mt-6">
+                          <Button
+                            variant="outline"
+                            onClick={() => toggleSection(scenario.id, 'totalStats')}
+                            className="flex items-center gap-2 mb-2"
+                          >
+                            {expandedSections[scenario.id]?.totalStats ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                            Total Summary Statistics
+                          </Button>
+                          
+                          {expandedSections[scenario.id]?.totalStats && (
+                            <div className="overflow-x-auto">
+                              <table className="w-full border-collapse">
+                                <tbody>
+                                  <tr>
+                                    <td className="border p-2 font-medium">Total Cost with Hedging</td>
+                                    <td className="border p-2 text-right">
+                                      {scenario.results.reduce((sum, row) => sum + row.hedgedCost, 0).toFixed(2)}
+                                    </td>
+                                  </tr>
+                                  <tr>
+                                    <td className="border p-2 font-medium">Total Cost without Hedging</td>
+                                    <td className="border p-2 text-right">
+                                      {scenario.results.reduce((sum, row) => sum + row.unhedgedCost, 0).toFixed(2)}
+                                    </td>
+                                  </tr>
+                                  <tr>
+                                    <td className="border p-2 font-medium">Total P&L</td>
+                                    <td className="border p-2 text-right">
+                                      {scenario.results.reduce((sum, row) => sum + row.deltaPnL, 0).toFixed(2)}
+                                    </td>
+                                  </tr>
+                                  <tr>
+                                    <td className="border p-2 font-medium">Total Strategy Premium</td>
+                                    <td className="border p-2 text-right">
+                                      {scenario.results.reduce((sum, row) => sum + (row.strategyPrice * row.monthlyVolume), 0).toFixed(2)}
+                                    </td>
+                                  </tr>
+                                  <tr>
+                                    <td className="border p-2 font-medium">Cost Reduction (%)</td>
+                                    <td className="border p-2 text-right">
+                                      {(() => {
+                                        const totalPnL = scenario.results.reduce((sum, row) => sum + row.deltaPnL, 0);
+                                        const totalUnhedgedCost = scenario.results.reduce((sum, row) => sum + row.unhedgedCost, 0);
+                                        return ((totalPnL / Math.abs(totalUnhedgedCost)) * 100).toFixed(2);
+                                      })()}%
+                                    </td>
+                                  </tr>
+                                  <tr>
+                                    <td className="border p-2 font-medium">Strike Target</td>
+                                    <td className="border p-2 text-right">
+                                      {(() => {
+                                        const totalHedgedCost = scenario.results.reduce((sum, row) => sum + row.hedgedCost, 0);
+                                        const totalVolume = scenario.results.reduce((sum, row) => sum + row.monthlyVolume, 0);
+                                        return totalVolume > 0 
+                                          ? Number(Math.abs(totalHedgedCost) / totalVolume).toFixed(2)
+                                          : 'N/A';
+                                      })()}
+                                    </td>
+                                  </tr>
+                                </tbody>
+                              </table>
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="mt-6">
+                          <Button
+                            variant="outline"
+                            onClick={() => toggleSection(scenario.id, 'monthlyPnL')}
+                            className="flex items-center gap-2 mb-2"
+                          >
+                            {expandedSections[scenario.id]?.monthlyPnL ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                            Monthly & Yearly P&L Breakdown
+                          </Button>
+                          
+                          {expandedSections[scenario.id]?.monthlyPnL && (
+                            <div className="overflow-x-auto">
+                              {(() => {
+                                // Organiser les données par année et par mois
+                                const pnlByYearMonth: Record<string, Record<string, number>> = {};
+                                const yearTotals: Record<string, number> = {};
+                                const monthTotals: Record<string, number> = {};
+                                let grandTotal = 0;
+                                
+                                // Collecter toutes les années et tous les mois uniques
+                                const years: Set<string> = new Set();
+                                const months: string[] = [
+                                  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 
+                                  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+                                ];
+                                
+                                // Initialiser la structure de données
+                                scenario.results.forEach(result => {
+                                  const date = new Date(result.date);
+                                  const year = date.getFullYear().toString();
+                                  const month = date.getMonth();
+                                  const monthKey = months[month];
+                                  
+                                  years.add(year);
+                                  
+                                  if (!pnlByYearMonth[year]) {
+                                    pnlByYearMonth[year] = {};
+                                    yearTotals[year] = 0;
+                                  }
+                                  
+                                  if (!pnlByYearMonth[year][monthKey]) {
+                                    pnlByYearMonth[year][monthKey] = 0;
+                                  }
+                                  
+                                  // Ajouter le P&L au mois correspondant
+                                  pnlByYearMonth[year][monthKey] += result.deltaPnL;
+                                  
+                                  // Mettre à jour les totaux
+                                  yearTotals[year] += result.deltaPnL;
+                                  if (!monthTotals[monthKey]) monthTotals[monthKey] = 0;
+                                  monthTotals[monthKey] += result.deltaPnL;
+                                  grandTotal += result.deltaPnL;
+                                });
+                                
+                                // Convertir l'ensemble des années en tableau trié
+                                const sortedYears = Array.from(years).sort();
+                                
+                                // Fonction pour appliquer une couleur en fonction de la valeur
+                                const getPnLColor = (value: number) => {
+                                  if (value > 0) return 'bg-green-100';
+                                  if (value < 0) return 'bg-red-100';
+                                  return '';
+                                };
+                                
+                                // Fonction pour formater les valeurs de P&L
+                                const formatPnL = (value: number) => {
+                                  if (Math.abs(value) < 0.01) return '0';
+                                  // Formater en milliers avec un point de séparation de milliers
+                                  return (value / 1000).toLocaleString(undefined, {
+                                    minimumFractionDigits: 0,
+                                    maximumFractionDigits: 3
+                                  });
+                                };
+                                
+                                return (
+                                  <table className="min-w-full border-collapse text-sm">
+                                    <thead>
+                                      <tr className="bg-gray-100">
+                                        <th className="border p-2 font-semibold text-left"></th>
+                                        {months.map(month => (
+                                          <th key={month} className="border p-2 font-semibold text-center w-20">{month}</th>
+                                        ))}
+                                        <th className="border p-2 font-semibold text-center w-20">Total</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      {sortedYears.map(year => (
+                                        <tr key={year}>
+                                          <td className="border p-2 font-semibold">{year}</td>
+                                          {months.map(month => {
+                                            const value = pnlByYearMonth[year][month] || 0;
+                                            return (
+                                              <td 
+                                                key={`${year}-${month}`} 
+                                                className={`border p-2 text-right ${getPnLColor(value)}`}
+                                              >
+                                                {value ? formatPnL(value) : '-'}
+                                              </td>
+                                            );
+                                          })}
+                                          <td className={`border p-2 text-right font-semibold ${getPnLColor(yearTotals[year])}`}>
+                                            {formatPnL(yearTotals[year])}
+                                          </td>
+                                        </tr>
+                                      ))}
+                                      <tr className="bg-gray-50">
+                                        <td className="border p-2 font-semibold">Total</td>
+                                        {months.map(month => (
+                                          <td 
+                                            key={`total-${month}`} 
+                                            className={`border p-2 text-right font-semibold ${getPnLColor(monthTotals[month] || 0)}`}
+                                          >
+                                            {monthTotals[month] ? formatPnL(monthTotals[month]) : '-'}
+                                          </td>
+                                        ))}
+                                        <td className={`border p-2 text-right font-semibold ${getPnLColor(grandTotal)}`}>
+                                          {formatPnL(grandTotal)}
+                                        </td>
+                                      </tr>
+                                    </tbody>
+                                  </table>
+                                );
+                              })()}
+                            </div>
+                          )}
+                        </div>
+
+                        <Button
+                          onClick={() => {
+                            localStorage.setItem('calculatorState', JSON.stringify({
+                              params: scenario.params,
+                              strategy: scenario.strategy,
+                              results: scenario.results,
+                              payoffData: scenario.payoffData,
+                              // Récupérer les paramètres personnalisés du scénario sauvegardé ou utiliser des valeurs par défaut
+                              manualForwards: scenario.manualForwards || {},
+                              realPrices: scenario.realPrices || {},
+                              realPriceParams: {
+                                useSimulation: false,
+                                volatility: 0.3,
+                                drift: 0.01,
+                                numSimulations: 1000
+                              },
+                              barrierOptionSimulations: 1000,
+                              useClosedFormBarrier: false,
+                              activeTab: 'parameters',
+                              customScenario: scenario.stressTest,
+                              stressTestScenarios: {}, // You might want to save this too
+                              // Récupérer les paramètres de volatilité implicite
+                              useImpliedVol: scenario.useImpliedVol || false,
+                              impliedVolatilities: scenario.impliedVolatilities || {},
+                              // Récupérer les prix personnalisés des options
+                              customOptionPrices: scenario.customOptionPrices || {}
+                            }));
+                            navigate('/');
+                          }}
+                          className="mt-4"
+                        >
+                          Load This Scenario
+                        </Button>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Matrices de risque */}
+        <TabsContent value="risk-matrices" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Risk Matrices</CardTitle>
+              <CardDescription>
+                Risk analysis matrices with multiple strategy comparisons
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Name</TableHead>
+                    <TableHead>Strategies</TableHead>
+                    <TableHead>Price Ranges</TableHead>
+                    <TableHead>Created</TableHead>
+                    <TableHead>Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {savedRiskMatrices.map((matrix) => (
+                    <TableRow key={matrix.id}>
+                      <TableCell className="font-medium">{matrix.name}</TableCell>
+                      <TableCell>
+                        <Badge variant="outline">
+                          {matrix.strategies.length} strategies
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline">
+                          {matrix.priceRanges.length} ranges
+                        </Badge>
+                      </TableCell>
+                      <TableCell>{formatDate(matrix.timestamp)}</TableCell>
+                      <TableCell>
+                        <div className="flex gap-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => viewReport({ ...matrix, type: 'risk-matrix' })}
+                          >
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => exportReport(matrix)}
+                          >
+                            <Download className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Backtests */}
+        <TabsContent value="backtests" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Historical Backtests</CardTitle>
+              <CardDescription>
+                Historical data analysis and backtesting results
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Name</TableHead>
+                    <TableHead>Data Points</TableHead>
+                    <TableHead>Period</TableHead>
+                    <TableHead>Created</TableHead>
+                    <TableHead>Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {savedBacktests.map((backtest) => (
+                    <TableRow key={backtest.id}>
+                      <TableCell className="font-medium">{backtest.name}</TableCell>
+                      <TableCell>
+                        <Badge variant="outline">
+                          {backtest.historicalData?.length || backtest.results?.length || 0} points
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        {backtest.params?.monthsToHedge || 'N/A'} months
+                      </TableCell>
+                      <TableCell>{formatDate(backtest.timestamp)}</TableCell>
+                      <TableCell>
+                        <div className="flex gap-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => viewReport({ ...backtest, type: 'backtest' })}
+                          >
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => exportReport(backtest)}
+                          >
+                            <Download className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
+
+      {/* Dialogues */}
+      
+      {/* Dialogue de visualisation */}
+      <Dialog open={isViewDialogOpen} onOpenChange={setIsViewDialogOpen}>
+        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>
+              {selectedReport?.name} - {selectedReport?.type?.replace('-', ' ')}
+            </DialogTitle>
+            <DialogDescription>
+              Detailed view of the selected report
+            </DialogDescription>
+          </DialogHeader>
+          
+          {selectedReport && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label>Created</Label>
+                  <p className="text-sm">{formatDate(selectedReport.timestamp)}</p>
+                </div>
+                <div>
+                  <Label>Type</Label>
+                  <Badge className={getReportTypeColor(selectedReport.type)}>
+                    {selectedReport.type.replace('-', ' ')}
+                  </Badge>
+                </div>
+              </div>
+
+              {selectedReport.type === 'scenario' && (
+                <div className="space-y-4">
+                  <div>
+                    <Label>Strategy Components</Label>
+                    <div className="text-sm">
+                      {selectedReport.strategy?.length || 0} components
+                    </div>
+                  </div>
+                  <div>
+                    <Label>Parameters</Label>
+                    <pre className="text-xs bg-gray-100 p-2 rounded overflow-auto">
+                      {JSON.stringify(selectedReport.params, null, 2)}
+                    </pre>
+                  </div>
+                </div>
+              )}
+
+              {selectedReport.type === 'risk-matrix' && (
+                <div className="space-y-4">
+                  <div>
+                    <Label>Strategies</Label>
+                    <div className="text-sm">
+                      {selectedReport.strategies?.length || 0} strategies analyzed
+                    </div>
+                  </div>
+                  <div>
+                    <Label>Price Ranges</Label>
+                    <div className="text-sm">
+                      {selectedReport.priceRanges?.length || 0} price ranges
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {selectedReport.type === 'backtest' && (
+                <div className="space-y-4">
+                  <div>
+                    <Label>Historical Data</Label>
+                    <div className="text-sm">
+                      {selectedReport.historicalData?.length || 0} data points
+                    </div>
+                  </div>
+                  <div>
+                    <Label>Results</Label>
+                    <div className="text-sm">
+                      {selectedReport.results?.length || 0} periods analyzed
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsViewDialogOpen(false)}>
+              Close
+            </Button>
+            <Button onClick={() => exportReport(selectedReport)}>
+              <Download className="h-4 w-4 mr-2" />
+              Export
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialogue de suppression */}
+      <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Report</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete "{selectedReport?.name}"? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsDeleteDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={confirmDelete}>
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Layout>
   );
 };

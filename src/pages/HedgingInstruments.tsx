@@ -264,9 +264,14 @@ const HedgingInstruments = () => {
   // Force re-calculation when valuation date changes
   useEffect(() => {
     if (instruments.length > 0) {
-      console.log(`[DEBUG] Valuation date changed to ${valuationDate}, forcing recalculation of all Today Prices`);
+      console.log(`[DEBUG] Valuation date changed to ${valuationDate}, forcing recalculation of all Today Prices and MTM`);
+      setIsRecalculating(true);
+      
       // Force re-render to recalculate all Today Prices with new valuation date
       setInstruments([...instruments]);
+      
+      // Reset recalculating state after a short delay to show feedback
+      setTimeout(() => setIsRecalculating(false), 500);
     }
   }, [valuationDate]);
 
@@ -274,9 +279,14 @@ const HedgingInstruments = () => {
   useEffect(() => {
     if (instruments.length > 0) {
       console.log(`[DEBUG] Market parameters changed, forcing recalculation of Today Prices and MTM`);
+      setIsRecalculating(true);
+      
       // Force re-render to recalculate all Today Prices and MTM with new market parameters
       const updatedInstruments = instruments.map(instrument => ({ ...instrument }));
       setInstruments(updatedInstruments);
+      
+      // Reset recalculating state after a short delay to show feedback
+      setTimeout(() => setIsRecalculating(false), 500);
     }
   }, [currencyMarketData]);
 
@@ -465,29 +475,22 @@ const HedgingInstruments = () => {
     return PricingService.calculateGarmanKohlhagenPrice(type, fallbackSpot, K, r, 0, t, effectiveSigma);
   };
 
-  // Fonction calculateTodayPrice améliorée pour utiliser les données enrichies d'export
+  // ✅ CORRECTION MTM - Fonction calculateTodayPrice pour recalcul automatique du MTM
+  // Cette fonction utilise maintenant la valuationDate pour calculer le time to maturity,
+  // garantissant que le MTM se recalcule automatiquement quand la date de valorisation change.
   // Note: La fonction calculateBarrierOptionClosedForm a été déplacée vers PricingService
   // avec une implémentation complète pour les options à double barrière
 
   const calculateTodayPrice = (instrument: HedgingInstrument): number => {
-    // ✅ STRATÉGIE : Utiliser les valeurs CURRENT affichées dans le tableau (modifiables par l'utilisateur)
+    // ✅ CORRECTION : Utiliser la date de valorisation actuelle pour le calcul du MTM
+    // AVANT : calculationTimeToMaturity utilisait effectiveStrategyStartDate (dates fixes)
+    // APRÈS : calculationTimeToMaturity utilise valuationDate (date modifiable par l'utilisateur)
     
-    // ✅ 1. TIME TO MATURITY : Utiliser la logique Strategy Builder avec dates d'export
-    // Priorité : dates d'export > dates actuelles
-    let effectiveStrategyStartDate = strategyStartDate;
-    let effectiveHedgingStartDate = hedgingStartDate;
+    // ✅ 1. TIME TO MATURITY : Utiliser la date de valorisation actuelle (valuationDate)
+    // Cela garantit que le MTM se recalcule automatiquement quand la date de valorisation change
+    const calculationTimeToMaturity = PricingService.calculateTimeToMaturity(instrument.maturity, valuationDate);
     
-    if (instrument.exportStrategyStartDate && instrument.exportHedgingStartDate) {
-      effectiveStrategyStartDate = instrument.exportStrategyStartDate;
-      effectiveHedgingStartDate = instrument.exportHedgingStartDate;
-      console.log(`[DEBUG] ${instrument.id}: Using export dates - Strategy: ${effectiveStrategyStartDate}, Hedging: ${effectiveHedgingStartDate}`);
-    }
-    
-    // Pour le pricing, utiliser Strategy Start Date (comme Strategy Builder)
-    const calculationTimeToMaturity = PricingService.calculateTimeToMaturity(instrument.maturity, effectiveStrategyStartDate);
-    
-    // Pour l'affichage MTM, utiliser Hedging Start Date (comme Strategy Builder)
-    const displayTimeToMaturity = PricingService.calculateTimeToMaturity(instrument.maturity, effectiveHedgingStartDate);
+    console.log(`[DEBUG] ${instrument.id}: Using valuation date ${valuationDate} for MTM calculation - TTM: ${calculationTimeToMaturity.toFixed(6)} years`);
     
     // 2. PARAMÈTRES DE MARCHÉ : Utiliser les valeurs CURRENT des données de marché
     const marketData = currencyMarketData[instrument.currency] || getMarketDataFromInstruments(instrument.currency) || { spot: 1.0000, volatility: 20, domesticRate: 1.0, foreignRate: 1.0 };
@@ -533,7 +536,7 @@ const HedgingInstruments = () => {
     // 5. STRIKE ANALYSIS : Vérifier la cohérence du strike
     console.log(`[DEBUG] ${instrument.id}: Strike analysis - Strike: ${instrument.strike}, Type: ${instrument.originalComponent?.strikeType || 'unknown'}, Original Strike: ${instrument.originalComponent?.strike || 'N/A'}, Spot: ${spotRate}`);
     
-         console.log(`[DEBUG] ${instrument.id}: Time to maturity - Strategy Start: ${calculationTimeToMaturity.toFixed(4)} years, Hedging Start: ${displayTimeToMaturity.toFixed(4)} years (Export dates: ${instrument.exportStrategyStartDate ? 'Yes' : 'No'})`);
+         console.log(`[DEBUG] ${instrument.id}: Time to maturity from valuation date ${valuationDate}: ${calculationTimeToMaturity.toFixed(4)} years`);
      console.log(`[DEBUG] ${instrument.id}: Using current spot ${spotRate.toFixed(4)} -> forward ${S.toFixed(4)} (r_d=${(r_d*100).toFixed(1)}%, r_f=${(r_f*100).toFixed(1)}%, t=${calculationTimeToMaturity.toFixed(4)})`);
     
     // Vérifier l'expiration
@@ -1177,6 +1180,30 @@ const HedgingInstruments = () => {
     return sum + displayedNotional;
   }, 0);
   
+  // ✅ Check for date consistency issues
+  const dateInconsistencyWarnings = instruments.filter(inst => {
+    if (!inst.maturity) return false;
+    const timeToMaturityFromHedging = calculateTimeToMaturity(inst.maturity, hedgingStartDate);
+    const timeToMaturityFromValuation = calculateTimeToMaturity(inst.maturity, valuationDate);
+    return timeToMaturityFromHedging < 0 || timeToMaturityFromValuation < 0;
+  });
+
+  // ✅ Helper function to suggest appropriate hedging start date
+  const getSuggestedHedgingStartDate = (): string => {
+    if (instruments.length === 0) return hedgingStartDate;
+    
+    // Find the earliest instrument maturity date
+    const earliestMaturity = instruments.reduce((earliest, inst) => {
+      if (!inst.maturity) return earliest;
+      return inst.maturity < earliest ? inst.maturity : earliest;
+    }, instruments[0]?.maturity || hedgingStartDate);
+    
+    // Suggest a date 6 months before the earliest maturity
+    const suggested = new Date(earliestMaturity);
+    suggested.setMonth(suggested.getMonth() - 6);
+    return suggested.toISOString().split('T')[0];
+  };
+
   // Calculate total MTM using our pricing functions with currency-specific data
   const totalMTM = instruments.reduce((sum, inst) => {
     const marketData = currencyMarketData[inst.currency];
@@ -1217,6 +1244,33 @@ const HedgingInstruments = () => {
         { label: "Hedging Instruments" }
       ]}
     >
+      {/* ✅ Date Consistency Warning */}
+      {dateInconsistencyWarnings.length > 0 && (
+        <div className="mb-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+          <div className="flex items-center gap-2 text-yellow-800">
+            <AlertCircle className="h-5 w-5" />
+            <h3 className="font-semibold">Date Consistency Warning</h3>
+          </div>
+          <p className="mt-2 text-sm text-yellow-700">
+            {dateInconsistencyWarnings.length} instrument(s) have date inconsistencies. 
+            The Hedging Start Date ({hedgingStartDate}) or Valuation Date ({valuationDate}) 
+            may be after some instrument maturity dates, causing calculation issues.
+          </p>
+          <p className="mt-1 text-xs text-yellow-600">
+            Consider adjusting the Hedging Start Date to be before instrument maturities.
+            Suggested date: <span className="font-mono font-semibold">{getSuggestedHedgingStartDate()}</span>
+          </p>
+          <Button
+            size="sm"
+            variant="outline"
+            className="mt-2"
+            onClick={() => setHedgingStartDate(getSuggestedHedgingStartDate())}
+          >
+            Use Suggested Date
+          </Button>
+        </div>
+      )}
+
       {/* MTM Calculation Controls */}
       <Card className="mb-4">
         <CardHeader>
@@ -1498,11 +1552,18 @@ const HedgingInstruments = () => {
             <TrendingUp className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className={`text-2xl font-bold ${getMTMColor(totalMTM)}`}>
-              {formatCurrency(totalMTM)}
+            <div className={`text-2xl font-bold ${getMTMColor(totalMTM)} ${isRecalculating ? 'opacity-50' : ''}`}>
+              {isRecalculating ? (
+                <div className="flex items-center gap-2">
+                  <RefreshCw className="h-5 w-5 animate-spin" />
+                  Calculating...
+                </div>
+              ) : (
+                formatCurrency(totalMTM)
+              )}
             </div>
             <p className="text-xs text-muted-foreground">
-              Unrealized P&L
+              {isRecalculating ? 'Recalculating MTM...' : 'Unrealized P&L'}
             </p>
           </CardContent>
         </Card>
@@ -1761,12 +1822,28 @@ const HedgingInstruments = () => {
                       }
                                               // Calculate time to maturity - TOUJOURS recalculer avec la date de valorisation actuelle
                         let timeToMaturity = 0;
+                        let hasTimeMaturityError = false;
+                        
                         if (instrument.maturity) {
                           // Toujours calculer avec la date de valorisation actuelle pour l'affichage
                           timeToMaturity = calculateTimeToMaturity(instrument.maturity, valuationDate);
+                          
+                          // ✅ NOUVEAU : Vérifier si la hedging start date est cohérente avec la maturité
+                          const timeToMaturityFromHedging = calculateTimeToMaturity(instrument.maturity, hedgingStartDate);
+                          
+                          if (timeToMaturityFromHedging < 0) {
+                            console.warn(`[HEDGING DATE WARNING] ${instrument.id}: Hedging Start Date (${hedgingStartDate}) is after maturity (${instrument.maturity}). This instrument would already be expired.`);
+                            hasTimeMaturityError = true;
+                          }
+                          
+                          if (timeToMaturity < 0) {
+                            console.warn(`[VALUATION DATE WARNING] ${instrument.id}: Valuation Date (${valuationDate}) is after maturity (${instrument.maturity}). This instrument is expired.`);
+                            hasTimeMaturityError = true;
+                          }
                         } else {
                           console.warn(`No maturity date available for instrument ${instrument.id}`);
                           timeToMaturity = 0;
+                          hasTimeMaturityError = true;
                         }
                       // Use implied volatility from Detailed Results if available, otherwise use component volatility
                       const volatility = instrument.impliedVolatility || instrument.volatility || 0;
@@ -1873,16 +1950,30 @@ const HedgingInstruments = () => {
                           </TableCell>
                           
                           {/* Time to Maturity - Current */}
-                          <TableCell className="font-mono text-center bg-green-50">
-                            <div className="text-xs text-green-600">
-                              {timeToMaturity.toFixed(4)}y
-                            </div>
-                              <div className="text-xs text-gray-500">
-                              {(timeToMaturity * 365).toFixed(0)}d
+                          <TableCell className={`font-mono text-center ${hasTimeMaturityError ? 'bg-red-50' : 'bg-green-50'}`}>
+                            {hasTimeMaturityError ? (
+                              <div className="text-xs text-red-600">
+                                <div className="flex items-center gap-1 justify-center">
+                                  <AlertCircle className="h-3 w-3" />
+                                  <span>Date Issue</span>
+                                </div>
+                                <div className="text-xs text-red-500 mt-1">
+                                  Check dates consistency
+                                </div>
                               </div>
-                            <div className="text-xs text-gray-400">
-                              Calc from {valuationDate}
-                            </div>
+                            ) : (
+                              <>
+                                <div className="text-xs text-green-600">
+                                  {timeToMaturity.toFixed(4)}y
+                                </div>
+                                <div className="text-xs text-gray-500">
+                                  {(timeToMaturity * 365).toFixed(0)}d
+                                </div>
+                                <div className="text-xs text-gray-400">
+                                  Calc from {valuationDate}
+                                </div>
+                              </>
+                            )}
                           </TableCell>
                           
                           {/* Spot Price - Export */}

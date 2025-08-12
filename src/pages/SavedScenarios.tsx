@@ -219,13 +219,18 @@ const SavedScenarios = () => {
 
   // Toggle section visibility
   const toggleSection = (scenarioId: string, section: string) => {
-    setExpandedSections(prev => ({
-      ...prev,
-      [scenarioId]: {
-        ...(prev[scenarioId] || initializeExpandedState(scenarioId)),
-        [section]: !(prev[scenarioId]?.[section] ?? false)
-      }
-    }));
+    console.log('Toggle section:', scenarioId, section);
+    setExpandedSections(prev => {
+      const newState = {
+        ...prev,
+        [scenarioId]: {
+          ...(prev[scenarioId] || initializeExpandedState(scenarioId)),
+          [section]: !(prev[scenarioId]?.[section] ?? false)
+        }
+      };
+      console.log('New expanded state:', newState[scenarioId]);
+      return newState;
+    });
   };
 
   React.useEffect(() => {
