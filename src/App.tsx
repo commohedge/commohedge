@@ -22,6 +22,8 @@ import ForexMarket from "./pages/ForexMarket";
 import UserManagement from "./pages/UserManagement";
 import Settings from "./pages/Settings";
 import SavedScenarios from "./pages/SavedScenarios";
+import RegressionAnalysis from "./pages/RegressionAnalysis";
+import OptionsMarketData from "./pages/OptionsMarketData";
 import NotFound from "./pages/NotFound";
 
 // Theme toggle component
@@ -57,6 +59,8 @@ const App = () => (
             <Route path="/forex-market" element={<ForexMarket />} />
             <Route path="/users" element={<UserManagement />} />
             <Route path="/settings" element={<Settings />} />
+            <Route path="/regression-analysis" element={<RegressionAnalysis />} />
+            <Route path="/options-market-data" element={<OptionsMarketData />} />
             
             {/* Legacy routes */}
             <Route path="/saved" element={<SavedScenarios />} />

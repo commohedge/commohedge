@@ -15,7 +15,9 @@ import {
   Database,
   Briefcase,
   Activity,
-  Calculator
+  Calculator,
+  BarChart,
+  Zap
 } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import {
@@ -34,6 +36,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useCompanySettings, getCompanyNameSync, companySettingsEmitter } from "@/hooks/useCompanySettings";
+import ExchangeRateService from "@/services/ExchangeRateService";
 
 const menuItems = [
   {
@@ -74,6 +77,12 @@ const menuItems = [
     description: "Advanced pricing for options, swaps and forwards"
   },
   {
+    title: "Regression Analysis",
+    url: "/regression-analysis",
+    icon: TrendingUp,
+    description: "Advanced regression analysis and data visualization"
+  },
+  {
     title: "Risk Analysis",
     url: "/risk-analysis",
     icon: BarChart3,
@@ -84,6 +93,12 @@ const menuItems = [
     url: "/positions",
     icon: Activity,
     description: "Real-time position monitoring"
+  },
+  {
+    title: "Options Market Data",
+    url: "/options-market-data",
+    icon: Zap,
+    description: "Real-time options market data and analytics"
   }
 ];
 
@@ -116,6 +131,12 @@ const managementItems = [
     description: "FX rates and volatility feeds"
   },
   {
+    title: "Options Market Data",
+    url: "/options-market-data",
+    icon: BarChart,
+    description: "Real-time options market data and analytics"
+  },
+  {
     title: "User Management",
     url: "/users",
     icon: Users,
@@ -135,12 +156,43 @@ export function AppSidebar() {
   const logo = getCompanyLogo();
   // Utilise le cache mémoire pour le nom dès le premier render
   const [companyName, setCompanyName] = useState(getCompanyNameSync());
+  
+  // State for market status data
+  const [marketStatusData, setMarketStatusData] = useState({
+    EUR_USD: 1.0856,
+    GBP_USD: 1.2734
+  });
+  
+  const exchangeRateService = ExchangeRateService.getInstance();
+  
   useEffect(() => {
     const unsubscribe = companySettingsEmitter.subscribe(() => {
       setCompanyName(getCompanyNameSync());
     });
     return unsubscribe;
   }, []);
+  
+  // Load market status data
+  useEffect(() => {
+    const loadMarketStatusData = async () => {
+      try {
+        const exchangeData = await exchangeRateService.getExchangeRates('USD');
+        setMarketStatusData({
+          EUR_USD: exchangeData.rates.EUR || 1.0856,
+          GBP_USD: exchangeData.rates.GBP || 1.2734
+        });
+      } catch (error) {
+        console.error('Error loading market status data:', error);
+      }
+    };
+
+    loadMarketStatusData();
+    
+    // Update every 30 seconds
+    const interval = setInterval(loadMarketStatusData, 30000);
+    return () => clearInterval(interval);
+  }, []);
+  
   // Découpe le nom pour l'affichage
   const dashIndex = companyName.indexOf(' - ');
   const primaryName = dashIndex === -1 ? companyName : companyName.substring(0, dashIndex).trim();
@@ -308,11 +360,11 @@ export function AppSidebar() {
           <div className="grid grid-cols-2 gap-2 text-xs">
             <div className="bg-muted/50 rounded p-2">
               <div className="text-muted-foreground">EUR/USD</div>
-              <div className="font-mono font-medium">1.0856</div>
+              <div className="font-mono font-medium">{marketStatusData.EUR_USD.toFixed(4)}</div>
             </div>
             <div className="bg-muted/50 rounded p-2">
               <div className="text-muted-foreground">GBP/USD</div>
-              <div className="font-mono font-medium">1.2734</div>
+              <div className="font-mono font-medium">{marketStatusData.GBP_USD.toFixed(4)}</div>
             </div>
           </div>
         </div>

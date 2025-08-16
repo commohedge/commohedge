@@ -1,10 +1,11 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { Layout } from "@/components/Layout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { useFinancialData } from "@/hooks/useFinancialData";
+import ExchangeRateService from "@/services/ExchangeRateService";
 import { 
   TrendingUp, 
   TrendingDown, 
@@ -33,6 +34,91 @@ const Dashboard = () => {
     updateMarketData,
     generateStressScenarios
   } = useFinancialData();
+
+  // State for market overview data
+  const [marketOverviewData, setMarketOverviewData] = useState<{
+    EUR_USD: { rate: number; change: number };
+    GBP_USD: { rate: number; change: number };
+    USD_JPY: { rate: number; change: number };
+    USD_CHF: { rate: number; change: number };
+  }>({
+    EUR_USD: { rate: 1.0856, change: 0.12 },
+    GBP_USD: { rate: 1.2734, change: -0.08 },
+    USD_JPY: { rate: 161.85, change: 0.24 },
+    USD_CHF: { rate: 0.9642, change: 0.05 }
+  });
+
+  // State to track previous rates for change calculation
+  const [previousRates, setPreviousRates] = useState<{
+    EUR_USD: number;
+    GBP_USD: number;
+    USD_JPY: number;
+    USD_CHF: number;
+  }>({
+    EUR_USD: 1.0856,
+    GBP_USD: 1.2734,
+    USD_JPY: 161.85,
+    USD_CHF: 0.9642
+  });
+
+  const exchangeRateService = ExchangeRateService.getInstance();
+
+  // Function to load market overview data from Forex Market
+  const loadMarketOverviewData = async () => {
+    try {
+      const exchangeData = await exchangeRateService.getExchangeRates('USD');
+      
+      // Get current rates
+      const currentRates = {
+        EUR_USD: exchangeData.rates.EUR || 1.0856,
+        GBP_USD: exchangeData.rates.GBP || 1.2734,
+        USD_JPY: exchangeData.rates.JPY || 161.85,
+        USD_CHF: exchangeData.rates.CHF || 0.9642
+      };
+      
+      // Calculate changes based on previous rates
+      const newMarketData = {
+        EUR_USD: { 
+          rate: currentRates.EUR_USD, 
+          change: calculateChange(currentRates.EUR_USD, previousRates.EUR_USD) 
+        },
+        GBP_USD: { 
+          rate: currentRates.GBP_USD, 
+          change: calculateChange(currentRates.GBP_USD, previousRates.GBP_USD) 
+        },
+        USD_JPY: { 
+          rate: currentRates.USD_JPY, 
+          change: calculateChange(currentRates.USD_JPY, previousRates.USD_JPY) 
+        },
+        USD_CHF: { 
+          rate: currentRates.USD_CHF, 
+          change: calculateChange(currentRates.USD_CHF, previousRates.USD_CHF) 
+        }
+      };
+      
+      // Update states
+      setMarketOverviewData(newMarketData);
+      setPreviousRates(currentRates);
+    } catch (error) {
+      console.error('Error loading market overview data:', error);
+    }
+  };
+
+  // Helper function to calculate percentage change
+  const calculateChange = (currentRate: number, previousRate: number): number => {
+    if (!previousRate || previousRate === 0) return 0;
+    return ((currentRate - previousRate) / previousRate) * 100;
+  };
+
+  // Load market data on component mount and when live mode is enabled
+  useEffect(() => {
+    loadMarketOverviewData();
+    
+    if (isLiveMode) {
+      const interval = setInterval(loadMarketOverviewData, 30000); // Update every 30 seconds
+      return () => clearInterval(interval);
+    }
+  }, [isLiveMode]);
 
   // Generate real-time alerts based on actual data
   const generateAlerts = () => {
@@ -335,30 +421,59 @@ const Dashboard = () => {
       {/* Market Overview Footer */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Market Overview</CardTitle>
-          <CardDescription>Current FX rates and recent changes</CardDescription>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="text-base">Market Overview</CardTitle>
+              <CardDescription>Current FX rates and recent changes</CardDescription>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={loadMarketOverviewData}
+              className="flex items-center gap-2"
+            >
+              <RefreshCw className="h-4 w-4" />
+              Refresh
+            </Button>
+          </div>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div className="text-center">
-              <div className="text-lg font-mono font-bold">1.0856</div>
+              <div className="text-lg font-mono font-bold">
+                {marketOverviewData.EUR_USD.rate.toFixed(4)}
+              </div>
               <div className="text-sm text-muted-foreground">EUR/USD</div>
-              <div className="text-xs text-green-600">+0.12%</div>
+              <div className={`text-xs ${marketOverviewData.EUR_USD.change >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                {marketOverviewData.EUR_USD.change >= 0 ? '+' : ''}{marketOverviewData.EUR_USD.change.toFixed(2)}%
+              </div>
             </div>
             <div className="text-center">
-              <div className="text-lg font-mono font-bold">1.2734</div>
+              <div className="text-lg font-mono font-bold">
+                {marketOverviewData.GBP_USD.rate.toFixed(4)}
+              </div>
               <div className="text-sm text-muted-foreground">GBP/USD</div>
-              <div className="text-xs text-red-600">-0.08%</div>
+              <div className={`text-xs ${marketOverviewData.GBP_USD.change >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                {marketOverviewData.GBP_USD.change >= 0 ? '+' : ''}{marketOverviewData.GBP_USD.change.toFixed(2)}%
+              </div>
             </div>
             <div className="text-center">
-              <div className="text-lg font-mono font-bold">161.85</div>
+              <div className="text-lg font-mono font-bold">
+                {marketOverviewData.USD_JPY.rate.toFixed(2)}
+              </div>
               <div className="text-sm text-muted-foreground">USD/JPY</div>
-              <div className="text-xs text-green-600">+0.24%</div>
+              <div className={`text-xs ${marketOverviewData.USD_JPY.change >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                {marketOverviewData.USD_JPY.change >= 0 ? '+' : ''}{marketOverviewData.USD_JPY.change.toFixed(2)}%
+              </div>
             </div>
             <div className="text-center">
-              <div className="text-lg font-mono font-bold">0.9642</div>
+              <div className="text-lg font-mono font-bold">
+                {marketOverviewData.USD_CHF.rate.toFixed(4)}
+              </div>
               <div className="text-sm text-muted-foreground">USD/CHF</div>
-              <div className="text-xs text-green-600">+0.05%</div>
+              <div className={`text-xs ${marketOverviewData.USD_CHF.change >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                {marketOverviewData.USD_CHF.change >= 0 ? '+' : ''}{marketOverviewData.USD_CHF.change.toFixed(2)}%
+              </div>
             </div>
           </div>
         </CardContent>
