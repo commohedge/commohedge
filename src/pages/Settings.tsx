@@ -38,6 +38,7 @@ import {
   Eraser
 } from "lucide-react";
 import { useCompanySettings, companySettingsEmitter } from "@/hooks/useCompanySettings";
+import { getLocalStorageStats, performEmergencyRecovery } from "@/utils/emergencyRecovery";
 
 interface AppSettings {
   // General settings
@@ -647,7 +648,7 @@ const Settings = () => {
       )}
 
       <Tabs defaultValue="general" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-8">
+        <TabsList className="grid w-full grid-cols-9">
           <TabsTrigger value="general">General</TabsTrigger>
           <TabsTrigger value="risk">Risk</TabsTrigger>
           <TabsTrigger value="pricing">Pricing</TabsTrigger>
@@ -656,6 +657,7 @@ const Settings = () => {
           <TabsTrigger value="data">Data</TabsTrigger>
           <TabsTrigger value="fxexposures">FX Exposures</TabsTrigger>
           <TabsTrigger value="hedging">Hedging</TabsTrigger>
+          <TabsTrigger value="diagnostic">Diagnostic</TabsTrigger>
         </TabsList>
 
         <TabsContent value="general">
@@ -2016,6 +2018,203 @@ const Settings = () => {
                     placeholder="Enter additional documentation requirements..."
                     rows={3}
                   />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="diagnostic">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <AlertTriangle className="h-5 w-5" />
+                Diagnostic & Récupération
+              </CardTitle>
+              <CardDescription>
+                Outils de diagnostic et de récupération pour résoudre les problèmes de l'application
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {/* LocalStorage Statistics */}
+              <div className="space-y-4">
+                <h4 className="text-lg font-semibold">Statistiques LocalStorage</h4>
+                <div className="grid gap-4 md:grid-cols-3">
+                  <Card>
+                    <CardContent className="pt-6">
+                      <div className="text-2xl font-bold">
+                        {(() => {
+                          const stats = getLocalStorageStats();
+                          return stats.itemCount;
+                        })()}
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        Éléments stockés
+                      </p>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardContent className="pt-6">
+                      <div className="text-2xl font-bold">
+                        {(() => {
+                          const stats = getLocalStorageStats();
+                          return (stats.totalSize / 1024).toFixed(1) + ' KB';
+                        })()}
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        Taille totale
+                      </p>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardContent className="pt-6">
+                      <div className="text-2xl font-bold">
+                        {(() => {
+                          const stats = getLocalStorageStats();
+                          const largestItem = stats.items[0];
+                          return largestItem ? largestItem.key : 'N/A';
+                        })()}
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        Plus gros élément
+                      </p>
+                    </CardContent>
+                  </Card>
+                </div>
+              </div>
+
+              <Separator />
+
+              {/* Emergency Recovery Actions */}
+              <div className="space-y-4">
+                <h4 className="text-lg font-semibold">Actions de Récupération</h4>
+                <Alert>
+                  <AlertTriangle className="h-4 w-4" />
+                  <AlertDescription>
+                    Ces actions peuvent supprimer des données. Utilisez-les uniquement en cas de problème.
+                  </AlertDescription>
+                </Alert>
+                
+                <div className="grid gap-4 md:grid-cols-2">
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-base">Nettoyer les données du Strategy Builder</CardTitle>
+                      <CardDescription>
+                        Supprime les données corrompues du Strategy Builder
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button variant="outline" className="w-full">
+                            <Eraser className="h-4 w-4 mr-2" />
+                            Nettoyer Strategy Builder
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Nettoyer les données du Strategy Builder</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              Cette action va supprimer toutes les données sauvegardées du Strategy Builder, 
+                              y compris les stratégies, paramètres et résultats. Cette action est irréversible.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Annuler</AlertDialogCancel>
+                            <AlertDialogAction
+                              onClick={() => {
+                                performEmergencyRecovery({ clearCalculatorState: true });
+                                toast({
+                                  title: "Données nettoyées",
+                                  description: "Les données du Strategy Builder ont été supprimées.",
+                                });
+                              }}
+                              className="bg-orange-600 hover:bg-orange-700"
+                            >
+                              Nettoyer
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-base">Réinitialiser toutes les données</CardTitle>
+                      <CardDescription>
+                        Supprime toutes les données de l'application
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button variant="outline" className="w-full text-red-600 border-red-200 hover:bg-red-50">
+                            <Trash2 className="h-4 w-4 mr-2" />
+                            Réinitialiser tout
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Réinitialiser toutes les données</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              Cette action va supprimer TOUTES les données de l'application, 
+                              y compris les paramètres, stratégies, expositions et instruments. 
+                              Cette action est irréversible.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Annuler</AlertDialogCancel>
+                            <AlertDialogAction
+                              onClick={() => {
+                                performEmergencyRecovery({ resetToDefaults: true });
+                                toast({
+                                  title: "Application réinitialisée",
+                                  description: "Toutes les données ont été supprimées.",
+                                });
+                              }}
+                              className="bg-red-600 hover:bg-red-700"
+                            >
+                              Réinitialiser
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    </CardContent>
+                  </Card>
+                </div>
+              </div>
+
+              <Separator />
+
+              {/* System Information */}
+              <div className="space-y-4">
+                <h4 className="text-lg font-semibold">Informations Système</h4>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label>Navigateur</Label>
+                    <Input 
+                      value={navigator.userAgent.split(' ').slice(-2).join(' ')} 
+                      readOnly 
+                      className="bg-muted"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>LocalStorage disponible</Label>
+                    <Input 
+                      value={(() => {
+                        try {
+                          localStorage.setItem('test', 'test');
+                          localStorage.removeItem('test');
+                          return 'Oui';
+                        } catch {
+                          return 'Non';
+                        }
+                      })()} 
+                      readOnly 
+                      className="bg-muted"
+                    />
+                  </div>
                 </div>
               </div>
             </CardContent>

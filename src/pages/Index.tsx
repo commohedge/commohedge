@@ -1144,13 +1144,17 @@ const Index = () => {
 
   // Add state for active tab
   const [activeTab, setActiveTab] = useState(() => {
-    const savedState = localStorage.getItem('calculatorState');
-    return savedState ? JSON.parse(savedState).activeTab : 'parameters';
+    try {
+      const savedState = localStorage.getItem('calculatorState');
+      return savedState ? JSON.parse(savedState).activeTab || 'parameters' : 'parameters';
+    } catch (error) {
+      console.warn('Error parsing activeTab from localStorage:', error);
+      return 'parameters';
+    }
   });
 
   // Basic parameters state
   const [params, setParams] = useState(() => {
-    const savedState = localStorage.getItem('calculatorState');
     const defaultParams = {
       startDate: new Date().toISOString().split('T')[0],           // Hedging Start Date
       strategyStartDate: new Date().toISOString().split('T')[0],   // Strategy Start Date (same as hedging start by default)
@@ -1167,20 +1171,31 @@ const Index = () => {
       customPeriods: []
     };
     
-    if (savedState) {
-      const savedParams = JSON.parse(savedState).params;
-      // Ensure backward compatibility - calculate missing volumes if needed
-      if (!savedParams.baseVolume) {
-        savedParams.baseVolume = savedParams.totalVolume || 10000000;
+    try {
+      const savedState = localStorage.getItem('calculatorState');
+      if (savedState) {
+        const savedParams = JSON.parse(savedState).params;
+        // Ensure backward compatibility - calculate missing volumes if needed
+        if (!savedParams.baseVolume) {
+          savedParams.baseVolume = savedParams.totalVolume || 10000000;
+        }
+        if (!savedParams.quoteVolume) {
+          savedParams.quoteVolume = (savedParams.totalVolume || 10000000) * (savedParams.spotPrice || 1.0850);
+        }
+        // Ensure backward compatibility - add strategyStartDate if missing
+        if (!savedParams.strategyStartDate) {
+          savedParams.strategyStartDate = savedParams.startDate || new Date().toISOString().split('T')[0];
+        }
+        return savedParams;
       }
-      if (!savedParams.quoteVolume) {
-        savedParams.quoteVolume = (savedParams.totalVolume || 10000000) * (savedParams.spotPrice || 1.0850);
+    } catch (error) {
+      console.warn('Error parsing params from localStorage:', error);
+      // Clear corrupted data
+      try {
+        localStorage.removeItem('calculatorState');
+      } catch (e) {
+        console.warn('Could not clear corrupted localStorage:', e);
       }
-      // Ensure backward compatibility - add strategyStartDate if missing
-      if (!savedParams.strategyStartDate) {
-        savedParams.strategyStartDate = savedParams.startDate || new Date().toISOString().split('T')[0];
-      }
-      return savedParams;
     }
     
     return defaultParams;
@@ -1191,40 +1206,70 @@ const Index = () => {
 
   // Strategy components state
   const [strategy, setStrategy] = useState(() => {
-    const savedState = localStorage.getItem('calculatorState');
-    return savedState ? JSON.parse(savedState).strategy : [];
+    try {
+      const savedState = localStorage.getItem('calculatorState');
+      return savedState ? JSON.parse(savedState).strategy || [] : [];
+    } catch (error) {
+      console.warn('Error parsing strategy from localStorage:', error);
+      return [];
+    }
   });
 
   // Results state - complete results for calculations
   const [results, setResults] = useState(() => {
-    const savedState = localStorage.getItem('calculatorState');
-    return savedState ? JSON.parse(savedState).results : null;
+    try {
+      const savedState = localStorage.getItem('calculatorState');
+      return savedState ? JSON.parse(savedState).results || null : null;
+    } catch (error) {
+      console.warn('Error parsing results from localStorage:', error);
+      return null;
+    }
   });
 
   // Display results state - filtered results for user interface
   const [displayResults, setDisplayResults] = useState(() => {
-    const savedState = localStorage.getItem('calculatorState');
-    const fullResults = savedState ? JSON.parse(savedState).results : null;
-    // Initialize with full results, will be filtered when calculateResults runs
-    return fullResults;
+    try {
+      const savedState = localStorage.getItem('calculatorState');
+      const fullResults = savedState ? JSON.parse(savedState).results || null : null;
+      // Initialize with full results, will be filtered when calculateResults runs
+      return fullResults;
+    } catch (error) {
+      console.warn('Error parsing displayResults from localStorage:', error);
+      return null;
+    }
   });
 
   // Manual forward prices state
   const [manualForwards, setManualForwards] = useState(() => {
-    const savedState = localStorage.getItem('calculatorState');
-    return savedState ? JSON.parse(savedState).manualForwards : {};
+    try {
+      const savedState = localStorage.getItem('calculatorState');
+      return savedState ? JSON.parse(savedState).manualForwards || {} : {};
+    } catch (error) {
+      console.warn('Error parsing manualForwards from localStorage:', error);
+      return {};
+    }
   });
 
   // Real prices state
   const [realPrices, setRealPrices] = useState(() => {
-    const savedState = localStorage.getItem('calculatorState');
-    return savedState ? JSON.parse(savedState).realPrices : {};
+    try {
+      const savedState = localStorage.getItem('calculatorState');
+      return savedState ? JSON.parse(savedState).realPrices || {} : {};
+    } catch (error) {
+      console.warn('Error parsing realPrices from localStorage:', error);
+      return {};
+    }
   });
 
   // Payoff data state
   const [payoffData, setPayoffData] = useState(() => {
-    const savedState = localStorage.getItem('calculatorState');
-    return savedState ? JSON.parse(savedState).payoffData : [];
+    try {
+      const savedState = localStorage.getItem('calculatorState');
+      return savedState ? JSON.parse(savedState).payoffData || [] : [];
+    } catch (error) {
+      console.warn('Error parsing payoffData from localStorage:', error);
+      return [];
+    }
   });
 
   // Real prices simulation parameters
