@@ -10,13 +10,10 @@ import {
   Shield,
   AlertTriangle,
   Target,
-  PieChart,
   Users,
-  Database,
   Briefcase,
   Activity,
   Calculator,
-  BarChart,
   Zap
 } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
@@ -37,6 +34,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useCompanySettings, getCompanyNameSync, companySettingsEmitter } from "@/hooks/useCompanySettings";
 import ExchangeRateService from "@/services/ExchangeRateService";
+import { ScrollArea } from "@/components/ui/ScrollArea";
 
 const menuItems = [
   {
@@ -108,34 +106,10 @@ const reportingItems = [
     url: "/reports",
     icon: FileText,
     description: "Generate custom reports"
-  },
-  {
-    title: "Performance",
-    url: "/performance",
-    icon: TrendingUp,
-    description: "Hedging effectiveness tracking"
-  },
-  {
-    title: "Analytics",
-    url: "/analytics",
-    icon: PieChart,
-    description: "Advanced analytics dashboard"
   }
 ];
 
 const managementItems = [
-  {
-    title: "Market Data",
-    url: "/market-data",
-    icon: Database,
-    description: "FX rates and volatility feeds"
-  },
-  {
-    title: "Options Market Data",
-    url: "/options-market-data",
-    icon: BarChart,
-    description: "Real-time options market data and analytics"
-  },
   {
     title: "User Management",
     url: "/users",
@@ -232,6 +206,7 @@ export function AppSidebar() {
       </SidebarHeader>
       
       <SidebarContent className="p-2">
+        <ScrollArea variant="sidebar" orientation="vertical" className="h-full">
         {/* Core Functions */}
         <SidebarGroup>
           <SidebarGroupLabel className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-2 mb-2">
@@ -264,10 +239,10 @@ export function AppSidebar() {
 
         <SidebarSeparator className="my-4" />
 
-        {/* Reporting & Analytics */}
+        {/* Reporting */}
         <SidebarGroup>
           <SidebarGroupLabel className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-2 mb-2">
-            Reporting & Analytics
+            Reporting
           </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
@@ -345,6 +320,7 @@ export function AppSidebar() {
             </div>
           </SidebarGroupContent>
         </SidebarGroup>
+        </ScrollArea>
       </SidebarContent>
 
       <SidebarFooter className="p-4 border-t border-border/40">

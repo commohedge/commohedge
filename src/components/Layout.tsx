@@ -15,6 +15,7 @@ import {
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
 import { useCompanySettings, getCompanyNameSync, companySettingsEmitter } from "@/hooks/useCompanySettings";
+import { ScrollArea } from "@/components/ui/ScrollArea";
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -88,9 +89,11 @@ export function Layout({ children, title, breadcrumbs }: LayoutProps) {
             </div>
           </div>
         </header>
-        <div className="flex flex-1 flex-col gap-4 p-4 pt-6">
-          {children}
-        </div>
+        <ScrollArea variant="content" orientation="vertical" className="flex-1">
+          <div className="flex flex-1 flex-col gap-4 p-4 pt-6">
+            {children}
+          </div>
+        </ScrollArea>
       </SidebarInset>
     </SidebarProvider>
   );

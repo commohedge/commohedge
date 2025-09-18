@@ -1,0 +1,165 @@
+/* Styles de scrollbar personnalisés pour une meilleure UX */
+
+/* Scrollbar globale pour l'application */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: hsl(var(--primary) / 0.2) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+  border-radius: 8px;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: hsl(var(--primary) / 0.2);
+  border-radius: 8px;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--primary) / 0.4);
+}
+
+*::-webkit-scrollbar-thumb:active {
+  background: hsl(var(--primary) / 0.6);
+}
+
+/* Scrollbar pour les éléments de contenu principal */
+.content-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: hsl(var(--muted-foreground) / 0.2) transparent;
+}
+
+.content-scrollbar::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.content-scrollbar::-webkit-scrollbar-track {
+  background: hsl(var(--muted) / 0.3);
+  border-radius: 10px;
+}
+
+.content-scrollbar::-webkit-scrollbar-thumb {
+  background: hsl(var(--muted-foreground) / 0.2);
+  border-radius: 10px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.content-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--muted-foreground) / 0.4);
+}
+
+/* Scrollbar pour les modales et popups */
+.modal-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: hsl(var(--border) / 0.5) transparent;
+}
+
+.modal-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.modal-scrollbar::-webkit-scrollbar-track {
+  background: hsl(var(--background) / 0.5);
+  border-radius: 8px;
+}
+
+.modal-scrollbar::-webkit-scrollbar-thumb {
+  background: hsl(var(--border) / 0.5);
+  border-radius: 8px;
+  transition: all 0.2s ease-in-out;
+}
+
+.modal-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--border) / 0.8);
+}
+
+/* Animation de scroll fluide */
+@keyframes smoothScroll {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(-10px);
+  }
+}
+
+.smooth-scroll-animation {
+  animation: smoothScroll 0.3s ease-in-out;
+}
+
+/* Styles pour les éléments avec défilement horizontal */
+.horizontal-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: hsl(var(--primary) / 0.3) transparent;
+  scroll-behavior: smooth;
+}
+
+.horizontal-scroll::-webkit-scrollbar {
+  height: 6px;
+}
+
+.horizontal-scroll::-webkit-scrollbar-track {
+  background: transparent;
+  border-radius: 8px;
+}
+
+.horizontal-scroll::-webkit-scrollbar-thumb {
+  background: hsl(var(--primary) / 0.3);
+  border-radius: 8px;
+  transition: all 0.2s ease-in-out;
+}
+
+.horizontal-scroll::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--primary) / 0.5);
+}
+
+/* Styles pour les listes et menus */
+.list-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: hsl(var(--accent) / 0.2) transparent;
+}
+
+.list-scrollbar::-webkit-scrollbar {
+  width: 4px;
+}
+
+.list-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+  border-radius: 6px;
+}
+
+.list-scrollbar::-webkit-scrollbar-thumb {
+  background: hsl(var(--accent) / 0.2);
+  border-radius: 6px;
+  transition: all 0.2s ease-in-out;
+}
+
+.list-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--accent) / 0.4);
+}
+
+/* Responsive scrollbar - plus fine sur mobile */
+@media (max-width: 768px) {
+  *::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
+  }
+  
+  .sidebar-scrollbar::-webkit-scrollbar {
+    width: 3px;
+  }
+  
+  .content-scrollbar::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+}

@@ -4,6 +4,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import { ThemeProvider } from "./hooks/ThemeProvider";
+import { useSmoothScroll, useMomentumScroll } from "./hooks/useSmoothScroll";
 
 // Import pages
 import Dashboard from "./pages/Dashboard";
@@ -15,9 +16,6 @@ import Index from "./pages/Index";
 import StrategyBuilder from "./pages/StrategyBuilder";
 import Pricers from "./pages/Pricers";
 import Reports from "./pages/Reports";
-import Performance from "./pages/Performance";
-import Analytics from "./pages/Analytics";
-import MarketData from "./pages/MarketData";
 import ForexMarket from "./pages/ForexMarket";
 import UserManagement from "./pages/UserManagement";
 import Settings from "./pages/Settings";
@@ -31,16 +29,21 @@ import { ThemeToggle } from "./components/ui/theme-toggle";
 
 const queryClient = new QueryClient();
 
-const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <ThemeProvider>
-      <TooltipProvider>
-        <Toaster />
-        <Sonner />
-        <div className="fixed top-4 right-4 z-50">
-          <ThemeToggle />
-        </div>
-        <Router>
+const App = () => {
+  // Initialiser les hooks de scroll fluide
+  useSmoothScroll();
+  useMomentumScroll();
+
+  return (
+    <QueryClientProvider client={queryClient}>
+      <ThemeProvider>
+        <TooltipProvider>
+          <Toaster />
+          <Sonner />
+          <div className="fixed top-4 right-4 z-50">
+            <ThemeToggle />
+          </div>
+          <Router>
           <Routes>
             {/* FX Risk Management Routes */}
             <Route path="/" element={<Dashboard />} />
@@ -53,23 +56,21 @@ const App = () => (
             <Route path="/pricers" element={<Pricers />} />
             <Route path="/positions" element={<PositionMonitor />} />
             <Route path="/reports" element={<Reports />} />
-            <Route path="/performance" element={<Performance />} />
-            <Route path="/analytics" element={<Analytics />} />
-            <Route path="/market-data" element={<MarketData />} />
             <Route path="/forex-market" element={<ForexMarket />} />
+            <Route path="/options-market-data" element={<OptionsMarketData />} />
             <Route path="/users" element={<UserManagement />} />
             <Route path="/settings" element={<Settings />} />
             <Route path="/regression-analysis" element={<RegressionAnalysis />} />
-            <Route path="/options-market-data" element={<OptionsMarketData />} />
             
             {/* Legacy routes */}
             <Route path="/saved" element={<SavedScenarios />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
-        </Router>
-      </TooltipProvider>
-    </ThemeProvider>
-  </QueryClientProvider>
-);
+          </Router>
+        </TooltipProvider>
+      </ThemeProvider>
+    </QueryClientProvider>
+  );
+};
 
 export default App;

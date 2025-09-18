@@ -38,6 +38,7 @@ interface UseFinancialDataReturn {
     shocks: { [currencyPair: string]: number };
     impact: number;
   }>;
+  calculateVarContributions: () => { [currency: string]: number };
   syncWithHedgingInstruments: () => void;
   autoGenerateExposures: () => void;
   
@@ -589,6 +590,7 @@ export const useFinancialData = (): UseFinancialDataReturn => {
     calculateForwardRate,
     calculateOptionPrice,
     generateStressScenarios,
+    calculateVarContributions: () => serviceRef.current.calculateVarContributions(),
     syncWithHedgingInstruments,
     autoGenerateExposures,
     

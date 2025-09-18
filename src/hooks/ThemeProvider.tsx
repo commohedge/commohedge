@@ -26,6 +26,25 @@ interface ThemeProviderProps {
 export const ThemeProvider = ({ children }: ThemeProviderProps) => {
   const themeState = useTheme();
 
+  // S'assurer que le thème est appliqué au niveau racine
+  React.useEffect(() => {
+    const root = document.documentElement;
+    const currentTheme = themeState.theme;
+    
+    // Supprimer toutes les classes de thème
+    root.classList.remove("light", "dark", "bloomberg-theme");
+    
+    // Appliquer le thème actuel
+    if (currentTheme === "system") {
+      const systemTheme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+      root.classList.add(systemTheme);
+    } else if (currentTheme === "bloomberg") {
+      root.classList.add("dark", "bloomberg-theme");
+    } else {
+      root.classList.add(currentTheme);
+    }
+  }, [themeState.theme]);
+
   return (
     <ThemeContext.Provider value={themeState}>
       {children}

@@ -1,4 +1,8 @@
 /* stylelint-disable */
+
+/* Import des styles de scrollbar personnalisés */
+@import './styles/scrollbar.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -97,6 +101,8 @@
     @apply bg-background text-foreground;
     font-feature-settings: "rlig" 1, "calt" 1;
     font-family: var(--font-sans);
+    scroll-behavior: smooth;
+    -webkit-overflow-scrolling: touch;
   }
 
   h1, h2, h3, h4, h5, h6 {
@@ -153,5 +159,125 @@
 
   .custom-scrollbar::-webkit-scrollbar-thumb:hover {
     @apply bg-primary/30;
+  }
+
+  /* Barres de défilement verticales modernes et fluides */
+  .smooth-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--primary) / 0.3) transparent;
+    scroll-behavior: smooth;
+  }
+
+  .smooth-scrollbar::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  .smooth-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+    border-radius: 10px;
+  }
+
+  .smooth-scrollbar::-webkit-scrollbar-thumb {
+    background: hsl(var(--primary) / 0.2);
+    border-radius: 10px;
+    transition: all 0.2s ease-in-out;
+  }
+
+  .smooth-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--primary) / 0.4);
+    width: 8px;
+  }
+
+  .smooth-scrollbar::-webkit-scrollbar-thumb:active {
+    background: hsl(var(--primary) / 0.6);
+  }
+
+  /* Barres de défilement pour la sidebar */
+  .sidebar-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--sidebar-accent) / 0.3) transparent;
+    scroll-behavior: smooth;
+  }
+
+  .sidebar-scrollbar::-webkit-scrollbar {
+    width: 4px;
+  }
+
+  .sidebar-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+    border-radius: 8px;
+  }
+
+  .sidebar-scrollbar::-webkit-scrollbar-thumb {
+    background: hsl(var(--sidebar-accent) / 0.2);
+    border-radius: 8px;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .sidebar-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--sidebar-accent) / 0.4);
+    width: 6px;
+  }
+
+  .sidebar-scrollbar::-webkit-scrollbar-thumb:active {
+    background: hsl(var(--sidebar-primary) / 0.6);
+  }
+
+  /* Animation fluide pour le scroll */
+  .smooth-scroll {
+    scroll-behavior: smooth;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Styles pour les éléments avec overflow */
+  .overflow-auto {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--primary) / 0.2) transparent;
+  }
+
+  .overflow-auto::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  .overflow-auto::-webkit-scrollbar-track {
+    background: transparent;
+    border-radius: 8px;
+  }
+
+  .overflow-auto::-webkit-scrollbar-thumb {
+    background: hsl(var(--primary) / 0.2);
+    border-radius: 8px;
+    transition: all 0.2s ease-in-out;
+  }
+
+  .overflow-auto::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--primary) / 0.4);
+  }
+
+  /* Styles pour les tableaux */
+  .table-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--muted-foreground) / 0.3) transparent;
+  }
+
+  .table-scroll::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  .table-scroll::-webkit-scrollbar-track {
+    background: hsl(var(--muted) / 0.5);
+    border-radius: 10px;
+  }
+
+  .table-scroll::-webkit-scrollbar-thumb {
+    background: hsl(var(--muted-foreground) / 0.3);
+    border-radius: 10px;
+    transition: all 0.2s ease-in-out;
+  }
+
+  .table-scroll::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--muted-foreground) / 0.5);
   }
 }

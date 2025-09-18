@@ -862,7 +862,7 @@ import { Card, CardHeader, CardTitle, CardContent, CardDescription, CardFooter }
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { Plus, Trash2, Save, X, AlertTriangle, Table, PlusCircle, Trash, Upload } from 'lucide-react';
+import { Plus, Trash2, Save, X, AlertTriangle, Table, PlusCircle, Trash, Upload, BarChart3, Calculator, Shield, Calendar } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Link } from 'react-router-dom';
 import { CalculatorState, CustomPeriod } from '@/types/CalculatorState';
@@ -1145,7 +1145,7 @@ const Index = () => {
   // Add state for active tab
   const [activeTab, setActiveTab] = useState(() => {
     try {
-      const savedState = localStorage.getItem('calculatorState');
+    const savedState = localStorage.getItem('calculatorState');
       return savedState ? JSON.parse(savedState).activeTab || 'parameters' : 'parameters';
     } catch (error) {
       console.warn('Error parsing activeTab from localStorage:', error);
@@ -1173,20 +1173,20 @@ const Index = () => {
     
     try {
       const savedState = localStorage.getItem('calculatorState');
-      if (savedState) {
-        const savedParams = JSON.parse(savedState).params;
-        // Ensure backward compatibility - calculate missing volumes if needed
-        if (!savedParams.baseVolume) {
-          savedParams.baseVolume = savedParams.totalVolume || 10000000;
-        }
-        if (!savedParams.quoteVolume) {
-          savedParams.quoteVolume = (savedParams.totalVolume || 10000000) * (savedParams.spotPrice || 1.0850);
-        }
-        // Ensure backward compatibility - add strategyStartDate if missing
-        if (!savedParams.strategyStartDate) {
-          savedParams.strategyStartDate = savedParams.startDate || new Date().toISOString().split('T')[0];
-        }
-        return savedParams;
+    if (savedState) {
+      const savedParams = JSON.parse(savedState).params;
+      // Ensure backward compatibility - calculate missing volumes if needed
+      if (!savedParams.baseVolume) {
+        savedParams.baseVolume = savedParams.totalVolume || 10000000;
+      }
+      if (!savedParams.quoteVolume) {
+        savedParams.quoteVolume = (savedParams.totalVolume || 10000000) * (savedParams.spotPrice || 1.0850);
+      }
+      // Ensure backward compatibility - add strategyStartDate if missing
+      if (!savedParams.strategyStartDate) {
+        savedParams.strategyStartDate = savedParams.startDate || new Date().toISOString().split('T')[0];
+      }
+      return savedParams;
       }
     } catch (error) {
       console.warn('Error parsing params from localStorage:', error);
@@ -1207,7 +1207,7 @@ const Index = () => {
   // Strategy components state
   const [strategy, setStrategy] = useState(() => {
     try {
-      const savedState = localStorage.getItem('calculatorState');
+    const savedState = localStorage.getItem('calculatorState');
       return savedState ? JSON.parse(savedState).strategy || [] : [];
     } catch (error) {
       console.warn('Error parsing strategy from localStorage:', error);
@@ -1218,7 +1218,7 @@ const Index = () => {
   // Results state - complete results for calculations
   const [results, setResults] = useState(() => {
     try {
-      const savedState = localStorage.getItem('calculatorState');
+    const savedState = localStorage.getItem('calculatorState');
       return savedState ? JSON.parse(savedState).results || null : null;
     } catch (error) {
       console.warn('Error parsing results from localStorage:', error);
@@ -1229,10 +1229,10 @@ const Index = () => {
   // Display results state - filtered results for user interface
   const [displayResults, setDisplayResults] = useState(() => {
     try {
-      const savedState = localStorage.getItem('calculatorState');
+    const savedState = localStorage.getItem('calculatorState');
       const fullResults = savedState ? JSON.parse(savedState).results || null : null;
-      // Initialize with full results, will be filtered when calculateResults runs
-      return fullResults;
+    // Initialize with full results, will be filtered when calculateResults runs
+    return fullResults;
     } catch (error) {
       console.warn('Error parsing displayResults from localStorage:', error);
       return null;
@@ -1242,7 +1242,7 @@ const Index = () => {
   // Manual forward prices state
   const [manualForwards, setManualForwards] = useState(() => {
     try {
-      const savedState = localStorage.getItem('calculatorState');
+    const savedState = localStorage.getItem('calculatorState');
       return savedState ? JSON.parse(savedState).manualForwards || {} : {};
     } catch (error) {
       console.warn('Error parsing manualForwards from localStorage:', error);
@@ -1253,7 +1253,7 @@ const Index = () => {
   // Real prices state
   const [realPrices, setRealPrices] = useState(() => {
     try {
-      const savedState = localStorage.getItem('calculatorState');
+    const savedState = localStorage.getItem('calculatorState');
       return savedState ? JSON.parse(savedState).realPrices || {} : {};
     } catch (error) {
       console.warn('Error parsing realPrices from localStorage:', error);
@@ -1264,7 +1264,7 @@ const Index = () => {
   // Payoff data state
   const [payoffData, setPayoffData] = useState(() => {
     try {
-      const savedState = localStorage.getItem('calculatorState');
+    const savedState = localStorage.getItem('calculatorState');
       return savedState ? JSON.parse(savedState).payoffData || [] : [];
     } catch (error) {
       console.warn('Error parsing payoffData from localStorage:', error);
@@ -1798,7 +1798,7 @@ const Index = () => {
       });
       
       // Recalculate strategy price
-      result.strategyPrice = result.optionPrices.reduce((sum, opt) => sum + opt.price * opt.quantity/100, 0);
+      result.strategyPrice = validateDataForReduce(result.optionPrices).reduce((sum, opt) => sum + opt.price * opt.quantity/100, 0);
       
       // Recalculate hedged cost, unhedged cost, delta P&L
       const monthlyPayoff = result.realPrice - result.forward;
@@ -3347,11 +3347,11 @@ const Index = () => {
       ];
 
         // Calculate strategy price
-      const strategyPrice = allOptionPrices.reduce((total, opt) => 
+      const strategyPrice = validateDataForReduce(allOptionPrices).reduce((total, opt) => 
             total + (opt.price * opt.quantity), 0);
 
         // Calculate payoff using real price
-      const totalPayoff = allOptionPrices.reduce((sum, opt, idx) => {
+      const totalPayoff = validateDataForReduce(allOptionPrices).reduce((sum, opt, idx) => {
           let payoff = 0;
           
         // Pour les options de la stratégie originale, utiliser l'index original
@@ -3487,7 +3487,7 @@ const Index = () => {
         }, 0);
 
       // Calculer le pourcentage total de swaps dans la stratégie
-        const totalSwapPercentage = swaps.reduce((sum, swap) => sum + swap.quantity, 0) / 100;
+        const totalSwapPercentage = validateDataForReduce(swaps).reduce((sum, swap) => sum + swap.quantity, 0) / 100;
       
       // Calculer le prix couvert (hedged price) en tenant compte des swaps et du prix réel
         const hedgedPrice = totalSwapPercentage * swapPrice + (1 - totalSwapPercentage) * realPrice;
@@ -3642,7 +3642,7 @@ const Index = () => {
 
   // Update the yearlyResults calculation with type checking
   const calculateYearlyResults = (results: Result[]) => {
-    return results.reduce((acc: Record<string, { 
+    return validateDataForReduce(results).reduce((acc: Record<string, { 
       hedgedCost: number; 
       unhedgedCost: number; 
       deltaPnL: number;
@@ -4006,8 +4006,19 @@ const Index = () => {
     }
   };
 
+  // Add function to validate data before using reduce operations
+  const validateDataForReduce = (data: any, operation: string = 'reduce') => {
+    if (!data || !Array.isArray(data)) {
+      console.warn(`⚠️ Invalid data for ${operation}:`, data);
+      return [];
+    }
+    return data;
+  };
+
   // Add function to clear loaded scenario
   const clearLoadedScenario = () => {
+    try {
+      console.log('🧹 Clearing loaded scenario...');
     setParams({
       startDate: new Date().toISOString().split('T')[0],           // Hedging Start Date
       strategyStartDate: new Date().toISOString().split('T')[0],   // Strategy Start Date
@@ -4025,6 +4036,7 @@ const Index = () => {
     });
     setStrategy([]);
     setResults(null);
+    setDisplayResults(null); // Important: clear display results too
     setPayoffData([]);
     setManualForwards({});
     setRealPrices({});
@@ -4040,6 +4052,9 @@ const Index = () => {
     setImpliedVolatilities({});
     setUseCustomOptionPrices(false);
     setCustomOptionPrices({});
+    
+    // Réinitialiser l'onglet actif
+    setActiveTab('parameters');
     
     // Réinitialiser les scénarios de stress test à leurs valeurs par défaut
     setStressTestScenarios({
@@ -4144,6 +4159,7 @@ const Index = () => {
       },
       strategy: [],
       results: null,
+      displayResults: null, // Important: clear display results too
       payoffData: [],
       manualForwards: {},
       realPrices: {},
@@ -4170,6 +4186,14 @@ const Index = () => {
       impliedVolatilities: {}
     };
     localStorage.setItem('calculatorState', JSON.stringify(state));
+    
+    console.log('✅ Scenario cleared successfully');
+    } catch (error) {
+      console.error('❌ Error clearing scenario:', error);
+      // Fallback: just clear localStorage and reload
+      localStorage.removeItem('calculatorState');
+      window.location.reload();
+    }
   };
 
   // Add function to prepare content for PDF export
@@ -4348,7 +4372,7 @@ const Index = () => {
 
   // Fonction pour calculer le prix du swap (moyenne des forwards actualisés)
   const calculateSwapPrice = (forwards: number[], timeToMaturities: number[], r: number) => {
-    const weightedSum = forwards.reduce((sum, forward, i) => {
+    const weightedSum = validateDataForReduce(forwards).reduce((sum, forward, i) => {
       return sum + forward * Math.exp(-r * timeToMaturities[i]);
     }, 0);
     return weightedSum / forwards.length;
@@ -4605,7 +4629,7 @@ const Index = () => {
             }
           } else {
             // Fallback to monthly average if no close date found
-            avgPrice = prices.reduce((sum, price) => sum + price, 0) / prices.length;
+            avgPrice = validateDataForReduce(prices).reduce((sum, price) => sum + price, 0) / prices.length;
             calculationMethod = 'Monthly average (3rd Friday fallback)';
             console.warn(`[BACKTEST] ${month}: Could not find close date to 3rd Friday, using monthly average`);
           }
@@ -4757,7 +4781,7 @@ const Index = () => {
       // Otherwise, calculate new results for this strategy
       
       // Calculate the total cost of the strategy taking into account the coverage ratio
-      const strategyPremium = results.reduce((sum, row) => {
+      const strategyPremium = validateDataForReduce(results).reduce((sum, row) => {
         // Apply the coverage ratio to the strategy cost
         return sum + (row.strategyPrice * row.monthlyVolume * (strategyConfig.coverageRatio / 100));
       }, 0);
@@ -5274,9 +5298,9 @@ const Index = () => {
     }
     
     // Total results
-    const totalHedgedCost = results.reduce((sum, row) => sum + row.hedgedCost, 0);
-    const totalUnhedgedCost = results.reduce((sum, row) => sum + row.unhedgedCost, 0);
-    const totalPnL = results.reduce((sum, row) => sum + row.deltaPnL, 0);
+    const totalHedgedCost = validateDataForReduce(results).reduce((sum, row) => sum + row.hedgedCost, 0);
+    const totalUnhedgedCost = validateDataForReduce(results).reduce((sum, row) => sum + row.unhedgedCost, 0);
+    const totalPnL = validateDataForReduce(results).reduce((sum, row) => sum + row.deltaPnL, 0);
     const costReduction = (totalPnL / Math.abs(totalUnhedgedCost)) * 100;
     
     doc.setFontSize(14);
@@ -6683,46 +6707,48 @@ const pricingFunctions = {
                     />
                   </div>
                 </div>
-                <div className="space-y-3">
-                <div className="compact-form-group">
-                    <label className="compact-label">
-                      {params.currencyPair?.base || 'Base'} Volume ({params.currencyPair?.base || 'BASE'})
+                {/* Volume & Spot Rate - Compact Grid Layout */}
+                <div className="bg-muted/20 p-3 rounded-lg space-y-3">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    {/* Base Volume */}
+                    <div className="space-y-1">
+                      <label className="text-xs font-medium text-muted-foreground">
+                        {params.currencyPair?.base || 'Base'} Volume
                     </label>
                   <Input
                     type="number"
                       value={params.baseVolume}
                       onChange={(e) => handleBaseVolumeChange(Number(e.target.value))}
-                    className="compact-input"
+                        className="h-8 text-xs"
                       placeholder="Volume in base currency"
                     />
                   </div>
-                  <div className="compact-form-group">
-                    <label className="compact-label">
-                      {params.currencyPair?.quote || 'Quote'} Volume ({params.currencyPair?.quote || 'QUOTE'})
+                    
+                    {/* Quote Volume */}
+                    <div className="space-y-1">
+                      <label className="text-xs font-medium text-muted-foreground">
+                        {params.currencyPair?.quote || 'Quote'} Volume
                     </label>
                     <Input
                       type="number"
                       value={Math.round(params.quoteVolume)}
                       onChange={(e) => handleQuoteVolumeChange(Number(e.target.value))}
-                      className="compact-input"
+                        className="h-8 text-xs"
                       placeholder="Volume in quote currency"
                     />
                   </div>
-                  <div className="text-xs text-muted-foreground flex items-center gap-1">
-                    <span>💱</span>
-                    <span>Volumes auto-sync at current spot rate: {params.spotPrice.toFixed(4)}</span>
-                  </div>
-                </div>
-                <div className="compact-form-group">
-                  <label className="compact-label">
-                    Current Spot Rate ({params.currencyPair?.symbol || 'EUR/USD'})
+                    
+                    {/* Spot Rate */}
+                    <div className="space-y-1">
+                      <label className="text-xs font-medium text-muted-foreground">
+                        Spot Rate ({params.currencyPair?.symbol || 'EUR/USD'})
                   </label>
-                  <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-1">
                     <Input
                       type="number"
                       value={params.spotPrice}
                       onChange={(e) => handleSpotPriceChange(Number(e.target.value))}
-                      className="compact-input flex-1"
+                          className="h-8 text-xs flex-1"
                       step="0.0001"
                       placeholder={`${params.currencyPair?.defaultSpotRate || 1.0850}`}
                     />
@@ -6735,28 +6761,38 @@ const pricingFunctions = {
                           setInitialSpotPrice(params.currencyPair.defaultSpotRate);
                         }
                       }}
-                      className="h-8 px-2 text-xs whitespace-nowrap"
+                          className="h-8 px-2 text-xs"
                       title="Reset to default market rate"
                     >
                       Reset
                     </Button>
                   </div>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Rate automatically filled when selecting pair • Click Reset to restore default
-                  </p>
                 </div>
               </div>
 
-              <div className="mt-6 pb-4 border-b">
+                  {/* Auto-sync Status */}
+                  <div className="text-xs text-muted-foreground flex items-center gap-1 justify-center bg-primary/5 p-2 rounded border border-primary/10">
+                    <span>💱</span>
+                    <span>Volumes auto-sync at current spot rate: <span className="font-mono font-medium">{params.spotPrice.toFixed(4)}</span></span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Custom Periods - Compact Toggle */}
+              <div className="mt-3">
+                <div className="bg-muted/20 p-3 rounded-lg">
                 <div className="flex items-center gap-2">
                   <Switch
                     checked={params.useCustomPeriods}
                     onCheckedChange={toggleCustomPeriods}
                     id="useCustomPeriods"
+                      size="sm"
                   />
-                  <label htmlFor="useCustomPeriods" className="text-sm font-medium cursor-pointer">
+                    <label htmlFor="useCustomPeriods" className="text-sm font-medium cursor-pointer flex items-center gap-2">
+                      <Calendar size={16} />
                     Use Custom Periods Instead of Monthly Hedging
                   </label>
+                  </div>
                 </div>
                 
                 {params.useCustomPeriods && (
@@ -6827,23 +6863,31 @@ const pricingFunctions = {
                 )}
               </div>
 
-              <div className="mt-4">
-                <h3 className="text-base font-medium mb-3 text-primary">Real Price Simulation</h3>
-                <div className="space-y-3">
+              {/* Pricing Configuration - Compact Layout */}
+              <div className="mt-3 space-y-4">
+                {/* Real Price Simulation & Option Pricing Model - Combined Row */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Real Price Simulation */}
+                  <div className="bg-muted/30 p-3 rounded-lg space-y-2">
+                    <h4 className="text-sm font-semibold text-primary flex items-center gap-2">
+                      <BarChart3 size={16} />
+                      Real Price Simulation
+                    </h4>
                   <div className="flex items-center gap-2">
                     <Switch
                     checked={realPriceParams.useSimulation}
                       onCheckedChange={(checked) => setRealPriceParams(prev => ({...prev, useSimulation: checked}))}
                       id="useMonteCarloSimulation"
+                        size="sm"
                   />
-                    <label htmlFor="useMonteCarloSimulation" className="text-sm font-medium cursor-pointer">
+                      <label htmlFor="useMonteCarloSimulation" className="text-xs font-medium cursor-pointer">
                       Use Monte Carlo Simulation for Real Prices
                     </label>
                 </div>
                   
                   {realPriceParams.useSimulation && (
-                    <div className="compact-form-group pl-8">
-                      <label className="compact-label">Number of Price Path Simulations</label>
+                      <div className="pt-2 border-t border-border/50">
+                        <label className="text-xs text-muted-foreground mb-1 block">Price Path Simulations</label>
                       <div className="flex items-center gap-2">
                         <Slider 
                           value={[realPriceParams.numSimulations]} 
@@ -6860,24 +6904,26 @@ const pricingFunctions = {
                     min="100"
                     max="10000"
                     step="100"
-                          className="compact-input w-20 text-center"
+                            className="w-16 h-7 text-xs text-center"
                   />
                 </div>
                     </div>
                   )}
-                  
-                </div>
               </div>
               
-              <div className="mt-6 pt-4 border-t">
-                <h3 className="text-base font-medium mb-3 text-primary">Option Pricing Model</h3>
-                <div className="compact-form-group">
-                  <label className="block text-sm font-medium mb-2">Model Selection</label>
+                  {/* Option Pricing Model */}
+                  <div className="bg-muted/30 p-3 rounded-lg space-y-2">
+                    <h4 className="text-sm font-semibold text-primary flex items-center gap-2">
+                      <Calculator size={16} />
+                      Option Pricing Model
+                    </h4>
+                    <div className="space-y-2">
+                      <label className="text-xs text-muted-foreground">Model Selection</label>
                   <Select 
                     value={optionPricingModel} 
                     onValueChange={(value: string) => setOptionPricingModel(value as 'black-scholes' | 'garman-kohlhagen' | 'monte-carlo')}
                   >
-                    <SelectTrigger>
+                        <SelectTrigger className="h-8 text-xs">
                       <SelectValue placeholder="Select pricing model" />
                     </SelectTrigger>
                     <SelectContent>
@@ -6886,17 +6932,23 @@ const pricingFunctions = {
                       <SelectItem value="monte-carlo">Monte Carlo (Vanilla Options)</SelectItem>
                     </SelectContent>
                   </Select>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Garman-Kohlhagen model is recommended for FX options as it accounts for dual interest rates
+                      <p className="text-xs text-muted-foreground">
+                        Garman-Kohlhagen model is recommended for FX options
                   </p>
+                    </div>
                 </div>
               </div>
 
-              <div className="mt-6 pt-4 border-t">
-                <h3 className="text-base font-medium mb-3 text-primary">Barrier Option Pricing</h3>
-                <div className="space-y-3">
-                  <div className="compact-form-group">
-                    <label className="compact-label">Number of Simulations for Barrier Options</label>
+                {/* Barrier Option Pricing - Full Width Compact */}
+                <div className="bg-muted/30 p-3 rounded-lg">
+                  <h4 className="text-sm font-semibold text-primary flex items-center gap-2 mb-3">
+                    <Shield size={16} />
+                    Barrier Option Pricing
+                  </h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {/* Simulations */}
+                    <div className="space-y-2">
+                      <label className="text-xs text-muted-foreground">Number of Simulations</label>
                     <div className="flex items-center gap-2">
                       <Slider 
                         value={[barrierOptionSimulations]} 
@@ -6913,18 +6965,19 @@ const pricingFunctions = {
                         min="100"
                         max="10000"
                         step="100"
-                        className="compact-input w-20 text-center"
+                          className="w-16 h-7 text-xs text-center"
                       />
                     </div>
                   </div>
                   
-                  <div className="compact-form-group">
-                    <label className="block text-sm font-medium mb-2">Pricing Method</label>
+                    {/* Pricing Method */}
+                    <div className="space-y-2">
+                      <label className="text-xs text-muted-foreground">Pricing Method</label>
                     <Select 
                       value={barrierPricingModel} 
                       onValueChange={(value: string) => setBarrierPricingModel(value as 'monte-carlo' | 'closed-form')}
                     >
-                      <SelectTrigger>
+                        <SelectTrigger className="h-8 text-xs">
                         <SelectValue placeholder="Select barrier pricing method" />
                       </SelectTrigger>
                       <SelectContent>
@@ -6932,9 +6985,10 @@ const pricingFunctions = {
                         <SelectItem value="closed-form">Closed-Form Approximation</SelectItem>
                       </SelectContent>
                     </Select>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Closed-form solutions provide faster and more accurate pricing for standard barrier options
+                      <p className="text-xs text-muted-foreground">
+                        Closed-form provides faster and more accurate pricing
                     </p>
+                    </div>
                   </div>
                     </div>
               </div>
@@ -8533,8 +8587,8 @@ const pricingFunctions = {
                       <td className="border p-2 font-medium">Cost Reduction (%)</td>
                       <td className="border p-2 text-right">
                         {(() => {
-                          const totalPnL = results.reduce((sum, row) => sum + row.deltaPnL, 0);
-                          const totalUnhedgedCost = results.reduce((sum, row) => sum + row.unhedgedCost, 0);
+                          const totalPnL = validateDataForReduce(results).reduce((sum, row) => sum + row.deltaPnL, 0);
+                          const totalUnhedgedCost = validateDataForReduce(results).reduce((sum, row) => sum + row.unhedgedCost, 0);
                                                              return (((totalPnL / Math.abs(totalUnhedgedCost)) * 100).toFixed(2) + '%');
                         })()}
                       </td>
@@ -8543,8 +8597,8 @@ const pricingFunctions = {
                       <td className="border p-2 font-medium">Strike Target</td>
                       <td className="border p-2 text-right">
                         {(() => {
-                          const totalHedgedCost = results.reduce((sum, row) => sum + row.hedgedCost, 0);
-                          const totalVolume = results.reduce((sum, row) => sum + row.monthlyVolume, 0);
+                          const totalHedgedCost = validateDataForReduce(results).reduce((sum, row) => sum + row.hedgedCost, 0);
+                          const totalVolume = validateDataForReduce(results).reduce((sum, row) => sum + row.monthlyVolume, 0);
                           return totalVolume > 0 
                             ? ((-1) * totalHedgedCost / totalVolume).toLocaleString(undefined, {
                                 minimumFractionDigits: 2,
