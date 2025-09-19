@@ -11,6 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Progress } from "@/components/ui/progress";
 import { toast } from "@/components/ui/use-toast";
+import { calculateTimeToMaturity } from "./Index"; // Import standardized time to maturity calculation
 import { 
   Plus, 
   Shield, 
@@ -342,21 +343,17 @@ const HedgingInstruments = () => {
 
   // ✅ Utiliser exactement la même logique de pricing que Strategy Builder
 
-  // ✅ Calcul de maturité avec logique Strategy Builder
-  const calculateTimeToMaturity = (maturityDate: string, valuationDate: string): number => {
-    const result = PricingService.calculateTimeToMaturity(maturityDate, valuationDate);
-    console.log('[HEDGING] maturity:', maturityDate, 'valuation:', valuationDate, 'result:', result.toFixed(6), 'years');
-    return result;
-  };
+  // ✅ Utilise la fonction standardisée importée depuis Index.tsx
+  // Plus besoin de fonction locale - garantit la cohérence avec Strategy Builder
 
   // ✅ Calcul de maturité depuis Strategy Start Date (comme Strategy Builder)
   const calculateTimeToMaturityFromStrategyStart = (maturityDate: string): number => {
-    return PricingService.calculateTimeToMaturity(maturityDate, strategyStartDate);
+    return calculateTimeToMaturity(maturityDate, strategyStartDate);
   };
 
   // ✅ Calcul de maturité depuis Hedging Start Date (pour affichage)
   const calculateTimeToMaturityFromHedgingStart = (maturityDate: string): number => {
-    return PricingService.calculateTimeToMaturity(maturityDate, hedgingStartDate);
+    return calculateTimeToMaturity(maturityDate, hedgingStartDate);
   };
 
   // Utiliser le PricingService centralisé au lieu de redéfinir erf
@@ -482,15 +479,15 @@ const HedgingInstruments = () => {
   // avec une implémentation complète pour les options à double barrière
 
   const calculateTodayPrice = (instrument: HedgingInstrument): number => {
-    // ✅ CORRECTION : Utiliser la date de valorisation actuelle pour le calcul du MTM
-    // AVANT : calculationTimeToMaturity utilisait effectiveStrategyStartDate (dates fixes)
-    // APRÈS : calculationTimeToMaturity utilise valuationDate (date modifiable par l'utilisateur)
+    // ✅ CORRECTION : Utiliser Strategy Start Date pour parfaite cohérence avec Strategy Builder
+    // UTILISE : calculationTimeToMaturity avec strategyStartDate (même logique que Strategy Builder)
+    // GARANTIT : Time to Maturity identique entre Export et Current
     
-    // ✅ 1. TIME TO MATURITY : Utiliser la date de valorisation actuelle (valuationDate)
-    // Cela garantit que le MTM se recalcule automatiquement quand la date de valorisation change
-    const calculationTimeToMaturity = PricingService.calculateTimeToMaturity(instrument.maturity, valuationDate);
+    // ✅ 1. TIME TO MATURITY : Utiliser Strategy Start Date pour cohérence parfaite avec Strategy Builder
+    // Même date de référence que dans Strategy Builder pour les calculs financiers
+    const calculationTimeToMaturity = calculateTimeToMaturity(instrument.maturity, strategyStartDate);
     
-    console.log(`[DEBUG] ${instrument.id}: Using valuation date ${valuationDate} for MTM calculation - TTM: ${calculationTimeToMaturity.toFixed(6)} years`);
+    console.log(`[DEBUG] ${instrument.id}: Using strategy start date ${strategyStartDate} for TTM calculation - TTM: ${calculationTimeToMaturity.toFixed(6)} years`);
     
     // 2. PARAMÈTRES DE MARCHÉ : Utiliser les valeurs CURRENT des données de marché
     const marketData = currencyMarketData[instrument.currency] || getMarketDataFromInstruments(instrument.currency) || { spot: 1.0000, volatility: 20, domesticRate: 1.0, foreignRate: 1.0 };
@@ -1825,8 +1822,8 @@ const HedgingInstruments = () => {
                         let hasTimeMaturityError = false;
                         
                         if (instrument.maturity) {
-                          // Toujours calculer avec la date de valorisation actuelle pour l'affichage
-                          timeToMaturity = calculateTimeToMaturity(instrument.maturity, valuationDate);
+                          // ✅ CORRECTION : Utiliser Strategy Start Date comme dans Strategy Builder
+                          timeToMaturity = calculateTimeToMaturity(instrument.maturity, strategyStartDate);
                           
                           // ✅ NOUVEAU : Vérifier si la hedging start date est cohérente avec la maturité
                           const timeToMaturityFromHedging = calculateTimeToMaturity(instrument.maturity, hedgingStartDate);
@@ -2134,8 +2131,8 @@ const HedgingInstruments = () => {
                           <TableCell className="font-mono text-center bg-green-50">
                             {(() => {
                               const marketData = currencyMarketData[instrument.currency] || getMarketDataFromInstruments(instrument.currency) || { spot: 1.0000, volatility: 20, domesticRate: 1.0, foreignRate: 1.0 };
-                              // TOUJOURS utiliser le temps calculé avec la date de valorisation ACTUELLE pour "Current"
-                              const currentTimeToMat = calculateTimeToMaturity(instrument.maturity, valuationDate);
+                              // ✅ CORRECTION : Utiliser Strategy Start Date pour cohérence avec Strategy Builder
+                              const currentTimeToMat = calculateTimeToMaturity(instrument.maturity, strategyStartDate);
                               const r_d = marketData.domesticRate / 100;
                               const r_f = marketData.foreignRate / 100;
                               const currentSpot = instrument.impliedSpotPrice || marketData.spot;

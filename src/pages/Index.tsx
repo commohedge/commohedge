@@ -2152,8 +2152,9 @@ const Index = () => {
   const generatePricePathsForPeriod = (months, startDate, numSimulations = 1000) => {
     const paths = [];
     const timeToMaturities = months.map(date => {
-      const diffTime = Math.abs(date.getTime() - startDate.getTime());
-      return diffTime / (365.25 * 24 * 60 * 60 * 1000);
+      const maturityDateStr = date.toISOString().split('T')[0]; // Format YYYY-MM-DD
+      const valuationDateStr = startDate.toISOString().split('T')[0]; // Format YYYY-MM-DD
+      return calculateTimeToMaturity(maturityDateStr, valuationDateStr);
     });
     
     const maxMaturity = Math.max(...timeToMaturities);
@@ -2606,23 +2607,17 @@ const Index = () => {
       return null;
     }
 
-    const hedgingStartDateObj = new Date(hedgingStartDate);
-    
-    // Filter results to only include periods at or after the user's hedging start date
-    const filteredResults = allResults.filter(result => {
-      const resultDate = new Date(result.date);
-      return resultDate >= hedgingStartDateObj;
-    });
-
+    // Since we now generate months starting from hedging start date, 
+    // we should show ALL calculated results (all months to hedge)
     console.log(`[DISPLAY FILTER] Hedging start date: ${hedgingStartDate}`);
-    console.log(`[DISPLAY FILTER] Total calculated periods: ${allResults.length}, Displayed periods: ${filteredResults.length}`);
+    console.log(`[DISPLAY FILTER] Showing ALL ${allResults.length} calculated periods (all months to hedge)`);
     
-    if (filteredResults.length > 0) {
-      console.log(`[DISPLAY FILTER] First displayed period: ${filteredResults[0].date}`);
-      console.log(`[DISPLAY FILTER] Last displayed period: ${filteredResults[filteredResults.length - 1].date}`);
+    if (allResults.length > 0) {
+      console.log(`[DISPLAY FILTER] First period: ${allResults[0].date}`);
+      console.log(`[DISPLAY FILTER] Last period: ${allResults[allResults.length - 1].date}`);
     }
 
-    return filteredResults.length > 0 ? filteredResults : null;
+    return allResults;
   };
 
   // Calculate detailed results
@@ -2631,8 +2626,8 @@ const Index = () => {
     const strategyStartDate = new Date(params.strategyStartDate);
     const calculationStartDate = new Date(strategyStartDate.getFullYear(), strategyStartDate.getMonth(), strategyStartDate.getDate());
     
-    // User's chosen hedging start date for display purposes
-    const userStartDate = new Date(params.startDate);
+    // User's chosen hedging start date - this is where pricing and hedging periods should start
+    const hedgingStartDate = new Date(params.startDate);
     
     let months = [];
     let monthlyVolumes = [];
@@ -2651,8 +2646,8 @@ const Index = () => {
       monthlyVolumes = sortedPeriods.map(period => period.volume);
     } else {
       // Generate exactly the number of months specified by the user
-      // Start from the strategy start date and add exactly monthsToHedge months
-      let currentDate = new Date(strategyStartDate);
+      // Start from the HEDGING START DATE and add exactly monthsToHedge months
+      let currentDate = new Date(hedgingStartDate);
       
       // Generate exactly params.monthsToHedge months
       for (let i = 0; i < params.monthsToHedge; i++) {
@@ -2661,7 +2656,7 @@ const Index = () => {
         currentDate.setMonth(currentDate.getMonth() + 1);
       }
       
-      console.log(`[CALCULATION] Generated exactly ${months.length} periods starting from ${strategyStartDate.toISOString().split('T')[0]}`);
+      console.log(`[CALCULATION] Generated exactly ${months.length} periods starting from HEDGING START DATE ${hedgingStartDate.toISOString().split('T')[0]}`);
       
       // Use equal volumes for each month
       const monthlyVolume = params.totalVolume / months.length;
@@ -2776,10 +2771,11 @@ const Index = () => {
     });
 
     // Continue with the rest of calculateResults
-    // Calculate time to maturity from today (for accurate financial calculations)
+    // Calculate time to maturity using the same function as HedgingInstruments for consistency
     const timeToMaturities = months.map(date => {
-      const diffTime = Math.abs(date.getTime() - calculationStartDate.getTime());
-      return diffTime / (365.25 * 24 * 60 * 60 * 1000);
+      const maturityDateStr = date.toISOString().split('T')[0]; // Format YYYY-MM-DD
+      const valuationDateStr = calculationStartDate.toISOString().split('T')[0]; // Format YYYY-MM-DD
+      return calculateTimeToMaturity(maturityDateStr, valuationDateStr);
     });
 
     // Suivi des options knocked out
@@ -3530,7 +3526,7 @@ const Index = () => {
     // Store complete results for calculations (includes periods before user's start date)
     setResults(detailedResults);
     
-    // Filter results for display - only show from user's chosen hedging start date onwards
+    // Show all calculated results (all months to hedge from hedging start date)
     const displayResults = filterResultsForDisplay(detailedResults, params.startDate);
     setDisplayResults(displayResults);
     
@@ -3773,8 +3769,8 @@ const Index = () => {
     try {
       const importService = StrategyImportService.getInstance();
       
-      // ✅ FILTRER les résultats détaillés comme dans Detailed Results
-      // Seulement exporter les périodes à partir de la Hedging Start Date
+      // ✅ Utiliser tous les résultats calculés (tous les mois à hedger)
+      // Les périodes sont maintenant générées directement à partir de la Hedging Start Date
       const filteredResults = filterResultsForDisplay(results, params.startDate);
       
       if (!filteredResults || filteredResults.length === 0) {
