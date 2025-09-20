@@ -319,8 +319,8 @@ const SavedScenarios = () => {
       <div className="w-full max-w-6xl mx-auto space-y-6">
       <div className="flex justify-between items-center">
         <h1 className="text-2xl font-bold">Saved Scenarios</h1>
-        <Link to="/">
-          <Button>Back to Calculator</Button>
+        <Link to="/dashboard">
+          <Button>Back to Dashboard</Button>
         </Link>
       </div>
 

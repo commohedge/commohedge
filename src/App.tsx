@@ -22,7 +22,10 @@ import Settings from "./pages/Settings";
 import SavedScenarios from "./pages/SavedScenarios";
 import RegressionAnalysis from "./pages/RegressionAnalysis";
 import OptionsMarketData from "./pages/OptionsMarketData";
+import LandingPage from "./pages/LandingPage";
+import Login from "./pages/Login";
 import NotFound from "./pages/NotFound";
+import ProtectedRoute from "./components/ProtectedRoute";
 
 // Theme toggle component
 import { ThemeToggle } from "./components/ui/theme-toggle";
@@ -45,25 +48,31 @@ const App = () => {
           </div>
           <Router>
           <Routes>
+            {/* Landing Page - Page par défaut */}
+            <Route path="/" element={<LandingPage />} />
+            
+            {/* Authentication */}
+            <Route path="/login" element={<Login />} />
+            
             {/* FX Risk Management Routes */}
-            <Route path="/" element={<Dashboard />} />
-            <Route path="/exposures" element={<Exposures />} />
-            <Route path="/hedging" element={<HedgingInstruments />} />
-            <Route path="/risk-analysis" element={<RiskAnalysis />} />
+            <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+            <Route path="/exposures" element={<ProtectedRoute><Exposures /></ProtectedRoute>} />
+            <Route path="/hedging" element={<ProtectedRoute><HedgingInstruments /></ProtectedRoute>} />
+            <Route path="/risk-analysis" element={<ProtectedRoute><RiskAnalysis /></ProtectedRoute>} />
             
             {/* Strategy Builder and Advanced Features */}
-            <Route path="/strategy-builder" element={<StrategyBuilder />} />
-            <Route path="/pricers" element={<Pricers />} />
-            <Route path="/positions" element={<PositionMonitor />} />
-            <Route path="/reports" element={<Reports />} />
-            <Route path="/forex-market" element={<ForexMarket />} />
-            <Route path="/options-market-data" element={<OptionsMarketData />} />
-            <Route path="/users" element={<UserManagement />} />
-            <Route path="/settings" element={<Settings />} />
-            <Route path="/regression-analysis" element={<RegressionAnalysis />} />
+            <Route path="/strategy-builder" element={<ProtectedRoute><StrategyBuilder /></ProtectedRoute>} />
+            <Route path="/pricers" element={<ProtectedRoute><Pricers /></ProtectedRoute>} />
+            <Route path="/positions" element={<ProtectedRoute><PositionMonitor /></ProtectedRoute>} />
+            <Route path="/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
+            <Route path="/forex-market" element={<ProtectedRoute><ForexMarket /></ProtectedRoute>} />
+            <Route path="/options-market-data" element={<ProtectedRoute><OptionsMarketData /></ProtectedRoute>} />
+            <Route path="/users" element={<ProtectedRoute><UserManagement /></ProtectedRoute>} />
+            <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
+            <Route path="/regression-analysis" element={<ProtectedRoute><RegressionAnalysis /></ProtectedRoute>} />
             
             {/* Legacy routes */}
-            <Route path="/saved" element={<SavedScenarios />} />
+            <Route path="/saved" element={<ProtectedRoute><SavedScenarios /></ProtectedRoute>} />
             <Route path="*" element={<NotFound />} />
           </Routes>
           </Router>

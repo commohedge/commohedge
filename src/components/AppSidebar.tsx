@@ -35,11 +35,13 @@ import { Badge } from "@/components/ui/badge";
 import { useCompanySettings, getCompanyNameSync, companySettingsEmitter } from "@/hooks/useCompanySettings";
 import ExchangeRateService from "@/services/ExchangeRateService";
 import { ScrollArea } from "@/components/ui/ScrollArea";
+import { useAuth } from "@/hooks/useAuth";
+import { LogOut, User } from "lucide-react";
 
 const menuItems = [
   {
     title: "Dashboard",
-    url: "/",
+    url: "/dashboard",
     icon: Home,
     description: "Global overview and key metrics"
   },
@@ -126,6 +128,7 @@ const managementItems = [
 
 export function AppSidebar() {
   const location = useLocation();
+  const { user, logout } = useAuth();
   const { getCompanyNameParts, isLoaded, getCompanyLogo } = useCompanySettings();
   const logo = getCompanyLogo();
   // Utilise le cache mémoire pour le nom dès le premier render
@@ -324,23 +327,55 @@ export function AppSidebar() {
       </SidebarContent>
 
       <SidebarFooter className="p-4 border-t border-border/40">
-        <div className="space-y-2">
-          <div className="flex items-center justify-between text-xs text-muted-foreground">
-            <span>Market Status</span>
-            <div className="flex items-center gap-1">
-              <div className="h-2 w-2 bg-green-500 rounded-full animate-pulse"></div>
-              <span className="text-green-600 dark:text-green-400">Live</span>
+        <div className="space-y-3">
+          {/* User Info */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="h-8 w-8 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full flex items-center justify-center">
+                <User className="h-4 w-4 text-white" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-medium text-foreground truncate">
+                  {user?.name || 'User'}
+                </div>
+                <div className="text-xs text-muted-foreground truncate">
+                  {user?.email}
+                </div>
+              </div>
             </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                logout();
+                window.location.href = '/';
+              }}
+              className="h-8 w-8 p-0 hover:bg-destructive/10 hover:text-destructive"
+              title="Logout"
+            >
+              <LogOut className="h-4 w-4" />
+            </Button>
           </div>
-          
-          <div className="grid grid-cols-2 gap-2 text-xs">
-            <div className="bg-muted/50 rounded p-2">
-              <div className="text-muted-foreground">EUR/USD</div>
-              <div className="font-mono font-medium">{marketStatusData.EUR_USD.toFixed(4)}</div>
+
+          {/* Market Status */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between text-xs text-muted-foreground">
+              <span>Market Status</span>
+              <div className="flex items-center gap-1">
+                <div className="h-2 w-2 bg-green-500 rounded-full animate-pulse"></div>
+                <span className="text-green-600 dark:text-green-400">Live</span>
+              </div>
             </div>
-            <div className="bg-muted/50 rounded p-2">
-              <div className="text-muted-foreground">GBP/USD</div>
-              <div className="font-mono font-medium">{marketStatusData.GBP_USD.toFixed(4)}</div>
+            
+            <div className="grid grid-cols-2 gap-2 text-xs">
+              <div className="bg-muted/50 rounded p-2">
+                <div className="text-muted-foreground">EUR/USD</div>
+                <div className="font-mono font-medium">{marketStatusData.EUR_USD.toFixed(4)}</div>
+              </div>
+              <div className="bg-muted/50 rounded p-2">
+                <div className="text-muted-foreground">GBP/USD</div>
+                <div className="font-mono font-medium">{marketStatusData.GBP_USD.toFixed(4)}</div>
+              </div>
             </div>
           </div>
         </div>

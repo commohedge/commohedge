@@ -9,18 +9,18 @@ interface CompanySettings {
 
 interface AppSettings {
   company: CompanySettings;
-  risk: any;
-  pricing: any;
-  ui: any;
-  notifications: any;
-  data: any;
-  fxExposures: any;
-  hedgingInstruments: any;
+  risk: Record<string, unknown>;
+  pricing: Record<string, unknown>;
+  ui: Record<string, unknown>;
+  notifications: Record<string, unknown>;
+  data: Record<string, unknown>;
+  fxExposures: Record<string, unknown>;
+  hedgingInstruments: Record<string, unknown>;
 }
 
 const defaultSettings: AppSettings = {
   company: {
-    name: "OCP Group - Corporate Performance Management",
+    name: "FX hedging - Risk Management Platform",
     currency: "USD",
     timezone: "Europe/Paris",
     fiscalYearStart: "01-01"
@@ -34,7 +34,7 @@ const defaultSettings: AppSettings = {
   hedgingInstruments: {}
 };
 
-const DEFAULT_LOGO = "/ocp-logo.png";
+const DEFAULT_LOGO = "/fx-hedging-logo.png";
 
 // --- LOGO CACHE (singleton, module scope) ---
 let logoCache: string | null = null;
@@ -82,7 +82,9 @@ export function useCompanySettings() {
           companyNameCache = parsed.company.name;
           return companyNameCache;
         }
-      } catch (error) {}
+        } catch (error) {
+          console.error('Error parsing saved settings:', error);
+        }
     }
     companyNameCache = defaultSettings.company.name;
     return companyNameCache;

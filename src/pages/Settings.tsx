@@ -134,7 +134,7 @@ const Settings = () => {
   const { companySettings, updateCompanySettings, getCompanyNameParts, getCompanyLogo, setCompanyLogo, resetCompanyLogo, isLoaded, getCompanyLogo: getLogo, getCompanyNameParts: getNameParts } = useCompanySettings();
   const [settings, setSettings] = useState<AppSettings>({
     company: {
-      name: "OCP Group - Corporate Performance Management",
+      name: "FX hedging - Risk Management Platform",
       currency: "USD",
       timezone: "Europe/Paris",
       fiscalYearStart: "01-01"
@@ -214,24 +214,47 @@ const Settings = () => {
   const [showCleanupDialog, setShowCleanupDialog] = useState(false);
   const [deletionStats, setDeletionStats] = useState<{total: number, deleted: number} | null>(null);
   const logo = getCompanyLogo();
-  const companyName = companySettings.name;
+  const companyName = companySettings?.name || "FX hedging - Risk Management Platform";
   const [pendingLogo, setPendingLogo] = useState<string | null>(null);
   const [logoMarkedForRemoval, setLogoMarkedForRemoval] = useState(false);
   const [pendingCompanyName, setPendingCompanyName] = useState<string | null>(null);
 
   // Load settings from localStorage
   useEffect(() => {
-    const savedSettings = localStorage.getItem('fxRiskManagerSettings');
-    if (savedSettings) {
+    const loadSettings = () => {
       try {
-        const parsed = JSON.parse(savedSettings);
-        setSettings(parsed);
-      } catch (error) {}
-    }
+        const savedSettings = localStorage.getItem('fxRiskManagerSettings');
+        if (savedSettings) {
+          const parsed = JSON.parse(savedSettings);
+          // Vérifier que les données parsées sont valides
+          if (parsed && typeof parsed === 'object' && parsed.company) {
+            setSettings(prev => ({
+              ...prev,
+              ...parsed,
+              // S'assurer que company existe toujours
+              company: {
+                ...prev.company,
+                ...parsed.company
+              }
+            }));
+          }
+        }
+      } catch (error) {
+        console.error('Error loading saved settings:', error);
+        // En cas d'erreur, garder les paramètres par défaut
+        toast({
+          title: "Erreur de chargement",
+          description: "Impossible de charger les paramètres sauvegardés. Paramètres par défaut utilisés.",
+          variant: "destructive",
+        });
+      }
+    };
+
+    loadSettings();
   }, []);
 
   // Fonction pour mettre à jour les paramètres
-  const updateSettings = (section: keyof AppSettings, updates: any) => {
+  const updateSettings = (section: keyof AppSettings, updates: Record<string, unknown>) => {
     setSettings(prev => ({
       ...prev,
       [section]: { ...prev[section], ...updates }
@@ -247,52 +270,81 @@ const Settings = () => {
   const saveSettings = async () => {
     setIsSaving(true);
     try {
-      // Toujours partir de la version la plus à jour de settings
-      let newSettings = { ...settings };
+      // Préparer les nouvelles configurations
+      const newSettings = { ...settings };
       let nameChanged = false;
+      
+      // Gérer le changement de nom
       if (pendingCompanyName !== null) {
-        newSettings.company = { ...newSettings.company, name: pendingCompanyName };
-        setPendingCompanyName(null);
-        nameChanged = true;
+        const trimmedName = pendingCompanyName.trim();
+        if (trimmedName.length > 0) {
+          newSettings.company = { ...newSettings.company, name: trimmedName };
+          nameChanged = true;
+        } else {
+          toast({
+            title: "Nom invalide",
+            description: "Le nom de l'entreprise ne peut pas être vide.",
+            variant: "destructive",
+          });
+          setIsSaving(false);
+          return;
+        }
       }
+      
+      // Sauvegarder les paramètres dans localStorage
       localStorage.setItem('fxRiskManagerSettings', JSON.stringify(newSettings));
-      setSettings(newSettings); // met à jour le state local avec la version effectivement sauvegardée
+      
+      // Mettre à jour le state local
+      setSettings(newSettings);
+      
+      // Mettre à jour les paramètres de l'entreprise si le nom a changé
       if (nameChanged) {
         updateCompanySettings({ name: newSettings.company.name });
       }
-      setLastSaved(new Date());
-      setHasChanges(false);
-      // Gestion du logo :
+      
+      // Gérer le logo
       if (pendingLogo !== null) {
         setCompanyLogo(pendingLogo);
       } else if (logoMarkedForRemoval) {
         resetCompanyLogo();
       }
+      
+      // Nettoyer les états temporaires
+      setPendingCompanyName(null);
       setPendingLogo(null);
       setLogoMarkedForRemoval(false);
-      // Recharge le state local settings après save (optionnel, mais cohérent)
-      const savedSettings = localStorage.getItem('fxRiskManagerSettings');
-      if (savedSettings) {
-        try {
-          const parsed = JSON.parse(savedSettings);
-          setSettings(parsed);
-        } catch (error) {}
-      }
-      if (newSettings.pricing.useRealTimeData !== isLiveMode) {
+      
+      // Appliquer les autres paramètres
+      if (newSettings.pricing?.useRealTimeData !== isLiveMode) {
         setLiveMode(newSettings.pricing.useRealTimeData);
       }
-      if (newSettings.ui.theme) {
+      if (newSettings.ui?.theme) {
         document.documentElement.className = newSettings.ui.theme;
       }
-      if (newSettings.ui.language) {
+      if (newSettings.ui?.language) {
         localStorage.setItem('preferred-language', newSettings.ui.language);
       }
-      if (newSettings.ui.dashboardRefresh) {
+      if (newSettings.ui?.dashboardRefresh) {
         localStorage.setItem('dashboard-refresh-interval', newSettings.ui.dashboardRefresh.toString());
       }
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      // Finaliser
+      setLastSaved(new Date());
+      setHasChanges(false);
+      
+      // Afficher un message de succès
+      toast({
+        title: "Paramètres sauvegardés",
+        description: "Vos modifications ont été enregistrées avec succès.",
+      });
+      
     } catch (error) {
       console.error('Error saving settings:', error);
+      toast({
+        title: "Erreur de sauvegarde",
+        description: "Une erreur est survenue lors de la sauvegarde.",
+        variant: "destructive",
+      });
     } finally {
       setIsSaving(false);
     }
@@ -300,7 +352,7 @@ const Settings = () => {
 
   // Function to reset settings
   const resetSettings = () => {
-    setPendingCompanyName("OCP Group - Corporate Performance Management");
+    setPendingCompanyName("FX hedging - Risk Management Platform");
     setLogoMarkedForRemoval(true);
     setPendingLogo(null);
     setSettings(prev => ({
@@ -494,8 +546,8 @@ const Settings = () => {
           amount: 1000000,
           maturity: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days from now
           type: 'receivable' as const,
-          description: 'Test EUR Receivable - OCP Group',
-          subsidiary: 'OCP Group',
+          description: 'Test EUR Receivable - FX hedging',
+          subsidiary: 'FX hedging',
           hedgeRatio: 0,
           hedgedAmount: 0
         },
@@ -504,8 +556,8 @@ const Settings = () => {
           amount: -750000,
           maturity: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000), // 60 days from now
           type: 'payable' as const,
-          description: 'Test GBP Payable - OCP Group',
-          subsidiary: 'OCP Group',
+          description: 'Test GBP Payable - FX hedging',
+          subsidiary: 'FX hedging',
           hedgeRatio: 50,
           hedgedAmount: -375000
         },
@@ -514,8 +566,8 @@ const Settings = () => {
           amount: 150000000,
           maturity: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000), // 90 days from now
           type: 'receivable' as const,
-          description: 'Test JPY Receivable - OCP Group',
-          subsidiary: 'OCP Group',
+          description: 'Test JPY Receivable - FX hedging',
+          subsidiary: 'FX hedging',
           hedgeRatio: 100,
           hedgedAmount: 150000000
         },
@@ -524,8 +576,8 @@ const Settings = () => {
           amount: -500000,
           maturity: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000), // 10 days ago (expired)
           type: 'payable' as const,
-          description: 'Expired EUR Payable - OCP Group',
-          subsidiary: 'OCP Group',
+          description: 'Expired EUR Payable - FX hedging',
+          subsidiary: 'FX hedging',
           hedgeRatio: 0,
           hedgedAmount: 0
         },
@@ -535,7 +587,7 @@ const Settings = () => {
           maturity: new Date(Date.now() + 45 * 24 * 60 * 60 * 1000),
           type: 'receivable' as const,
           description: 'Invalid Test Exposure',
-          subsidiary: 'OCP Group',
+          subsidiary: 'FX hedging',
           hedgeRatio: 0,
           hedgedAmount: 0
         },
@@ -544,8 +596,8 @@ const Settings = () => {
           amount: 10000000,
           maturity: new Date(Date.now() + 120 * 24 * 60 * 60 * 1000), // 120 days from now
           type: 'receivable' as const,
-          description: 'Test MAD Receivable - OCP Group Morocco',
-          subsidiary: 'OCP Group Morocco',
+          description: 'Test MAD Receivable - FX hedging Morocco',
+          subsidiary: 'FX hedging Morocco',
           hedgeRatio: 75,
           hedgedAmount: 7500000
         }
@@ -679,7 +731,8 @@ const Settings = () => {
                     id="company-name"
                     value={pendingCompanyName ?? companyName}
                     onChange={(e) => {
-                      setPendingCompanyName(e.target.value);
+                      const value = e.target.value;
+                      setPendingCompanyName(value);
                       setHasChanges(true);
                     }}
                     placeholder="Your company name"
@@ -705,22 +758,49 @@ const Settings = () => {
                         id="company-logo"
                         type="file"
                         accept="image/png,image/jpeg,image/svg+xml"
-                        onChange={async (e) => {
-                          const file = e.target.files?.[0];
-                          if (file) {
-                            const reader = new FileReader();
-                            reader.onload = (ev) => {
-                              if (typeof ev.target?.result === 'string') {
-                                setPendingLogo(ev.target.result);
-                                setHasChanges(true);
-                                setLogoMarkedForRemoval(false);
-                              }
-                            };
-                            reader.readAsDataURL(file);
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          // Vérifier la taille du fichier (max 5MB)
+                          if (file.size > 5 * 1024 * 1024) {
+                            toast({
+                              title: "Fichier trop volumineux",
+                              description: "La taille du logo ne doit pas dépasser 5MB.",
+                              variant: "destructive",
+                            });
+                            return;
                           }
-                        }}
+                          
+                          // Vérifier le type de fichier
+                          if (!['image/png', 'image/jpeg', 'image/jpg', 'image/svg+xml'].includes(file.type)) {
+                            toast({
+                              title: "Format non supporté",
+                              description: "Veuillez utiliser un fichier PNG, JPEG ou SVG.",
+                              variant: "destructive",
+                            });
+                            return;
+                          }
+                          
+                          const reader = new FileReader();
+                          reader.onload = (ev) => {
+                            if (typeof ev.target?.result === 'string') {
+                              setPendingLogo(ev.target.result);
+                              setHasChanges(true);
+                              setLogoMarkedForRemoval(false);
+                            }
+                          };
+                          reader.onerror = () => {
+                            toast({
+                              title: "Erreur de lecture",
+                              description: "Impossible de lire le fichier image.",
+                              variant: "destructive",
+                            });
+                          };
+                          reader.readAsDataURL(file);
+                        }
+                      }}
                       />
-                      {(pendingLogo !== null || logo !== "/ocp-logo.png" || logoMarkedForRemoval) && (
+                      {(pendingLogo !== null || logo !== "/fx-hedging-logo.png" || logoMarkedForRemoval) && (
                         <div className="flex gap-2">
                           {!logoMarkedForRemoval && (
                             <Button

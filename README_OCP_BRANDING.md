@@ -1,8 +1,8 @@
-# Branding OCP Group - Intégration
+# Branding FX hedging - Intégration
 
 ## 🏢 **Branding Ajouté**
 
-L'application FX Risk Manager a été mise à jour pour inclure le branding **OCP Group - Corporate Performance Management**.
+L'application FX Risk Manager a été mise à jour pour inclure le branding **FX hedging - Risk Management Platform**.
 
 ## 📍 **Emplacements du Branding**
 
@@ -10,25 +10,25 @@ L'application FX Risk Manager a été mise à jour pour inclure le branding **OC
 - **Fichier** : `src/components/AppSidebar.tsx`
 - **Emplacement** : Header de la sidebar
 - **Contenu** :
-  - Logo OCP Group (image)
-  - Nom "OCP Group"
-  - Sous-titre "Corporate Performance Management"
+  - Logo FX hedging (image)
+  - Nom "FX hedging"
+  - Sous-titre "Risk Management Platform"
   - Titre application "FX Risk Manager"
 
 ### 2. **Header Principal**
 - **Fichier** : `src/components/Layout.tsx`
 - **Emplacement** : Coin supérieur droit du header
 - **Contenu** :
-  - Logo OCP Group (petite taille)
-  - Texte "OCP Group | Corporate Performance Management"
+  - Logo FX hedging (petite taille)
+  - Texte "FX hedging | Risk Management Platform"
   - Visible uniquement sur écrans larges (lg+)
 
 ### 3. **Titre HTML**
 - **Fichier** : `index.html`
 - **Contenu** :
-  - Titre : "FX Risk Manager | OCP Group - Corporate Performance Management"
-  - Description : "Currency Hedging Platform - OCP Group Corporate Performance Management"
-  - Auteur : "OCP Group"
+  - Titre : "FX Risk Manager | FX hedging - Risk Management Platform"
+  - Description : "Currency Hedging Platform - FX hedging Risk Management Platform"
+  - Auteur : "FX hedging"
 
 ## 🖼️ **Logo à Ajouter**
 
