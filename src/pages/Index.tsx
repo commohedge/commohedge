@@ -735,7 +735,7 @@ export const calculateSwapPrice = (forwards: number[], times: number[], r: numbe
 
 // Time to maturity calculation utility
 export const calculateTimeToMaturity = (maturityDate: string, valuationDate: string): number => {
-  const maturity = new Date(maturityDate + 'T23:00:00Z');
+  const maturity = new Date(maturityDate + 'T24:00:00Z');
   const valuation = new Date(valuationDate + 'T00:00:00Z');
   const diffTime = Math.abs(maturity.getTime() - valuation.getTime());
   return diffTime / (365.25 * 24 * 60 * 60 * 1000);

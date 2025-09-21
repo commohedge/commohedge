@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import { ThemeProvider } from "./hooks/ThemeProvider";
 import { useSmoothScroll, useMomentumScroll } from "./hooks/useSmoothScroll";
+import { useZoom } from "./hooks/useZoom";
 
 // Import pages
 import Dashboard from "./pages/Dashboard";
@@ -36,6 +37,9 @@ const App = () => {
   // Initialiser les hooks de scroll fluide
   useSmoothScroll();
   useMomentumScroll();
+  
+  // Initialiser le zoom
+  useZoom();
 
   return (
     <QueryClientProvider client={queryClient}>

@@ -35,10 +35,14 @@ import {
   Building,
   Trash2,
   AlertCircle,
-  Eraser
+  Eraser,
+  ZoomIn,
+  ZoomOut,
+  Monitor
 } from "lucide-react";
 import { useCompanySettings, companySettingsEmitter } from "@/hooks/useCompanySettings";
 import { getLocalStorageStats, performEmergencyRecovery } from "@/utils/emergencyRecovery";
+import "@/styles/zoom-controls.css";
 
 interface AppSettings {
   // General settings
@@ -80,6 +84,7 @@ interface AppSettings {
     dateFormat: string;
     numberFormat: string;
     dashboardRefresh: number;
+    zoomLevel: number;
   };
   
   // Notification settings
@@ -132,6 +137,12 @@ interface AppSettings {
 const Settings = () => {
   const { marketData, updateMarketData, isLiveMode, setLiveMode, exposures, deleteExposure, addExposure } = useFinancialData();
   const { companySettings, updateCompanySettings, getCompanyNameParts, getCompanyLogo, setCompanyLogo, resetCompanyLogo, isLoaded, getCompanyLogo: getLogo, getCompanyNameParts: getNameParts } = useCompanySettings();
+  
+  // Function to apply zoom to the entire application
+  const applyZoom = (zoomLevel: number) => {
+    document.documentElement.style.zoom = `${zoomLevel}%`;
+    localStorage.setItem('fx-hedging-zoom', zoomLevel.toString());
+  };
   const [settings, setSettings] = useState<AppSettings>({
     company: {
       name: "FX hedging - Risk Management Platform",
@@ -164,7 +175,8 @@ const Settings = () => {
       language: "en",
       dateFormat: "MM/DD/YYYY",
       numberFormat: "en-US",
-      dashboardRefresh: 30
+      dashboardRefresh: 30,
+      zoomLevel: 100
     },
     notifications: {
       riskAlerts: true,
@@ -223,9 +235,9 @@ const Settings = () => {
   useEffect(() => {
     const loadSettings = () => {
       try {
-        const savedSettings = localStorage.getItem('fxRiskManagerSettings');
-        if (savedSettings) {
-          const parsed = JSON.parse(savedSettings);
+    const savedSettings = localStorage.getItem('fxRiskManagerSettings');
+    if (savedSettings) {
+        const parsed = JSON.parse(savedSettings);
           // Vérifier que les données parsées sont valides
           if (parsed && typeof parsed === 'object' && parsed.company) {
             setSettings(prev => ({
@@ -237,6 +249,22 @@ const Settings = () => {
                 ...parsed.company
               }
             }));
+          }
+        }
+        
+        // Load zoom level from localStorage
+        const savedZoom = localStorage.getItem('fx-hedging-zoom');
+        if (savedZoom) {
+          const zoomLevel = parseInt(savedZoom);
+          if (zoomLevel >= 50 && zoomLevel <= 150) {
+            setSettings(prev => ({
+              ...prev,
+              ui: {
+                ...prev.ui,
+                zoomLevel: zoomLevel
+              }
+            }));
+            applyZoom(zoomLevel);
           }
         }
       } catch (error) {
@@ -279,7 +307,7 @@ const Settings = () => {
         const trimmedName = pendingCompanyName.trim();
         if (trimmedName.length > 0) {
           newSettings.company = { ...newSettings.company, name: trimmedName };
-          nameChanged = true;
+        nameChanged = true;
         } else {
           toast({
             title: "Nom invalide",
@@ -758,9 +786,9 @@ const Settings = () => {
                         id="company-logo"
                         type="file"
                         accept="image/png,image/jpeg,image/svg+xml"
-                      onChange={async (e) => {
-                        const file = e.target.files?.[0];
-                        if (file) {
+                        onChange={async (e) => {
+                          const file = e.target.files?.[0];
+                          if (file) {
                           // Vérifier la taille du fichier (max 5MB)
                           if (file.size > 5 * 1024 * 1024) {
                             toast({
@@ -781,14 +809,14 @@ const Settings = () => {
                             return;
                           }
                           
-                          const reader = new FileReader();
-                          reader.onload = (ev) => {
-                            if (typeof ev.target?.result === 'string') {
-                              setPendingLogo(ev.target.result);
-                              setHasChanges(true);
-                              setLogoMarkedForRemoval(false);
-                            }
-                          };
+                            const reader = new FileReader();
+                            reader.onload = (ev) => {
+                              if (typeof ev.target?.result === 'string') {
+                                setPendingLogo(ev.target.result);
+                                setHasChanges(true);
+                                setLogoMarkedForRemoval(false);
+                              }
+                            };
                           reader.onerror = () => {
                             toast({
                               title: "Erreur de lecture",
@@ -796,9 +824,9 @@ const Settings = () => {
                               variant: "destructive",
                             });
                           };
-                          reader.readAsDataURL(file);
-                        }
-                      }}
+                            reader.readAsDataURL(file);
+                          }
+                        }}
                       />
                       {(pendingLogo !== null || logo !== "/fx-hedging-logo.png" || logoMarkedForRemoval) && (
                         <div className="flex gap-2">
@@ -1288,6 +1316,110 @@ const Settings = () => {
                       <SelectItem value="0">Manual</SelectItem>
                     </SelectContent>
                   </Select>
+                </div>
+                
+                <Separator />
+                
+                <div className="space-y-4">
+                  <div className="flex items-center gap-2">
+                    <Monitor className="h-5 w-5 text-muted-foreground" />
+                    <Label className="text-base font-semibold">Display Zoom</Label>
+                  </div>
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <Label htmlFor="zoom-level">Zoom Level: {settings.ui.zoomLevel}%</Label>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            const newZoom = Math.max(50, settings.ui.zoomLevel - 10);
+                            updateSettings('ui', { zoomLevel: newZoom });
+                            applyZoom(newZoom);
+                          }}
+                          disabled={settings.ui.zoomLevel <= 50}
+                        >
+                          <ZoomOut className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            const newZoom = Math.min(150, settings.ui.zoomLevel + 10);
+                            updateSettings('ui', { zoomLevel: newZoom });
+                            applyZoom(newZoom);
+                          }}
+                          disabled={settings.ui.zoomLevel >= 150}
+                        >
+                          <ZoomIn className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <input
+                        type="range"
+                        min="50"
+                        max="150"
+                        step="10"
+                        value={settings.ui.zoomLevel}
+                        onChange={(e) => {
+                          const newZoom = parseInt(e.target.value);
+                          updateSettings('ui', { zoomLevel: newZoom });
+                          applyZoom(newZoom);
+                        }}
+                        className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer slider"
+                      />
+                      <div className="flex justify-between text-xs text-muted-foreground">
+                        <span>50%</span>
+                        <span>100%</span>
+                        <span>150%</span>
+                      </div>
+                    </div>
+                    
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          updateSettings('ui', { zoomLevel: 75 });
+                          applyZoom(75);
+                        }}
+                        className="flex-1"
+                      >
+                        75%
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          updateSettings('ui', { zoomLevel: 100 });
+                          applyZoom(100);
+                        }}
+                        className="flex-1"
+                      >
+                        100%
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          updateSettings('ui', { zoomLevel: 125 });
+                          applyZoom(125);
+                        }}
+                        className="flex-1"
+                      >
+                        125%
+                      </Button>
+                    </div>
+                    
+                    <Alert>
+                      <AlertTriangle className="h-4 w-4" />
+                      <AlertDescription>
+                        Zoom settings affect the entire application interface. Changes are applied immediately.
+                      </AlertDescription>
+                    </Alert>
+                  </div>
                 </div>
               </div>
             </CardContent>

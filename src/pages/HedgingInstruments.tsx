@@ -10,8 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Progress } from "@/components/ui/progress";
-import { toast } from "@/components/ui/use-toast";
-import { calculateTimeToMaturity } from "./Index"; // Import standardized time to maturity calculation
+import { useToast } from "@/hooks/use-toast";
 import { 
   Plus, 
   Shield, 
@@ -31,6 +30,15 @@ import {
 } from "lucide-react";
 import StrategyImportService, { HedgingInstrument } from "@/services/StrategyImportService";
 import { PricingService } from "@/services/PricingService";
+// ✅ IMPORT EXACT DES FONCTIONS EXPORTÉES D'INDEX.TSX UTILISÉES PAR STRATEGY BUILDER
+import {
+  calculateBarrierOptionPrice,
+  calculateBarrierOptionClosedForm,
+  calculateDigitalOptionPrice,
+  calculateGarmanKohlhagenPrice,
+  calculateVanillaOptionMonteCarlo,
+  erf
+} from "@/pages/Index";
 
 // Interface pour les paramètres de marché par devise
 interface CurrencyMarketData {
@@ -41,8 +49,10 @@ interface CurrencyMarketData {
 }
 
 const HedgingInstruments = () => {
+  const { toast } = useToast();
   const [selectedTab, setSelectedTab] = useState("all");
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [showExportColumns, setShowExportColumns] = useState(false);
   const [instruments, setInstruments] = useState<HedgingInstrument[]>(() => {
     try {
       const saved = localStorage.getItem('hedgingInstruments');
@@ -265,29 +275,32 @@ const HedgingInstruments = () => {
   // Force re-calculation when valuation date changes
   useEffect(() => {
     if (instruments.length > 0) {
-      console.log(`[DEBUG] Valuation date changed to ${valuationDate}, forcing recalculation of all Today Prices and MTM`);
-      setIsRecalculating(true);
+      console.log(`[🔄 VALUATION DATE CHANGE] New date: ${valuationDate} - Forcing recalculation of ${instruments.length} instruments`);
       
       // Force re-render to recalculate all Today Prices with new valuation date
-      setInstruments([...instruments]);
+      const updatedInstruments = instruments.map(instrument => ({ ...instrument }));
+      setInstruments(updatedInstruments);
       
-      // Reset recalculating state after a short delay to show feedback
-      setTimeout(() => setIsRecalculating(false), 500);
+      // Force update of currency market data state to trigger re-renders
+      setCurrencyMarketData(prev => ({ ...prev }));
+      
+      // Show toast to confirm recalculation
+      toast({
+        title: "Valuation Date Updated",
+        description: `Recalculating prices and MTM for ${instruments.length} instruments as of ${valuationDate}`,
+      });
+    } else {
+      console.log(`[🔄 VALUATION DATE CHANGE] New date: ${valuationDate} - No instruments to recalculate`);
     }
-  }, [valuationDate]);
+  }, [valuationDate, toast]);
 
   // Force re-calculation when market parameters change (spot, volatility, rates)
   useEffect(() => {
     if (instruments.length > 0) {
       console.log(`[DEBUG] Market parameters changed, forcing recalculation of Today Prices and MTM`);
-      setIsRecalculating(true);
-      
       // Force re-render to recalculate all Today Prices and MTM with new market parameters
       const updatedInstruments = instruments.map(instrument => ({ ...instrument }));
       setInstruments(updatedInstruments);
-      
-      // Reset recalculating state after a short delay to show feedback
-      setTimeout(() => setIsRecalculating(false), 500);
     }
   }, [currencyMarketData]);
 
@@ -343,17 +356,21 @@ const HedgingInstruments = () => {
 
   // ✅ Utiliser exactement la même logique de pricing que Strategy Builder
 
-  // ✅ Utilise la fonction standardisée importée depuis Index.tsx
-  // Plus besoin de fonction locale - garantit la cohérence avec Strategy Builder
+  // ✅ Calcul de maturité avec logique Strategy Builder
+  const calculateTimeToMaturity = (maturityDate: string, valuationDate: string): number => {
+    const result = PricingService.calculateTimeToMaturity(maturityDate, valuationDate);
+    console.log('[HEDGING] maturity:', maturityDate, 'valuation:', valuationDate, 'result:', result.toFixed(6), 'years');
+    return result;
+  };
 
   // ✅ Calcul de maturité depuis Strategy Start Date (comme Strategy Builder)
   const calculateTimeToMaturityFromStrategyStart = (maturityDate: string): number => {
-    return calculateTimeToMaturity(maturityDate, strategyStartDate);
+    return PricingService.calculateTimeToMaturity(maturityDate, strategyStartDate);
   };
 
   // ✅ Calcul de maturité depuis Hedging Start Date (pour affichage)
   const calculateTimeToMaturityFromHedgingStart = (maturityDate: string): number => {
-    return calculateTimeToMaturity(maturityDate, hedgingStartDate);
+    return PricingService.calculateTimeToMaturity(maturityDate, hedgingStartDate);
   };
 
   // Utiliser le PricingService centralisé au lieu de redéfinir erf
@@ -374,9 +391,11 @@ const HedgingInstruments = () => {
     return null;
   };
 
-  // Fonction calculateOptionPrice adaptée pour les instruments importés - utilise le PricingService centralisé
+    // ✅ CORRECTION : Utiliser exactement les MÊMES FONCTIONS que Strategy Builder (exportées d'Index.tsx)
   const calculateOptionPrice = (type: string, S: number, K: number, r: number, t: number, sigma: number, instrument: HedgingInstrument, date?: Date, optionIndex?: number) => {
-    // Utilize the volatility implied if available
+    // ✅ UTILISATION STRICTE DES FONCTIONS EXPORTÉES D'INDEX.TSX - MÊME LOGIQUE QUE STRATEGY BUILDER
+    
+    // 1. Gestion de la volatilité implicite (même logique que Strategy Builder)
     let effectiveSigma = sigma;
     if (date && useImpliedVol) {
       const monthKey = `${date.getFullYear()}-${date.getMonth() + 1}`;
@@ -397,7 +416,7 @@ const HedgingInstruments = () => {
         return 0;
       }
 
-      // Calculate barrier values
+      // Calculate barrier values - même logique que Strategy Builder
       const barrier = originalComponent.barrierType === 'percent' ? 
         S * (originalComponent.barrier / 100) : 
         originalComponent.barrier;
@@ -408,14 +427,15 @@ const HedgingInstruments = () => {
           originalComponent.secondBarrier) : 
         undefined;
 
+      // ✅ Utiliser les MÊMES FONCTIONS que Strategy Builder (exportées d'Index.tsx)
       if (barrierPricingModel === 'closed-form') {
-        return PricingService.calculateBarrierOptionClosedForm(
+        return Math.max(0, calculateBarrierOptionClosedForm(
           type, S, K, r, t, effectiveSigma, barrier, secondBarrier
-        );
+        ));
       } else {
-        return PricingService.calculateBarrierOptionPrice(
+        return Math.max(0, calculateBarrierOptionPrice(
           type, S, K, r, t, effectiveSigma, barrier, secondBarrier, barrierOptionSimulations
-        );
+        ));
       }
     }
 
@@ -439,55 +459,77 @@ const HedgingInstruments = () => {
           originalComponent.secondBarrier) : 
         undefined;
 
-      const rebate = (originalComponent.rebate || 5) / 100;
+      const rebate = originalComponent.rebate !== undefined ? originalComponent.rebate : 1;
+      const numSimulations = barrierOptionSimulations || 10000;
 
-      return PricingService.calculateDigitalOptionPrice(
-        type, S, K, r, t, effectiveSigma, barrier, secondBarrier, 10000, rebate
+      // ✅ Utiliser la MÊME FONCTION que Strategy Builder (exportée d'Index.tsx)
+      return calculateDigitalOptionPrice(
+        type, S, K, r, t, effectiveSigma, barrier, secondBarrier, numSimulations, rebate
       );
     }
 
-    // For vanilla options, use the selected pricing model - utiliser SPOT PRICE comme Strategy Builder
-    if (optionPricingModel === 'monte-carlo') {
-      // Use domestic and foreign rates for FX options
-      const marketData = currencyMarketData[instrument.currency];
-      if (marketData) {
-        const spotRate = instrument.impliedSpotPrice || marketData.spot;
-        return PricingService.calculateVanillaOptionMonteCarlo(
-          type, spotRate, K, marketData.domesticRate / 100, marketData.foreignRate / 100, t, effectiveSigma
-        );
+    // For vanilla options, use the selected pricing model - même logique que Strategy Builder
+    const marketData = currencyMarketData[instrument.currency] || getMarketDataFromInstruments(instrument.currency);
+    const r_d = marketData ? marketData.domesticRate / 100 : r;
+    const r_f = marketData ? marketData.foreignRate / 100 : 0;
+    
+    // For standard options, use appropriate pricing model
+    let price = 0;
+    if (optionPricingModel === 'garman-kohlhagen') {
+      // ✅ Utiliser la MÊME FONCTION que Strategy Builder (exportée d'Index.tsx)
+      price = calculateGarmanKohlhagenPrice(type, S, K, r_d, r_f, t, effectiveSigma);
+    } else if (optionPricingModel === 'monte-carlo') {
+      // ✅ Utiliser la MÊME FONCTION que Strategy Builder (exportée d'Index.tsx)
+      price = calculateVanillaOptionMonteCarlo(
+        type, S, K, r_d, r_f, t, effectiveSigma, 1000 // Number of simulations for vanilla options
+      );
+    } else {
+      // Use traditional Black-Scholes - même implémentation que Strategy Builder
+      const d1 = (Math.log(S/K) + (r + effectiveSigma**2/2)*t) / (effectiveSigma*Math.sqrt(t));
+      const d2 = d1 - effectiveSigma*Math.sqrt(t);
+      
+      const Nd1 = (1 + erf(d1/Math.sqrt(2)))/2;
+      const Nd2 = (1 + erf(d2/Math.sqrt(2)))/2;
+      
+      if (type === 'call') {
+        price = S*Nd1 - K*Math.exp(-r*t)*Nd2;
+      } else { // put
+        price = K*Math.exp(-r*t)*(1-Nd2) - S*(1-Nd1);
       }
     }
-
-    // Default to Garman-Kohlhagen for FX options - utiliser SPOT PRICE comme Strategy Builder
-    const marketData = currencyMarketData[instrument.currency];
-    if (marketData) {
-      const spotRate = instrument.impliedSpotPrice || marketData.spot;
-      return PricingService.calculateGarmanKohlhagenPrice(
-        type, spotRate, K, marketData.domesticRate / 100, marketData.foreignRate / 100, t, effectiveSigma
-      );
-    }
-
-    // Fallback to Black-Scholes if no market data - utiliser SPOT PRICE
-    const fallbackSpot = instrument.impliedSpotPrice || S;
-    return PricingService.calculateGarmanKohlhagenPrice(type, fallbackSpot, K, r, 0, t, effectiveSigma);
+    
+    // S'assurer que le prix de l'option n'est jamais négatif - même logique que Strategy Builder
+    return Math.max(0, price);
   };
 
-  // ✅ CORRECTION MTM - Fonction calculateTodayPrice pour recalcul automatique du MTM
-  // Cette fonction utilise maintenant la valuationDate pour calculer le time to maturity,
-  // garantissant que le MTM se recalcule automatiquement quand la date de valorisation change.
+  // Fonction calculateTodayPrice améliorée pour utiliser les données enrichies d'export
   // Note: La fonction calculateBarrierOptionClosedForm a été déplacée vers PricingService
   // avec une implémentation complète pour les options à double barrière
 
   const calculateTodayPrice = (instrument: HedgingInstrument): number => {
-    // ✅ CORRECTION : Utiliser Strategy Start Date pour parfaite cohérence avec Strategy Builder
-    // UTILISE : calculationTimeToMaturity avec strategyStartDate (même logique que Strategy Builder)
-    // GARANTIT : Time to Maturity identique entre Export et Current
+    // ✅ STRATÉGIE : Utiliser les valeurs CURRENT affichées dans le tableau (modifiables par l'utilisateur)
     
-    // ✅ 1. TIME TO MATURITY : Utiliser Strategy Start Date pour cohérence parfaite avec Strategy Builder
-    // Même date de référence que dans Strategy Builder pour les calculs financiers
-    const calculationTimeToMaturity = calculateTimeToMaturity(instrument.maturity, strategyStartDate);
+    // ✅ 1. TIME TO MATURITY : Utiliser la logique Strategy Builder avec dates d'export
+    // Priorité : dates d'export > dates actuelles
+    let effectiveStrategyStartDate = strategyStartDate;
+    let effectiveHedgingStartDate = hedgingStartDate;
     
-    console.log(`[DEBUG] ${instrument.id}: Using strategy start date ${strategyStartDate} for TTM calculation - TTM: ${calculationTimeToMaturity.toFixed(6)} years`);
+    if (instrument.exportStrategyStartDate && instrument.exportHedgingStartDate) {
+      effectiveStrategyStartDate = instrument.exportStrategyStartDate;
+      effectiveHedgingStartDate = instrument.exportHedgingStartDate;
+      console.log(`[DEBUG] ${instrument.id}: Using export dates - Strategy: ${effectiveStrategyStartDate}, Hedging: ${effectiveHedgingStartDate}`);
+    }
+    
+    // ✅ CORRECTION : Utiliser exactement la même logique que Strategy Builder pour les calculs de pricing
+    // Strategy Builder utilise calculationStartDate dérivé de strategyStartDate
+    const strategyStartDateObj = new Date(instrument.exportStrategyStartDate || strategyStartDate);
+    const calculationStartDate = new Date(strategyStartDateObj.getFullYear(), strategyStartDateObj.getMonth(), strategyStartDateObj.getDate());
+    const calculationStartDateStr = calculationStartDate.toISOString().split('T')[0];
+    
+    const calculationTimeToMaturity = PricingService.calculateTimeToMaturity(instrument.maturity, calculationStartDateStr);
+    
+    // Utiliser la même base de calcul pour l'affichage et le pricing
+    const displayTimeToMaturity = calculationTimeToMaturity;
     
     // 2. PARAMÈTRES DE MARCHÉ : Utiliser les valeurs CURRENT des données de marché
     const marketData = currencyMarketData[instrument.currency] || getMarketDataFromInstruments(instrument.currency) || { spot: 1.0000, volatility: 20, domesticRate: 1.0, foreignRate: 1.0 };
@@ -498,7 +540,7 @@ const HedgingInstruments = () => {
     const r_d = marketData.domesticRate / 100;  // Current domestic rate
     const r_f = marketData.foreignRate / 100;  // Current foreign rate
     
-    console.log(`[DEBUG] ${instrument.id}: Using CURRENT parameters - spot=${spotRate}, r_d=${(r_d*100).toFixed(3)}%, r_f=${(r_f*100).toFixed(3)}%, t=${calculationTimeToMaturity.toFixed(6)}`);
+    console.log(`[DEBUG] ${instrument.id}: Using CURRENT parameters - spot=${spotRate}, r_d=${(r_d*100).toFixed(3)}%, r_f=${(r_f*100).toFixed(3)}%, t=${calculationTimeToMaturity.toFixed(6)} (valuationDate=${valuationDate})`);
     console.log(`[DEBUG] ${instrument.id}: Export vs Current - Export spot: ${instrument.exportSpotPrice || 'N/A'}, Current: ${marketData.spot}`);
     console.log(`[DEBUG] ${instrument.id}: Export vs Current - Export r_d: ${instrument.exportDomesticRate ? (instrument.exportDomesticRate).toFixed(3) + '%' : 'N/A'}, Current: ${marketData.domesticRate.toFixed(3)}%`);
     console.log(`[DEBUG] ${instrument.id}: Export vs Current - Export r_f: ${instrument.exportForeignRate ? (instrument.exportForeignRate).toFixed(3) + '%' : 'N/A'}, Current: ${marketData.foreignRate.toFixed(3)}%`);
@@ -533,7 +575,7 @@ const HedgingInstruments = () => {
     // 5. STRIKE ANALYSIS : Vérifier la cohérence du strike
     console.log(`[DEBUG] ${instrument.id}: Strike analysis - Strike: ${instrument.strike}, Type: ${instrument.originalComponent?.strikeType || 'unknown'}, Original Strike: ${instrument.originalComponent?.strike || 'N/A'}, Spot: ${spotRate}`);
     
-         console.log(`[DEBUG] ${instrument.id}: Time to maturity from valuation date ${valuationDate}: ${calculationTimeToMaturity.toFixed(4)} years`);
+         console.log(`[DEBUG] ${instrument.id}: Time to maturity - Valuation Date: ${valuationDate}, TTM: ${calculationTimeToMaturity.toFixed(4)} years (Maturity: ${instrument.maturity})`);
      console.log(`[DEBUG] ${instrument.id}: Using current spot ${spotRate.toFixed(4)} -> forward ${S.toFixed(4)} (r_d=${(r_d*100).toFixed(1)}%, r_f=${(r_f*100).toFixed(1)}%, t=${calculationTimeToMaturity.toFixed(4)})`);
     
     // Vérifier l'expiration
@@ -1177,30 +1219,6 @@ const HedgingInstruments = () => {
     return sum + displayedNotional;
   }, 0);
   
-  // ✅ Check for date consistency issues
-  const dateInconsistencyWarnings = instruments.filter(inst => {
-    if (!inst.maturity) return false;
-    const timeToMaturityFromHedging = calculateTimeToMaturity(inst.maturity, hedgingStartDate);
-    const timeToMaturityFromValuation = calculateTimeToMaturity(inst.maturity, valuationDate);
-    return timeToMaturityFromHedging < 0 || timeToMaturityFromValuation < 0;
-  });
-
-  // ✅ Helper function to suggest appropriate hedging start date
-  const getSuggestedHedgingStartDate = (): string => {
-    if (instruments.length === 0) return hedgingStartDate;
-    
-    // Find the earliest instrument maturity date
-    const earliestMaturity = instruments.reduce((earliest, inst) => {
-      if (!inst.maturity) return earliest;
-      return inst.maturity < earliest ? inst.maturity : earliest;
-    }, instruments[0]?.maturity || hedgingStartDate);
-    
-    // Suggest a date 6 months before the earliest maturity
-    const suggested = new Date(earliestMaturity);
-    suggested.setMonth(suggested.getMonth() - 6);
-    return suggested.toISOString().split('T')[0];
-  };
-
   // Calculate total MTM using our pricing functions with currency-specific data
   const totalMTM = instruments.reduce((sum, inst) => {
     const marketData = currencyMarketData[inst.currency];
@@ -1241,33 +1259,6 @@ const HedgingInstruments = () => {
         { label: "Hedging Instruments" }
       ]}
     >
-      {/* ✅ Date Consistency Warning */}
-      {dateInconsistencyWarnings.length > 0 && (
-        <div className="mb-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-          <div className="flex items-center gap-2 text-yellow-800">
-            <AlertCircle className="h-5 w-5" />
-            <h3 className="font-semibold">Date Consistency Warning</h3>
-          </div>
-          <p className="mt-2 text-sm text-yellow-700">
-            {dateInconsistencyWarnings.length} instrument(s) have date inconsistencies. 
-            The Hedging Start Date ({hedgingStartDate}) or Valuation Date ({valuationDate}) 
-            may be after some instrument maturity dates, causing calculation issues.
-          </p>
-          <p className="mt-1 text-xs text-yellow-600">
-            Consider adjusting the Hedging Start Date to be before instrument maturities.
-            Suggested date: <span className="font-mono font-semibold">{getSuggestedHedgingStartDate()}</span>
-          </p>
-          <Button
-            size="sm"
-            variant="outline"
-            className="mt-2"
-            onClick={() => setHedgingStartDate(getSuggestedHedgingStartDate())}
-          >
-            Use Suggested Date
-          </Button>
-        </div>
-      )}
-
       {/* MTM Calculation Controls */}
       <Card className="mb-4">
         <CardHeader>
@@ -1285,25 +1276,31 @@ const HedgingInstruments = () => {
             <div className="grid gap-4 md:grid-cols-3">
               <div className="space-y-2">
                 <Label htmlFor="strategy-start-date">Strategy Start Date</Label>
+                <div className="flex items-center gap-2">
                 <Input
                   id="strategy-start-date"
                   type="date"
                   value={strategyStartDate}
-                  onChange={(e) => setStrategyStartDate(e.target.value)}
-                  className="font-mono"
+                    disabled
+                    className="font-mono bg-gray-50 dark:bg-gray-800"
                 />
-                <p className="text-xs text-muted-foreground">Used for pricing calculations</p>
+                  <Badge variant="outline" className="text-xs">Fixed</Badge>
+                </div>
+                <p className="text-xs text-muted-foreground">Fixed from Strategy Builder</p>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="hedging-start-date">Hedging Start Date</Label>
+                <div className="flex items-center gap-2">
                 <Input
                   id="hedging-start-date"
                   type="date"
                   value={hedgingStartDate}
-                  onChange={(e) => setHedgingStartDate(e.target.value)}
-                  className="font-mono"
+                    disabled
+                    className="font-mono bg-gray-50 dark:bg-gray-800"
                 />
-                <p className="text-xs text-muted-foreground">Used for MTM display</p>
+                  <Badge variant="outline" className="text-xs">Fixed</Badge>
+                </div>
+                <p className="text-xs text-muted-foreground">Fixed from Strategy Builder</p>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="valuation-date">Valuation Date</Label>
@@ -1314,7 +1311,7 @@ const HedgingInstruments = () => {
                   onChange={(e) => setValuationDate(e.target.value)}
                   className="font-mono"
                 />
-                <p className="text-xs text-muted-foreground">Current market date</p>
+                <p className="text-xs text-muted-foreground">Track strategies over time</p>
               </div>
             </div>
             <div className="space-y-2 md:col-span-3">
@@ -1332,6 +1329,8 @@ const HedgingInstruments = () => {
                   )}
                   {isRecalculating ? "Calculating..." : "Recalculate All MTM"}
                 </Button>
+                
+
                 
                 {/* BOUTON DE TEST POUR DIAGNOSTIC */}
                 <Button 
@@ -1549,18 +1548,11 @@ const HedgingInstruments = () => {
             <TrendingUp className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className={`text-2xl font-bold ${getMTMColor(totalMTM)} ${isRecalculating ? 'opacity-50' : ''}`}>
-              {isRecalculating ? (
-                <div className="flex items-center gap-2">
-                  <RefreshCw className="h-5 w-5 animate-spin" />
-                  Calculating...
-                </div>
-              ) : (
-                formatCurrency(totalMTM)
-              )}
+            <div className={`text-2xl font-bold ${getMTMColor(totalMTM)}`}>
+              {formatCurrency(totalMTM)}
             </div>
             <p className="text-xs text-muted-foreground">
-              {isRecalculating ? 'Recalculating MTM...' : 'Unrealized P&L'}
+              Unrealized P&L
             </p>
           </CardContent>
         </Card>
@@ -1603,6 +1595,16 @@ const HedgingInstruments = () => {
               </CardDescription>
             </div>
             <div className="flex gap-2">
+              {/* Toggle Export Columns */}
+              <Button 
+                onClick={() => setShowExportColumns(!showExportColumns)}
+                variant={showExportColumns ? "default" : "outline"}
+                size="sm"
+                className="whitespace-nowrap"
+              >
+                {showExportColumns ? "Hide Export" : "Show Export"}
+              </Button>
+              
             <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
               <DialogTrigger asChild>
                 <Button>
@@ -1755,47 +1757,60 @@ const HedgingInstruments = () => {
                   </div>
                 </div>
               ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead rowSpan={2}>ID</TableHead>
-                      <TableHead rowSpan={2}>Type</TableHead>
-                      <TableHead rowSpan={2}>Currency Pair</TableHead>
-                      <TableHead rowSpan={2}>Quantity (%)</TableHead>
-                      <TableHead rowSpan={2}>Unit Price (Initial)</TableHead>
-                      <TableHead rowSpan={2}>Today Price</TableHead>
-                      <TableHead rowSpan={2}>MTM</TableHead>
-                      <TableHead colSpan={2} className="text-center border-b">Time to Maturity</TableHead>
-                      <TableHead colSpan={2} className="text-center border-b">Spot Price</TableHead>
-                      <TableHead colSpan={2} className="text-center border-b">Volatility (%)</TableHead>
-                      <TableHead colSpan={2} className="text-center border-b">Domestic Rate (%)</TableHead>
-                      <TableHead colSpan={2} className="text-center border-b">Foreign Rate (%)</TableHead>
-                      <TableHead colSpan={2} className="text-center border-b">Forward Price</TableHead>
-                      <TableHead colSpan={2} className="text-center border-b">Strike Analysis</TableHead>
-                      <TableHead rowSpan={2}>Barrier 1</TableHead>
-                      <TableHead rowSpan={2}>Barrier 2</TableHead>
-                      <TableHead rowSpan={2}>Rebate (%)</TableHead>
-                      <TableHead rowSpan={2}>Volume</TableHead>
-                      <TableHead rowSpan={2}>Notional</TableHead>
-                      <TableHead rowSpan={2}>Maturity</TableHead>
-                      <TableHead rowSpan={2}>Status</TableHead>
-                      <TableHead rowSpan={2}>Actions</TableHead>
+                                 <div className="overflow-x-auto">
+                   <Table className="min-w-full border-collapse bg-white shadow-sm rounded-lg overflow-hidden">
+                     <TableHeader className="bg-gradient-to-r from-slate-50 to-slate-100">
+                       <TableRow className="border-b-2 border-slate-200">
+                         {/* Fixed columns */}
+                         <TableHead rowSpan={2} className="bg-slate-50 font-semibold text-center border-r border-slate-200 min-w-[60px] sticky left-0 z-10">ID</TableHead>
+                         <TableHead rowSpan={2} className="bg-slate-50 font-semibold text-center border-r border-slate-200 min-w-[100px]">Type</TableHead>
+                         <TableHead rowSpan={2} className="bg-slate-50 font-semibold text-center border-r border-slate-200 min-w-[100px]">Currency Pair</TableHead>
+                         <TableHead rowSpan={2} className="bg-slate-50 font-semibold text-center border-r border-slate-200 min-w-[80px]">Quantity (%)</TableHead>
+                         <TableHead rowSpan={2} className="bg-slate-50 font-semibold text-center border-r border-slate-200 min-w-[100px]">Unit Price (Initial)</TableHead>
+                         <TableHead rowSpan={2} className="bg-slate-50 font-semibold text-center border-r border-slate-200 min-w-[100px]">Today Price</TableHead>
+                         <TableHead rowSpan={2} className="bg-slate-50 font-semibold text-center border-r border-slate-200 min-w-[100px]">MTM</TableHead>
+                         
+                         {/* Dynamic columns with conditional Export */}
+                         <TableHead colSpan={showExportColumns ? 2 : 1} className="text-center border-b border-r border-slate-200 bg-blue-50 font-semibold min-w-[120px]">Time to Maturity</TableHead>
+                         <TableHead colSpan={showExportColumns ? 2 : 1} className="text-center border-b border-r border-slate-200 bg-green-50 font-semibold min-w-[100px]">Spot Price</TableHead>
+                         <TableHead colSpan={showExportColumns ? 2 : 1} className="text-center border-b border-r border-slate-200 bg-yellow-50 font-semibold min-w-[100px]">Volatility (%)</TableHead>
+                         <TableHead colSpan={showExportColumns ? 2 : 1} className="text-center border-b border-r border-slate-200 bg-purple-50 font-semibold min-w-[120px]">Domestic Rate (%)</TableHead>
+                         <TableHead colSpan={showExportColumns ? 2 : 1} className="text-center border-b border-r border-slate-200 bg-pink-50 font-semibold min-w-[120px]">Foreign Rate (%)</TableHead>
+                         <TableHead colSpan={showExportColumns ? 2 : 1} className="text-center border-b border-r border-slate-200 bg-indigo-50 font-semibold min-w-[120px]">Forward Price</TableHead>
+                         <TableHead colSpan={showExportColumns ? 2 : 1} className="text-center border-b border-r border-slate-200 bg-orange-50 font-semibold min-w-[120px]">Strike Analysis</TableHead>
+                         
+                         {/* Fixed end columns */}
+                         <TableHead rowSpan={2} className="bg-slate-50 font-semibold text-center border-r border-slate-200 min-w-[80px]">Barrier 1</TableHead>
+                         <TableHead rowSpan={2} className="bg-slate-50 font-semibold text-center border-r border-slate-200 min-w-[80px]">Barrier 2</TableHead>
+                         <TableHead rowSpan={2} className="bg-slate-50 font-semibold text-center border-r border-slate-200 min-w-[80px]">Rebate (%)</TableHead>
+                         <TableHead rowSpan={2} className="bg-slate-50 font-semibold text-center border-r border-slate-200 min-w-[80px]">Volume</TableHead>
+                         <TableHead rowSpan={2} className="bg-slate-50 font-semibold text-center border-r border-slate-200 min-w-[100px]">Notional</TableHead>
+                         <TableHead rowSpan={2} className="bg-slate-50 font-semibold text-center border-r border-slate-200 min-w-[100px]">Maturity</TableHead>
+                         <TableHead rowSpan={2} className="bg-slate-50 font-semibold text-center border-r border-slate-200 min-w-[80px]">Status</TableHead>
+                         <TableHead rowSpan={2} className="bg-slate-50 font-semibold text-center min-w-[120px]">Actions</TableHead>
                     </TableRow>
-                    <TableRow>
-                      <TableHead className="text-xs text-blue-600">Export</TableHead>
-                      <TableHead className="text-xs text-green-600">Current</TableHead>
-                      <TableHead className="text-xs text-blue-600">Export</TableHead>
-                      <TableHead className="text-xs text-green-600">Current</TableHead>
-                      <TableHead className="text-xs text-blue-600">Export</TableHead>
-                      <TableHead className="text-xs text-green-600">Current</TableHead>
-                      <TableHead className="text-xs text-blue-600">Export</TableHead>
-                      <TableHead className="text-xs text-green-600">Current</TableHead>
-                      <TableHead className="text-xs text-blue-600">Export</TableHead>
-                      <TableHead className="text-xs text-green-600">Current</TableHead>
-                      <TableHead className="text-xs text-blue-600">Export</TableHead>
-                      <TableHead className="text-xs text-green-600">Current</TableHead>
-                      <TableHead className="text-xs text-blue-600">Export</TableHead>
-                      <TableHead className="text-xs text-green-600">Current</TableHead>
+                       <TableRow className="border-b border-slate-200">
+                         {/* Sub-headers for dynamic columns */}
+                         {showExportColumns && <TableHead className="text-xs text-blue-600 bg-blue-50 border-r border-slate-200 font-medium">Export</TableHead>}
+                         <TableHead className="text-xs text-green-600 bg-blue-50 border-r border-slate-200 font-medium">Current</TableHead>
+                         
+                         {showExportColumns && <TableHead className="text-xs text-blue-600 bg-green-50 border-r border-slate-200 font-medium">Export</TableHead>}
+                         <TableHead className="text-xs text-green-600 bg-green-50 border-r border-slate-200 font-medium">Current</TableHead>
+                         
+                         {showExportColumns && <TableHead className="text-xs text-blue-600 bg-yellow-50 border-r border-slate-200 font-medium">Export</TableHead>}
+                         <TableHead className="text-xs text-green-600 bg-yellow-50 border-r border-slate-200 font-medium">Current</TableHead>
+                         
+                         {showExportColumns && <TableHead className="text-xs text-blue-600 bg-purple-50 border-r border-slate-200 font-medium">Export</TableHead>}
+                         <TableHead className="text-xs text-green-600 bg-purple-50 border-r border-slate-200 font-medium">Current</TableHead>
+                         
+                         {showExportColumns && <TableHead className="text-xs text-blue-600 bg-pink-50 border-r border-slate-200 font-medium">Export</TableHead>}
+                         <TableHead className="text-xs text-green-600 bg-pink-50 border-r border-slate-200 font-medium">Current</TableHead>
+                         
+                         {showExportColumns && <TableHead className="text-xs text-blue-600 bg-indigo-50 border-r border-slate-200 font-medium">Export</TableHead>}
+                         <TableHead className="text-xs text-green-600 bg-indigo-50 border-r border-slate-200 font-medium">Current</TableHead>
+                         
+                         {showExportColumns && <TableHead className="text-xs text-blue-600 bg-orange-50 border-r border-slate-200 font-medium">Export</TableHead>}
+                         <TableHead className="text-xs text-green-600 bg-orange-50 font-medium">Current</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -1817,30 +1832,28 @@ const HedgingInstruments = () => {
                         // For long positions: MTM = Today's Price - Original Price  
                         mtmValue = todayPrice - unitPrice;
                       }
-                                              // Calculate time to maturity - TOUJOURS recalculer avec la date de valorisation actuelle
+                                              // Calculate time to maturity - Utiliser la même logique que Strategy Builder
                         let timeToMaturity = 0;
-                        let hasTimeMaturityError = false;
-                        
                         if (instrument.maturity) {
-                          // ✅ CORRECTION : Utiliser Strategy Start Date comme dans Strategy Builder
-                          timeToMaturity = calculateTimeToMaturity(instrument.maturity, strategyStartDate);
+                          // ✅ CORRECTION : Affichage Table vs Pricing logic
+                          const effectiveStrategyStartDate = instrument.exportStrategyStartDate || strategyStartDate;
+                          const effectiveHedgingStartDate = instrument.exportHedgingStartDate || hedgingStartDate;
                           
-                          // ✅ NOUVEAU : Vérifier si la hedging start date est cohérente avec la maturité
-                          const timeToMaturityFromHedging = calculateTimeToMaturity(instrument.maturity, hedgingStartDate);
+                          // ✅ CORRECTION : Utiliser exactement la même logique que Strategy Builder
+                          // Strategy Builder utilise calculationStartDate dérivé de strategyStartDate
+                          const strategyStartDateObj = new Date(instrument.exportStrategyStartDate || strategyStartDate);
+                          const calculationStartDate = new Date(strategyStartDateObj.getFullYear(), strategyStartDateObj.getMonth(), strategyStartDateObj.getDate());
+                          const calculationStartDateStr = calculationStartDate.toISOString().split('T')[0];
                           
-                          if (timeToMaturityFromHedging < 0) {
-                            console.warn(`[HEDGING DATE WARNING] ${instrument.id}: Hedging Start Date (${hedgingStartDate}) is after maturity (${instrument.maturity}). This instrument would already be expired.`);
-                            hasTimeMaturityError = true;
-                          }
+                          const displayTimeToMaturity = PricingService.calculateTimeToMaturity(instrument.maturity, calculationStartDateStr);
                           
-                          if (timeToMaturity < 0) {
-                            console.warn(`[VALUATION DATE WARNING] ${instrument.id}: Valuation Date (${valuationDate}) is after maturity (${instrument.maturity}). This instrument is expired.`);
-                            hasTimeMaturityError = true;
-                          }
+                          // Utiliser la même base de calcul que Strategy Builder
+                          timeToMaturity = displayTimeToMaturity;
+                          
+                          console.log(`[DEBUG] ${instrument.id}: Time to Maturity - Display & Pricing (Strategy Logic ${calculationStartDateStr}): ${displayTimeToMaturity.toFixed(4)}y, Export: ${instrument.exportTimeToMaturity ? instrument.exportTimeToMaturity.toFixed(4) + 'y' : 'N/A'}`);
                         } else {
                           console.warn(`No maturity date available for instrument ${instrument.id}`);
                           timeToMaturity = 0;
-                          hasTimeMaturityError = true;
                         }
                       // Use implied volatility from Detailed Results if available, otherwise use component volatility
                       const volatility = instrument.impliedVolatility || instrument.volatility || 0;
@@ -1849,41 +1862,56 @@ const HedgingInstruments = () => {
                       const calculatedNotional = unitPrice * volumeToHedge;
                       
                       return (
-                        <TableRow key={instrument.id}>
-                          <TableCell className="font-medium">{instrument.id}</TableCell>
-                          <TableCell>
-                            <div className="flex items-center gap-2">
+                         <TableRow key={instrument.id} className="hover:bg-slate-50/80 border-b border-slate-100 transition-all duration-200 group">
+                           <TableCell className="font-semibold bg-slate-50/90 border-r border-slate-200 text-center sticky left-0 z-10 text-slate-700">
+                             <div className="px-2 py-1 rounded-md bg-white shadow-sm">
+                               {instrument.id}
+                             </div>
+                           </TableCell>
+                          <TableCell className="py-3">
+                            <div className="flex items-center gap-3">
+                              <div className="p-2 rounded-lg bg-slate-100/50 group-hover:bg-slate-200/50 transition-colors">
                               {getInstrumentIcon(instrument.type)}
-                              <div>
-                                <div>{instrument.type}</div>
+                              </div>
+                              <div className="space-y-1">
+                                <div className="font-medium text-slate-900">{instrument.type}</div>
                                 {instrument.strategyName && (
-                                  <div className="text-xs text-muted-foreground">
+                                  <div className="text-xs text-slate-500 flex items-center gap-1">
+                                    <span className="w-1 h-1 bg-slate-400 rounded-full"></span>
                                     From: {instrument.strategyName}
                                   </div>
                                 )}
                                 {instrument.repricingData && (
-                                  <div className="text-xs text-blue-600">
+                                  <div className="text-xs text-blue-600 flex items-center gap-1">
+                                    <span className="w-1 h-1 bg-blue-400 rounded-full"></span>
                                     Period Data ✓
                                   </div>
                                 )}
                               </div>
                             </div>
                           </TableCell>
-                          <TableCell>
-                            <Badge variant="outline" className="font-mono">
+                          <TableCell className="text-center">
+                            <Badge variant="outline" className="font-mono font-semibold px-3 py-1 bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100 transition-colors">
                               {instrument.currency}
                             </Badge>
                           </TableCell>
-                          <TableCell className="font-mono text-center">
+                          <TableCell className="text-center">
+                            <div className="inline-flex items-center justify-center px-3 py-1 rounded-full bg-green-50 text-green-700 font-mono font-semibold text-sm">
                             {quantityToHedge.toFixed(1)}%
+                            </div>
                           </TableCell>
-                          <TableCell className="font-mono text-right">
-                            {unitPrice > 0 ? unitPrice.toFixed(4) : 'N/A'}
+                          <TableCell className="text-right">
+                            <div className="font-mono text-slate-700 font-semibold">
+                              {unitPrice > 0 ? unitPrice.toFixed(4) : 
+                                <span className="text-slate-400 italic">N/A</span>
+                              }
+                            </div>
                           </TableCell>
-                          <TableCell className="font-mono text-right">
-                            <span className={todayPrice !== 0 ? "text-blue-600" : "text-gray-500"}>
+                          <TableCell className="text-right">
+                            <div className="space-y-1">
+                              <div className={`font-mono font-semibold ${todayPrice !== 0 ? "text-blue-600" : "text-slate-400"}`}>
                               {todayPrice !== 0 ? todayPrice.toFixed(4) : 'N/A'}
-                            </span>
+                              </div>
                             {(() => {
                               // Détecter le modèle de pricing utilisé (EXACTEMENT la même logique que calculateTodayPrice)
                               const optionType = instrument.type.toLowerCase();
@@ -1920,19 +1948,25 @@ const HedgingInstruments = () => {
                               }
                               
                               return (
-                                <div className="text-xs text-green-600">
+                                <div className="text-xs text-green-600 bg-green-50 px-2 py-1 rounded-md">
                                   Model: {modelName}
                                 </div>
                               );
                             })()}
+                            </div>
                           </TableCell>
-                          <TableCell className="font-mono text-right">
-                            <span className={`font-medium ${getMTMColor(mtmValue)}`}>
+                          <TableCell className="text-right">
+                            <div className={`inline-flex items-center justify-center px-3 py-1 rounded-lg font-mono font-semibold ${
+                              mtmValue >= 0 
+                                ? 'bg-green-50 text-green-700 border border-green-200' 
+                                : 'bg-red-50 text-red-700 border border-red-200'
+                            }`}>
                               {Math.abs(mtmValue) > 0.0001 ? (mtmValue >= 0 ? '+' : '') + mtmValue.toFixed(4) : '0.0000'}
-                            </span>
+                            </div>
                           </TableCell>
-                          {/* Time to Maturity - Export */}
-                          <TableCell className="font-mono text-center bg-blue-50">
+                                                     {/* Time to Maturity - Export (conditional) */}
+                           {showExportColumns && (
+                             <TableCell className="font-mono text-center bg-blue-50 border-r border-slate-200">
                               <div className="text-xs text-blue-600">
                               {instrument.exportTimeToMaturity ? 
                                 `${instrument.exportTimeToMaturity.toFixed(4)}y` : 
@@ -1945,46 +1979,37 @@ const HedgingInstruments = () => {
                               </div>
                             )}
                           </TableCell>
+                           )}
                           
                           {/* Time to Maturity - Current */}
-                          <TableCell className={`font-mono text-center ${hasTimeMaturityError ? 'bg-red-50' : 'bg-green-50'}`}>
-                            {hasTimeMaturityError ? (
-                              <div className="text-xs text-red-600">
-                                <div className="flex items-center gap-1 justify-center">
-                                  <AlertCircle className="h-3 w-3" />
-                                  <span>Date Issue</span>
-                                </div>
-                                <div className="text-xs text-red-500 mt-1">
-                                  Check dates consistency
-                                </div>
+                           <TableCell className="text-center bg-green-50/80 border-r border-slate-200">
+                            <div className="space-y-1">
+                              <div className="text-sm font-mono font-semibold text-green-700">
+                              {timeToMaturity.toFixed(4)}y
+                            </div>
+                              <div className="text-xs text-green-600 bg-green-100/50 px-2 py-1 rounded-md">
+                              {(timeToMaturity * 365).toFixed(0)}d
                               </div>
-                            ) : (
-                              <>
-                                <div className="text-xs text-green-600">
-                                  {timeToMaturity.toFixed(4)}y
-                                </div>
-                                <div className="text-xs text-gray-500">
-                                  {(timeToMaturity * 365).toFixed(0)}d
-                                </div>
-                                <div className="text-xs text-gray-400">
-                                  Calc from {valuationDate}
-                                </div>
-                              </>
-                            )}
-                          </TableCell>
-                          
-                          {/* Spot Price - Export */}
-                          <TableCell className="font-mono text-center bg-blue-50">
-                            <div className="text-xs text-blue-600">
-                              {instrument.exportSpotPrice ? 
-                                instrument.exportSpotPrice.toFixed(6) : 
-                                'N/A'
-                              }
+                              <div className="text-xs text-green-500 bg-green-50 px-2 py-1 rounded-md">
+                                Calc from {instrument.exportStrategyStartDate || strategyStartDate} (Strategy Logic)
+                              </div>
                             </div>
                           </TableCell>
                           
+                                                     {/* Spot Price - Export (conditional) */}
+                           {showExportColumns && (
+                             <TableCell className="text-center bg-blue-50/80 border-r border-slate-200">
+                               <div className="text-sm font-mono font-semibold text-blue-700">
+                              {instrument.exportSpotPrice ? 
+                                instrument.exportSpotPrice.toFixed(6) : 
+                                   <span className="text-blue-400 italic">N/A</span>
+                              }
+                            </div>
+                          </TableCell>
+                           )}
+                          
                           {/* Spot Price - Current */}
-                          <TableCell className="font-mono text-center bg-green-50">
+                           <TableCell className="text-center bg-green-50/80 border-r border-slate-200">
                             {(() => {
                               const marketData = currencyMarketData[instrument.currency] || getMarketDataFromInstruments(instrument.currency) || { spot: 1.0000, volatility: 20, domesticRate: 1.0, foreignRate: 1.0 };
                               const currentSpot = instrument.impliedSpotPrice || marketData.spot;
@@ -2001,7 +2026,7 @@ const HedgingInstruments = () => {
                                         }
                                       }}
                                       placeholder={currentSpot.toFixed(6)}
-                                      className="w-20 h-6 text-xs text-center"
+                                      className="w-20 h-6 text-xs text-center bg-white border-green-200 focus:border-green-400 focus:ring-green-400/20"
                                       step="0.0001"
                                       min="0"
                                     />
@@ -2017,7 +2042,7 @@ const HedgingInstruments = () => {
                                       </Button>
                                     )}
                                   </div>
-                                <div className="text-xs text-green-600">
+                                <div className="text-xs text-green-600 bg-green-100/50 px-2 py-1 rounded-md">
                                     Using: {currentSpot.toFixed(6)}
                                   </div>
                                 </div>
@@ -2025,18 +2050,20 @@ const HedgingInstruments = () => {
                             })()}
                           </TableCell>
                           
-                          {/* Volatility - Export */}
-                          <TableCell className="font-mono text-center bg-blue-50">
-                            <div className="text-xs text-blue-600">
+                                                     {/* Volatility - Export (conditional) */}
+                           {showExportColumns && (
+                             <TableCell className="text-center bg-blue-50/80 border-r border-slate-200">
+                               <div className="text-sm font-mono font-semibold text-blue-700">
                               {instrument.exportVolatility ? 
                                 `${instrument.exportVolatility.toFixed(2)}%` : 
-                                'N/A'
+                                   <span className="text-blue-400 italic">N/A</span>
                               }
                             </div>
                           </TableCell>
+                           )}
                           
                           {/* Volatility - Current */}
-                          <TableCell className="font-mono text-center bg-green-50">
+                           <TableCell className="text-center bg-green-50/80 border-r border-slate-200">
                             <div className="space-y-1">
                               <div className="flex items-center gap-1">
                                 <Input
@@ -2049,7 +2076,7 @@ const HedgingInstruments = () => {
                                     }
                                   }}
                                   placeholder={volatility.toFixed(1)}
-                                  className="w-16 h-6 text-xs text-center"
+                                  className="w-16 h-6 text-xs text-center bg-white border-green-200 focus:border-green-400 focus:ring-green-400/20"
                                   step="0.1"
                                   min="0"
                                   max="100"
@@ -2067,14 +2094,15 @@ const HedgingInstruments = () => {
                                   </Button>
                                 )}
                               </div>
-                              <div className="text-xs text-green-600">
+                                                              <div className="text-xs text-green-600 bg-green-100/50 px-2 py-1 rounded-md">
                                 Using: {instrument.impliedVolatility || volatility}%
                               </div>
                             </div>
                           </TableCell>
                           
-                          {/* Domestic Rate - Export */}
-                          <TableCell className="font-mono text-center bg-blue-50">
+                                                     {/* Domestic Rate - Export (conditional) */}
+                           {showExportColumns && (
+                             <TableCell className="font-mono text-center bg-blue-50 border-r border-slate-200">
                             <div className="text-xs text-blue-600">
                               {instrument.exportDomesticRate ? 
                                 `${instrument.exportDomesticRate.toFixed(3)}%` : 
@@ -2082,6 +2110,7 @@ const HedgingInstruments = () => {
                               }
                                 </div>
                           </TableCell>
+                           )}
                           
                           {/* Domestic Rate - Current */}
                           <TableCell className="font-mono text-center bg-green-50">
@@ -2095,8 +2124,9 @@ const HedgingInstruments = () => {
                             })()}
                           </TableCell>
                           
-                          {/* Foreign Rate - Export */}
-                          <TableCell className="font-mono text-center bg-blue-50">
+                                                     {/* Foreign Rate - Export (conditional) */}
+                           {showExportColumns && (
+                             <TableCell className="font-mono text-center bg-blue-50 border-r border-slate-200">
                                 <div className="text-xs text-blue-600">
                               {instrument.exportForeignRate ? 
                                 `${instrument.exportForeignRate.toFixed(3)}%` : 
@@ -2104,6 +2134,7 @@ const HedgingInstruments = () => {
                               }
                                 </div>
                           </TableCell>
+                           )}
                           
                           {/* Foreign Rate - Current */}
                           <TableCell className="font-mono text-center bg-green-50">
@@ -2117,8 +2148,9 @@ const HedgingInstruments = () => {
                             })()}
                           </TableCell>
                           
-                          {/* Forward Price - Export */}
-                          <TableCell className="font-mono text-center bg-blue-50">
+                                                     {/* Forward Price - Export (conditional) */}
+                           {showExportColumns && (
+                             <TableCell className="font-mono text-center bg-blue-50 border-r border-slate-200">
                             <div className="text-xs text-blue-600">
                               {instrument.exportForwardPrice ? 
                                 instrument.exportForwardPrice.toFixed(6) : 
@@ -2126,17 +2158,22 @@ const HedgingInstruments = () => {
                               }
                             </div>
                           </TableCell>
+                           )}
                           
                           {/* Forward Price - Current */}
                           <TableCell className="font-mono text-center bg-green-50">
                             {(() => {
                               const marketData = currencyMarketData[instrument.currency] || getMarketDataFromInstruments(instrument.currency) || { spot: 1.0000, volatility: 20, domesticRate: 1.0, foreignRate: 1.0 };
-                              // ✅ CORRECTION : Utiliser Strategy Start Date pour cohérence avec Strategy Builder
-                              const currentTimeToMat = calculateTimeToMaturity(instrument.maturity, strategyStartDate);
+                              // ✅ CORRECTION : Utiliser la même logique que Strategy Builder pour cohérence
+                              const strategyStartDateObj = new Date(instrument.exportStrategyStartDate || strategyStartDate);
+                              const calculationStartDate = new Date(strategyStartDateObj.getFullYear(), strategyStartDateObj.getMonth(), strategyStartDateObj.getDate());
+                              const calculationStartDateStr = calculationStartDate.toISOString().split('T')[0];
+                              const currentTimeToMat = PricingService.calculateTimeToMaturity(instrument.maturity, calculationStartDateStr);
                               const r_d = marketData.domesticRate / 100;
                               const r_f = marketData.foreignRate / 100;
                               const currentSpot = instrument.impliedSpotPrice || marketData.spot;
                               const currentForward = PricingService.calculateFXForwardPrice(currentSpot, r_d, r_f, currentTimeToMat);
+                              console.log(`[DEBUG] ${instrument.id}: Forward Price - Current using Strategy Logic (${calculationStartDateStr}), TTM: ${currentTimeToMat.toFixed(4)}y, Forward: ${currentForward.toFixed(6)}`);
                               return (
                                 <div className="text-xs text-green-600">
                                   {currentForward.toFixed(6)}
@@ -2145,8 +2182,9 @@ const HedgingInstruments = () => {
                             })()}
                           </TableCell>
                           
-                          {/* Strike - Export */}
-                          <TableCell className="font-mono text-center bg-blue-50">
+                                                     {/* Strike - Export (conditional) */}
+                           {showExportColumns && (
+                             <TableCell className="font-mono text-center bg-blue-50 border-r border-slate-200">
                             <div className="text-xs text-blue-600">
                               {(() => {
                                 // Calculer le strike d'export basé sur les paramètres d'export
@@ -2165,6 +2203,7 @@ const HedgingInstruments = () => {
                               </div>
                             )}
                           </TableCell>
+                           )}
                           
                           {/* Strike - Current */}
                           <TableCell className="font-mono text-center bg-green-50">
@@ -2247,6 +2286,7 @@ const HedgingInstruments = () => {
                     })}
                   </TableBody>
                 </Table>
+                </div>
               )}
             </TabsContent>
           </Tabs>

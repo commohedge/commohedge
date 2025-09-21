@@ -1,0 +1,136 @@
+/* Sidebar Zoom Adaptation Styles */
+
+/* Base sidebar styles with zoom adaptation */
+.sidebar-zoom-adaptive {
+  /* Use CSS custom properties for dynamic sizing */
+  --sidebar-base-width: 16rem; /* 256px */
+  --sidebar-zoom-factor: 1;
+  
+  /* Calculate actual width based on zoom */
+  width: calc(var(--sidebar-base-width) * var(--sidebar-zoom-factor));
+  min-width: calc(var(--sidebar-base-width) * var(--sidebar-zoom-factor));
+  max-width: calc(var(--sidebar-base-width) * var(--sidebar-zoom-factor));
+  
+  /* Ensure smooth transitions */
+  transition: width 0.2s ease, min-width 0.2s ease, max-width 0.2s ease;
+}
+
+/* Adjust sidebar content spacing based on zoom */
+.sidebar-zoom-adaptive .sidebar-content {
+  /* Scale padding and margins based on zoom factor */
+  padding-left: calc(0.5rem * var(--sidebar-zoom-factor));
+  padding-right: calc(0.5rem * var(--sidebar-zoom-factor));
+}
+
+/* Adjust sidebar header spacing */
+.sidebar-zoom-adaptive .sidebar-header {
+  padding: calc(1.5rem * var(--sidebar-zoom-factor));
+}
+
+/* Adjust sidebar footer spacing */
+.sidebar-zoom-adaptive .sidebar-footer {
+  padding: calc(1rem * var(--sidebar-zoom-factor));
+}
+
+/* Adjust menu item spacing */
+.sidebar-zoom-adaptive .sidebar-menu-item {
+  margin-bottom: calc(0.25rem * var(--sidebar-zoom-factor));
+}
+
+/* Adjust group label spacing */
+.sidebar-zoom-adaptive .sidebar-group-label {
+  padding: calc(0.5rem * var(--sidebar-zoom-factor));
+  margin-bottom: calc(0.5rem * var(--sidebar-zoom-factor));
+}
+
+/* Adjust button sizes in sidebar */
+.sidebar-zoom-adaptive .sidebar-menu-button {
+  padding: calc(0.5rem * var(--sidebar-zoom-factor)) calc(0.75rem * var(--sidebar-zoom-factor));
+  font-size: calc(0.875rem * var(--sidebar-zoom-factor));
+}
+
+/* Adjust icon sizes */
+.sidebar-zoom-adaptive .sidebar-icon {
+  width: calc(1.25rem * var(--sidebar-zoom-factor));
+  height: calc(1.25rem * var(--sidebar-zoom-factor));
+}
+
+/* Adjust logo size */
+.sidebar-zoom-adaptive .sidebar-logo {
+  width: calc(3rem * var(--sidebar-zoom-factor));
+  height: calc(3rem * var(--sidebar-zoom-factor));
+}
+
+/* Adjust user avatar size */
+.sidebar-zoom-adaptive .sidebar-user-avatar {
+  width: calc(2rem * var(--sidebar-zoom-factor));
+  height: calc(2rem * var(--sidebar-zoom-factor));
+}
+
+/* Adjust badge sizes */
+.sidebar-zoom-adaptive .sidebar-badge {
+  font-size: calc(0.75rem * var(--sidebar-zoom-factor));
+  padding: calc(0.125rem * var(--sidebar-zoom-factor)) calc(0.375rem * var(--sidebar-zoom-factor));
+}
+
+/* Adjust market status card spacing */
+.sidebar-zoom-adaptive .market-status-card {
+  padding: calc(0.75rem * var(--sidebar-zoom-factor));
+  margin-bottom: calc(0.5rem * var(--sidebar-zoom-factor));
+}
+
+/* Adjust market status card content */
+.sidebar-zoom-adaptive .market-status-content {
+  font-size: calc(0.875rem * var(--sidebar-zoom-factor));
+}
+
+/* Adjust market status label */
+.sidebar-zoom-adaptive .market-status-label {
+  font-size: calc(0.75rem * var(--sidebar-zoom-factor));
+}
+
+/* Responsive adjustments for very small zoom levels */
+@media (max-width: 1024px) {
+  .sidebar-zoom-adaptive {
+    --sidebar-base-width: 14rem; /* Slightly smaller on tablets */
+  }
+}
+
+@media (max-width: 768px) {
+  .sidebar-zoom-adaptive {
+    --sidebar-base-width: 12rem; /* Even smaller on mobile */
+  }
+}
+
+/* Ensure sidebar doesn't break layout at extreme zoom levels */
+.sidebar-zoom-adaptive {
+  /* Prevent sidebar from becoming too narrow */
+  min-width: 8rem;
+  /* Prevent sidebar from becoming too wide */
+  max-width: 24rem;
+}
+
+/* Smooth zoom transitions */
+.sidebar-zoom-adaptive * {
+  transition: font-size 0.2s ease, padding 0.2s ease, margin 0.2s ease;
+}
+
+/* Dark theme adjustments */
+.dark .sidebar-zoom-adaptive {
+  /* Dark theme specific adjustments if needed */
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+  .sidebar-zoom-adaptive {
+    border-width: 2px;
+  }
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  .sidebar-zoom-adaptive,
+  .sidebar-zoom-adaptive * {
+    transition: none;
+  }
+}

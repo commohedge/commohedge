@@ -320,24 +320,33 @@ export const useFinancialData = (): UseFinancialDataReturn => {
               }
             }
             
-            // ✅ NOUVEAU : Calculer le volume d'exposition total pour cette échéance
-            let totalExposureVolume = totalNotional;
+            // ✅ CORRECTION : Calculer l'exposition sous-jacente réelle, pas la somme des instruments de couverture
+            let underlyingExposureVolume = 0;
             
             if (originalInstruments.length > 0) {
-              // Utiliser les volumes bruts des instruments originaux si disponibles
+              // Chercher le volume d'exposition original depuis les données de stratégie
               const maturityOriginalInstruments = originalInstruments.filter(orig => {
                 const origMaturity = new Date(orig.maturity).toISOString().split('T')[0];
                 return origMaturity === maturityStr;
               });
               
               if (maturityOriginalInstruments.length > 0) {
-                totalExposureVolume = maturityOriginalInstruments.reduce((sum, inst) => {
-                  const volume = inst.rawVolume !== undefined ? inst.rawVolume : 
-                             inst.exposureVolume !== undefined ? inst.exposureVolume : 
-                             inst.notional;
-                  return sum + volume;
-                }, 0);
+                // ✅ CORRECTION : Prendre le volume d'exposition brut (rawVolume ou exposureVolume) 
+                // du premier instrument car ils représentent tous la même exposition sous-jacente
+                const firstInstrument = maturityOriginalInstruments[0];
+                underlyingExposureVolume = firstInstrument.rawVolume !== undefined ? firstInstrument.rawVolume : 
+                                         firstInstrument.exposureVolume !== undefined ? firstInstrument.exposureVolume : 
+                                         firstInstrument.baseVolume !== undefined ? firstInstrument.baseVolume :
+                                         totalNotional; // Fallback sur totalNotional si pas d'info d'exposition
+                
+                console.log(`[FX EXPOSURE] ${currency}-${maturityStr}: Using underlying exposure volume ${underlyingExposureVolume} instead of sum of hedging instruments ${totalNotional}`);
+              } else {
+                // Pas d'instruments originaux pour cette maturité, utiliser totalNotional comme fallback
+                underlyingExposureVolume = totalNotional;
               }
+            } else {
+              // Pas d'instruments originaux, utiliser totalNotional
+              underlyingExposureVolume = totalNotional;
             }
             
             // Determine if this should be a receivable or payable based on instrument types
@@ -347,10 +356,10 @@ export const useFinancialData = (): UseFinancialDataReturn => {
             
             const exposureType: 'receivable' | 'payable' = hasReceivableInstruments ? 'receivable' : 'payable';
             
-            // ✅ CORRECTION : Utiliser le volume d'exposition total au lieu du notional
-            const exposureAmount = exposureType === 'receivable' ? totalExposureVolume : -totalExposureVolume;
+            // ✅ CORRECTION : Utiliser le volume d'exposition sous-jacente réel
+            const exposureAmount = exposureType === 'receivable' ? underlyingExposureVolume : -underlyingExposureVolume;
             
-            // ✅ CORRECTION : Calculer le montant couvert basé sur le hedge ratio réel
+            // ✅ CORRECTION : Calculer le montant couvert basé sur le hedge ratio réel ET l'exposition sous-jacente
             const hedgedAmount = (maxHedgeQuantity / 100) * Math.abs(exposureAmount);
             const finalHedgedAmount = exposureType === 'receivable' ? hedgedAmount : -hedgedAmount;
             
@@ -361,7 +370,7 @@ export const useFinancialData = (): UseFinancialDataReturn => {
                 amount: exposureAmount,
                 type: exposureType,
                 maturity: maturityDate,
-                description: `Auto-generated from ${maturityInstruments.length} hedging instrument(s) - Maturity: ${maturityStr} - Hedge Ratio: ${maxHedgeQuantity}%`,
+                description: `Auto-generated from ${maturityInstruments.length} hedging instrument(s) - Maturity: ${maturityStr} - Hedge Ratio: ${maxHedgeQuantity}% (Underlying: ${underlyingExposureVolume.toLocaleString()})`,
                 subsidiary: 'Auto-Generated',
                 hedgeRatio: maxHedgeQuantity,
                 hedgedAmount: finalHedgedAmount
@@ -375,7 +384,7 @@ export const useFinancialData = (): UseFinancialDataReturn => {
               const updatedExposure = {
                 amount: exposureAmount,
                 type: exposureType,
-                description: `Auto-updated from ${maturityInstruments.length} hedging instrument(s) - Maturity: ${maturityStr} - Hedge Ratio: ${maxHedgeQuantity}%`,
+                description: `Auto-updated from ${maturityInstruments.length} hedging instrument(s) - Maturity: ${maturityStr} - Hedge Ratio: ${maxHedgeQuantity}% (Underlying: ${underlyingExposureVolume.toLocaleString()})`,
                 hedgeRatio: maxHedgeQuantity,
                 hedgedAmount: finalHedgedAmount
               };

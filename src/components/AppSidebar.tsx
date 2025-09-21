@@ -37,6 +37,7 @@ import ExchangeRateService from "@/services/ExchangeRateService";
 import { ScrollArea } from "@/components/ui/ScrollArea";
 import { useAuth } from "@/hooks/useAuth";
 import { LogOut, User } from "lucide-react";
+import "@/styles/sidebar-zoom.css";
 
 const menuItems = [
   {
@@ -180,14 +181,14 @@ export function AppSidebar() {
   };
 
   return (
-    <Sidebar className="border-r border-border/40 bg-gradient-to-b from-background to-background/95">
-      <SidebarHeader className="p-6 border-b border-border/40">
+    <Sidebar className="border-r border-border/40 bg-gradient-to-b from-background to-background/95 sidebar-zoom-adaptive">
+      <SidebarHeader className="p-6 border-b border-border/40 sidebar-header">
         <div className="flex items-center space-x-3">
           <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-primary/10 border border-primary/20">
             <img 
               src={logo}
               alt="Company Logo" 
-              className="h-10 w-10 object-contain"
+              className="h-10 w-10 object-contain sidebar-logo"
               onError={(e) => {
                 e.currentTarget.style.display = 'none';
                 e.currentTarget.nextElementSibling?.classList.remove('hidden');
@@ -208,11 +209,11 @@ export function AppSidebar() {
         </div>
       </SidebarHeader>
       
-      <SidebarContent className="p-2">
+      <SidebarContent className="p-2 sidebar-content">
         <ScrollArea variant="sidebar" orientation="vertical" className="h-full">
         {/* Core Functions */}
         <SidebarGroup>
-          <SidebarGroupLabel className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-2 mb-2">
+          <SidebarGroupLabel className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-2 mb-2 sidebar-group-label">
             Core Functions
           </SidebarGroupLabel>
           <SidebarGroupContent>
@@ -222,13 +223,13 @@ export function AppSidebar() {
                   <SidebarMenuButton 
                     asChild 
                     isActive={isActive(item.url)}
-                    className="group relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all hover:bg-accent hover:text-accent-foreground"
+                    className="group relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all hover:bg-accent hover:text-accent-foreground sidebar-menu-button"
                   >
                     <Link to={item.url} className="flex items-center gap-3 w-full">
-                      <item.icon className="h-4 w-4 shrink-0" />
+                      <item.icon className="h-4 w-4 shrink-0 sidebar-icon" />
                       <span className="flex-1">{item.title}</span>
                       {item.badge && (
-                        <Badge variant="secondary" className="text-xs h-5">
+                        <Badge variant="secondary" className="text-xs h-5 sidebar-badge">
                           {item.badge}
                         </Badge>
                       )}
@@ -244,7 +245,7 @@ export function AppSidebar() {
 
         {/* Reporting */}
         <SidebarGroup>
-          <SidebarGroupLabel className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-2 mb-2">
+          <SidebarGroupLabel className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-2 mb-2 sidebar-group-label">
             Reporting
           </SidebarGroupLabel>
           <SidebarGroupContent>
@@ -254,10 +255,10 @@ export function AppSidebar() {
                   <SidebarMenuButton 
                     asChild 
                     isActive={isActive(item.url)}
-                    className="group relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all hover:bg-accent hover:text-accent-foreground"
+                    className="group relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all hover:bg-accent hover:text-accent-foreground sidebar-menu-button"
                   >
                     <Link to={item.url} className="flex items-center gap-3 w-full">
-                      <item.icon className="h-4 w-4 shrink-0" />
+                      <item.icon className="h-4 w-4 shrink-0 sidebar-icon" />
                       <span className="flex-1">{item.title}</span>
                     </Link>
                   </SidebarMenuButton>
@@ -271,7 +272,7 @@ export function AppSidebar() {
 
         {/* Management */}
         <SidebarGroup>
-          <SidebarGroupLabel className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-2 mb-2">
+          <SidebarGroupLabel className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-2 mb-2 sidebar-group-label">
             Management
           </SidebarGroupLabel>
           <SidebarGroupContent>
@@ -281,10 +282,10 @@ export function AppSidebar() {
                   <SidebarMenuButton 
                     asChild 
                     isActive={isActive(item.url)}
-                    className="group relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all hover:bg-accent hover:text-accent-foreground"
+                    className="group relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all hover:bg-accent hover:text-accent-foreground sidebar-menu-button"
                   >
                     <Link to={item.url} className="flex items-center gap-3 w-full">
-                      <item.icon className="h-4 w-4 shrink-0" />
+                      <item.icon className="h-4 w-4 shrink-0 sidebar-icon" />
                       <span className="flex-1">{item.title}</span>
                     </Link>
                   </SidebarMenuButton>
@@ -296,7 +297,7 @@ export function AppSidebar() {
 
         {/* Risk Alerts */}
         <SidebarGroup className="mt-6">
-          <SidebarGroupLabel className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-2 mb-2">
+          <SidebarGroupLabel className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-2 mb-2 sidebar-group-label">
             Risk Alerts
           </SidebarGroupLabel>
           <SidebarGroupContent>
@@ -326,13 +327,13 @@ export function AppSidebar() {
         </ScrollArea>
       </SidebarContent>
 
-      <SidebarFooter className="p-4 border-t border-border/40">
+      <SidebarFooter className="p-4 border-t border-border/40 sidebar-footer">
         <div className="space-y-3">
           {/* User Info */}
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="h-8 w-8 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full flex items-center justify-center">
-                <User className="h-4 w-4 text-white" />
+              <div className="h-8 w-8 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full flex items-center justify-center sidebar-user-avatar">
+                <User className="h-4 w-4 text-white sidebar-icon" />
               </div>
               <div className="flex-1 min-w-0">
                 <div className="text-sm font-medium text-foreground truncate">
@@ -359,7 +360,7 @@ export function AppSidebar() {
 
           {/* Market Status */}
           <div className="space-y-2">
-            <div className="flex items-center justify-between text-xs text-muted-foreground">
+            <div className="flex items-center justify-between text-xs text-muted-foreground sidebar-group-label">
               <span>Market Status</span>
               <div className="flex items-center gap-1">
                 <div className="h-2 w-2 bg-green-500 rounded-full animate-pulse"></div>
@@ -368,13 +369,13 @@ export function AppSidebar() {
             </div>
             
             <div className="grid grid-cols-2 gap-2 text-xs">
-              <div className="bg-muted/50 rounded p-2">
-                <div className="text-muted-foreground">EUR/USD</div>
-                <div className="font-mono font-medium">{marketStatusData.EUR_USD.toFixed(4)}</div>
+              <div className="bg-muted/50 rounded p-2 market-status-card">
+                <div className="text-muted-foreground market-status-label">EUR/USD</div>
+                <div className="font-mono font-medium market-status-content">{marketStatusData.EUR_USD.toFixed(4)}</div>
               </div>
-              <div className="bg-muted/50 rounded p-2">
-                <div className="text-muted-foreground">GBP/USD</div>
-                <div className="font-mono font-medium">{marketStatusData.GBP_USD.toFixed(4)}</div>
+              <div className="bg-muted/50 rounded p-2 market-status-card">
+                <div className="text-muted-foreground market-status-label">GBP/USD</div>
+                <div className="font-mono font-medium market-status-content">{marketStatusData.GBP_USD.toFixed(4)}</div>
               </div>
             </div>
           </div>
