@@ -4155,7 +4155,7 @@ const Index = () => {
       },
       strategy: [],
       results: null,
-      displayResults: null, // Important: clear display results too
+      // displayResults removed - not part of CalculatorState interface
       payoffData: [],
       manualForwards: {},
       realPrices: {},
@@ -6782,7 +6782,6 @@ const pricingFunctions = {
                     checked={params.useCustomPeriods}
                     onCheckedChange={toggleCustomPeriods}
                     id="useCustomPeriods"
-                      size="sm"
                   />
                     <label htmlFor="useCustomPeriods" className="text-sm font-medium cursor-pointer flex items-center gap-2">
                       <Calendar size={16} />
@@ -6874,7 +6873,6 @@ const pricingFunctions = {
                     checked={realPriceParams.useSimulation}
                       onCheckedChange={(checked) => setRealPriceParams(prev => ({...prev, useSimulation: checked}))}
                       id="useMonteCarloSimulation"
-                        size="sm"
                   />
                       <label htmlFor="useMonteCarloSimulation" className="text-xs font-medium cursor-pointer">
                       Use Monte Carlo Simulation for Real Prices
@@ -8493,35 +8491,35 @@ const pricingFunctions = {
                         </tr>
                       </thead>
                       <tbody>
-                        {Object.entries(yearlyResults).map(([year, data]) => (
+                        {Object.entries(yearlyResults).map(([year, data]: [string, any]) => (
                           <tr key={year}>
                             <td className="border p-2 font-medium">{year}</td>
                             <td className="border p-2 text-right">
-                              {data.hedgedCost.toLocaleString(undefined, {
+                              {(data.hedgedCost || 0).toLocaleString(undefined, {
                                 minimumFractionDigits: 2,
                                 maximumFractionDigits: 2
                               })}
                             </td>
                             <td className="border p-2 text-right">
-                              {data.unhedgedCost.toLocaleString(undefined, {
+                              {(data.unhedgedCost || 0).toLocaleString(undefined, {
                                 minimumFractionDigits: 2,
                                 maximumFractionDigits: 2
                               })}
                             </td>
                             <td className="border p-2 text-right">
-                              {data.deltaPnL.toLocaleString(undefined, {
+                              {(data.deltaPnL || 0).toLocaleString(undefined, {
                                 minimumFractionDigits: 2,
                                 maximumFractionDigits: 2
                               })}
                             </td>
                             <td className="border p-2 text-right">
-                              {data.strategyPremium.toLocaleString(undefined, {
+                              {(data.strategyPremium || 0).toLocaleString(undefined, {
                                 minimumFractionDigits: 2,
                                 maximumFractionDigits: 2
                               })}
                             </td>
                             <td className="border p-2 text-right">
-                                  {(((data.deltaPnL / Math.abs(data.unhedgedCost)) * 100).toFixed(2) + '%')}
+                                  {data.unhedgedCost !== 0 ? (((data.deltaPnL / Math.abs(data.unhedgedCost)) * 100).toFixed(2) + '%') : '0%'}
                             </td>
                           </tr>
                         ))}

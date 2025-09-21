@@ -1757,12 +1757,12 @@ const HedgingInstruments = () => {
                   </div>
                 </div>
               ) : (
-                                 <div className="overflow-x-auto">
+                                 <div className="overflow-x-auto" style={{ maxWidth: 'calc(100vw - 280px)' }}>
                    <Table className="min-w-full border-collapse bg-white shadow-sm rounded-lg overflow-hidden">
                      <TableHeader className="bg-gradient-to-r from-slate-50 to-slate-100">
                        <TableRow className="border-b-2 border-slate-200">
                          {/* Fixed columns */}
-                         <TableHead rowSpan={2} className="bg-slate-50 font-semibold text-center border-r border-slate-200 min-w-[60px] sticky left-0 z-10">ID</TableHead>
+                         <TableHead rowSpan={2} className="bg-slate-50 font-semibold text-center border-r border-slate-200 min-w-[60px] sticky left-0 z-[5]">ID</TableHead>
                          <TableHead rowSpan={2} className="bg-slate-50 font-semibold text-center border-r border-slate-200 min-w-[100px]">Type</TableHead>
                          <TableHead rowSpan={2} className="bg-slate-50 font-semibold text-center border-r border-slate-200 min-w-[100px]">Currency Pair</TableHead>
                          <TableHead rowSpan={2} className="bg-slate-50 font-semibold text-center border-r border-slate-200 min-w-[80px]">Quantity (%)</TableHead>
@@ -1863,7 +1863,7 @@ const HedgingInstruments = () => {
                       
                       return (
                          <TableRow key={instrument.id} className="hover:bg-slate-50/80 border-b border-slate-100 transition-all duration-200 group">
-                           <TableCell className="font-semibold bg-slate-50/90 border-r border-slate-200 text-center sticky left-0 z-10 text-slate-700">
+                           <TableCell className="font-semibold bg-slate-50/90 border-r border-slate-200 text-center sticky left-0 z-[5] text-slate-700">
                              <div className="px-2 py-1 rounded-md bg-white shadow-sm">
                                {instrument.id}
                              </div>

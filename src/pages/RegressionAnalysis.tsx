@@ -28,7 +28,14 @@ import {
   FileText,
   ArrowRight,
   RefreshCcw,
-  DollarSign
+  DollarSign,
+  Save,
+  History,
+  Clock,
+  FolderOpen,
+  Trash2,
+  Download,
+  Eye
 } from "lucide-react";
 import {
   LineChart,
@@ -62,6 +69,16 @@ import {
   SelectTrigger, 
   SelectValue 
 } from "@/components/ui/select";
+import { 
+  Dialog, 
+  DialogContent, 
+  DialogDescription, 
+  DialogFooter, 
+  DialogHeader, 
+  DialogTitle, 
+  DialogTrigger 
+} from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
 import { toast } from "@/hooks/use-toast";
 
 // ===============================
@@ -80,6 +97,24 @@ interface Dataset {
   headers: string[];
   numericColumns: string[];
   rowCount: number;
+}
+
+// Interface pour l'historique des analyses
+interface SavedAnalysis {
+  id: string;
+  name: string;
+  description: string;
+  timestamp: number;
+  datasets: Dataset[];
+  selectedVariables: {
+    x: VariableSelection | null;
+    y: VariableSelection | null;
+  };
+  regressionResults: Record<RegressionType, RegressionResult | null>;
+  calculatedModels: RegressionType[];
+  selectedModel: RegressionType;
+  polynomialDegree: number;
+  combinedData: CombinedData | null;
 }
 
 interface VariableSelection {
@@ -2727,6 +2762,64 @@ const ModelComparison: React.FC<ModelComparisonProps> = ({
 };
 
 // ===============================
+// HISTORY MANAGEMENT FUNCTIONS
+// ===============================
+
+const ANALYSIS_STORAGE_KEY = 'regression_analysis_history';
+
+// Fonction pour sauvegarder une analyse
+function saveAnalysisToStorage(analysis: SavedAnalysis): void {
+  try {
+    const existingHistory = JSON.parse(localStorage.getItem(ANALYSIS_STORAGE_KEY) || '[]');
+    const updatedHistory = [analysis, ...existingHistory.filter((item: SavedAnalysis) => item.id !== analysis.id)];
+    
+    // Limiter à 50 analyses max pour éviter la surcharge
+    const limitedHistory = updatedHistory.slice(0, 50);
+    localStorage.setItem(ANALYSIS_STORAGE_KEY, JSON.stringify(limitedHistory));
+  } catch (error) {
+    console.error('Error saving analysis to storage:', error);
+    throw error;
+  }
+}
+
+// Fonction pour charger l'historique des analyses
+function loadAnalysisHistory(): SavedAnalysis[] {
+  try {
+    const history = localStorage.getItem(ANALYSIS_STORAGE_KEY);
+    return history ? JSON.parse(history) : [];
+  } catch (error) {
+    console.error('Error loading analysis history:', error);
+    return [];
+  }
+}
+
+// Fonction pour supprimer une analyse de l'historique
+function deleteAnalysisFromStorage(analysisId: string): void {
+  try {
+    const existingHistory = JSON.parse(localStorage.getItem(ANALYSIS_STORAGE_KEY) || '[]');
+    const updatedHistory = existingHistory.filter((item: SavedAnalysis) => item.id !== analysisId);
+    localStorage.setItem(ANALYSIS_STORAGE_KEY, JSON.stringify(updatedHistory));
+  } catch (error) {
+    console.error('Error deleting analysis from storage:', error);
+    throw error;
+  }
+}
+
+// Fonction pour exporter une analyse en JSON
+function exportAnalysisAsJSON(analysis: SavedAnalysis): void {
+  const dataStr = JSON.stringify(analysis, null, 2);
+  const dataBlob = new Blob([dataStr], { type: 'application/json' });
+  const url = URL.createObjectURL(dataBlob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `regression_analysis_${analysis.name}_${new Date().toISOString().split('T')[0]}.json`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
+// ===============================
 // MAIN COMPONENT
 // ===============================
 
@@ -2757,11 +2850,220 @@ const RegressionAnalysis: React.FC = () => {
   const [isCalculatingAll, setIsCalculatingAll] = useState(false);
   const [polynomialDegree, setPolynomialDegree] = useState(2);
 
+  // History management state
+  const [analysisHistory, setAnalysisHistory] = useState<SavedAnalysis[]>([]);
+  const [isSaveDialogOpen, setIsSaveDialogOpen] = useState(false);
+  const [isHistoryDialogOpen, setIsHistoryDialogOpen] = useState(false);
+  const [saveForm, setSaveForm] = useState({
+    name: '',
+    description: ''
+  });
+
   // Available regression types based on current data
   const availableTypes = useMemo(() => {
     if (!combinedData) return ['linear', 'polynomial'] as RegressionType[];
     return getAvailableRegressionTypes(combinedData.dataPoints);
   }, [combinedData]);
+
+  // Load analysis history on component mount
+  useEffect(() => {
+    const history = loadAnalysisHistory();
+    setAnalysisHistory(history);
+  }, []);
+
+  // Function to save current analysis
+  const handleSaveAnalysis = useCallback(() => {
+    if (!saveForm.name.trim()) {
+      toast({
+        title: "Error",
+        description: "Please provide a name for the analysis",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    if (!isDataValidated || !combinedData) {
+      toast({
+        title: "Error", 
+        description: "Please validate your data before saving",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    try {
+      const analysis: SavedAnalysis = {
+        id: `analysis_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        name: saveForm.name.trim(),
+        description: saveForm.description.trim(),
+        timestamp: Date.now(),
+        datasets,
+        selectedVariables,
+        regressionResults,
+        calculatedModels: Array.from(calculatedModels),
+        selectedModel,
+        polynomialDegree,
+        combinedData
+      };
+
+      saveAnalysisToStorage(analysis);
+      const updatedHistory = loadAnalysisHistory();
+      setAnalysisHistory(updatedHistory);
+      
+      toast({
+        title: "Analysis Saved",
+        description: `Analysis "${analysis.name}" has been saved successfully`
+      });
+
+      setSaveForm({ name: '', description: '' });
+      setIsSaveDialogOpen(false);
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to save analysis. Please try again.",
+        variant: "destructive"
+      });
+    }
+  }, [saveForm, isDataValidated, combinedData, datasets, selectedVariables, regressionResults, calculatedModels, selectedModel, polynomialDegree]);
+
+  // Function to reconstruct prediction functions for loaded regression results
+  const reconstructRegressionFunctions = useCallback((results: Record<RegressionType, RegressionResult | null>) => {
+    const reconstructedResults: Record<RegressionType, RegressionResult | null> = {
+      linear: null,
+      polynomial: null,
+      exponential: null,
+      logarithmic: null,
+      power: null,
+      logistic: null
+    };
+
+    Object.entries(results).forEach(([type, result]) => {
+      if (result && result.coefficients) {
+        const regressionType = type as RegressionType;
+        
+        // Reconstruct the predict function based on the type and coefficients
+        let predictFunction: (x: number) => number;
+        
+        switch (regressionType) {
+          case 'linear':
+            predictFunction = (x: number) => result.coefficients[1] * x + result.coefficients[0];
+            break;
+          case 'polynomial':
+            predictFunction = (x: number) => {
+              let sum = 0;
+              for (let i = 0; i < result.coefficients.length; i++) {
+                sum += result.coefficients[i] * Math.pow(x, i);
+              }
+              return sum;
+            };
+            break;
+          case 'exponential':
+            predictFunction = (x: number) => result.coefficients[0] * Math.exp(result.coefficients[1] * x);
+            break;
+          case 'logarithmic':
+            predictFunction = (x: number) => x > 0 ? result.coefficients[0] + result.coefficients[1] * Math.log(x) : NaN;
+            break;
+          case 'power':
+            predictFunction = (x: number) => x > 0 ? result.coefficients[0] * Math.pow(x, result.coefficients[1]) : NaN;
+            break;
+          case 'logistic':
+            predictFunction = (x: number) => result.coefficients[2] / (1 + Math.exp(-(result.coefficients[0] + result.coefficients[1] * x)));
+            break;
+          default:
+            predictFunction = () => NaN;
+        }
+
+        reconstructedResults[regressionType] = {
+          ...result,
+          predict: predictFunction
+        };
+      }
+    });
+
+    return reconstructedResults;
+  }, []);
+
+  // Function to load an analysis from history
+  const handleLoadAnalysis = useCallback((analysis: SavedAnalysis) => {
+    try {
+      console.log('Loading analysis:', analysis);
+      
+      // Restore all states in the correct order
+      setDatasets(analysis.datasets || []);
+      setSelectedVariables(analysis.selectedVariables || { x: null, y: null });
+      setPolynomialDegree(analysis.polynomialDegree || 2);
+      setCombinedData(analysis.combinedData);
+      setIsDataValidated(!!analysis.combinedData);
+      
+      // Reconstruct regression results with proper predict functions
+      const reconstructedResults = reconstructRegressionFunctions(analysis.regressionResults || {
+        linear: null,
+        polynomial: null,
+        exponential: null,
+        logarithmic: null,
+        power: null,
+        logistic: null
+      });
+      
+      setRegressionResults(reconstructedResults);
+      setCalculatedModels(new Set(analysis.calculatedModels || []));
+      setSelectedModel(analysis.selectedModel || 'linear');
+
+      // Small delay to ensure all states are set before showing success
+      setTimeout(() => {
+        toast({
+          title: "Analysis Loaded",
+          description: `Analysis "${analysis.name}" has been loaded successfully`
+        });
+      }, 100);
+
+      setIsHistoryDialogOpen(false);
+    } catch (error) {
+      console.error('Error loading analysis:', error);
+      toast({
+        title: "Error",
+        description: "Failed to load analysis. Please try again.",
+        variant: "destructive"
+      });
+    }
+  }, [reconstructRegressionFunctions]);
+
+  // Function to delete an analysis from history
+  const handleDeleteAnalysis = useCallback((analysisId: string) => {
+    try {
+      deleteAnalysisFromStorage(analysisId);
+      const updatedHistory = loadAnalysisHistory();
+      setAnalysisHistory(updatedHistory);
+      
+      toast({
+        title: "Analysis Deleted",
+        description: "Analysis has been deleted from history"
+      });
+    } catch (error) {
+      toast({
+        title: "Error", 
+        description: "Failed to delete analysis. Please try again.",
+        variant: "destructive"
+      });
+    }
+  }, []);
+
+  // Function to export analysis
+  const handleExportAnalysis = useCallback((analysis: SavedAnalysis) => {
+    try {
+      exportAnalysisAsJSON(analysis);
+      toast({
+        title: "Analysis Exported",
+        description: "Analysis has been exported as JSON file"
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to export analysis. Please try again.",
+        variant: "destructive"
+      });
+    }
+  }, []);
 
   // Handle variable selection
   const handleVariableSelect = useCallback((variable: VariableSelection, axis: 'x' | 'y') => {
@@ -2814,8 +3116,9 @@ const RegressionAnalysis: React.FC = () => {
     });
   }, [datasets, selectedVariables]);
 
+
   // Calculate single regression model
-  const calculateModel = useCallback((type: RegressionType) => {
+  const calculateModel = useCallback(async (type: RegressionType) => {
     if (!combinedData) {
       toast({
         title: "Missing data",
@@ -2825,13 +3128,11 @@ const RegressionAnalysis: React.FC = () => {
       return;
     }
 
-    const degree = type === 'polynomial' ? polynomialDegree : 2;
-    
     try {
       const result = performRegression(
-        combinedData.dataPoints, 
-        type, 
-        degree,
+        combinedData.dataPoints,
+        type,
+        polynomialDegree,
         combinedData.xLabel,
         combinedData.yLabel
       );
@@ -2844,34 +3145,13 @@ const RegressionAnalysis: React.FC = () => {
         setCalculatedModels(prev => new Set([...prev, type]));
         
         toast({
-          title: `${type} model calculated`,
-          description: `R² = ${result.r2.toFixed(4)}`,
-          variant: "default"
+          title: "Model Calculated",
+          description: `${type.charAt(0).toUpperCase() + type.slice(1)} regression completed successfully`
         });
       } else {
-        let errorMessage = `Unable to calculate ${type} model`;
-        
-        // Provide specific error messages based on model type
-        switch (type) {
-          case 'exponential':
-            errorMessage += ". Y values must all be positive.";
-            break;
-          case 'logarithmic':
-            errorMessage += ". X values must all be positive.";
-            break;
-          case 'power':
-            errorMessage += ". X and Y values must all be positive.";
-            break;
-          case 'polynomial':
-            errorMessage += `. Need at least ${degree + 1} data points.`;
-            break;
-          default:
-            errorMessage += ". Check your data and try again.";
-        }
-        
         toast({
-          title: "Calculation Error",
-          description: errorMessage,
+          title: "Calculation Failed",
+          description: `Unable to calculate ${type} regression with current data`,
           variant: "destructive"
         });
       }
@@ -2879,7 +3159,7 @@ const RegressionAnalysis: React.FC = () => {
       console.error(`Error calculating ${type} model:`, error);
       toast({
         title: "Calculation Error",
-        description: `Technical error during ${type} model calculation`,
+        description: `Error calculating ${type} regression model`,
         variant: "destructive"
       });
     }
@@ -2985,10 +3265,156 @@ const RegressionAnalysis: React.FC = () => {
               Analyze relationships between variables with 6 types of regression models
             </p>
           </div>
-          <Badge variant="outline" className="text-lg px-3 py-1">
-            <TrendingUp className="h-4 w-4 mr-2" />
-            Multi-Datasets
-          </Badge>
+          <div className="flex items-center gap-3">
+            {/* Save Analysis Button */}
+            <Dialog open={isSaveDialogOpen} onOpenChange={setIsSaveDialogOpen}>
+              <DialogTrigger asChild>
+                <Button 
+                  variant="outline" 
+                  disabled={!isDataValidated}
+                  className="flex items-center gap-2"
+                >
+                  <Save className="h-4 w-4" />
+                  Save Analysis
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-[500px]">
+                <DialogHeader>
+                  <DialogTitle>Save Regression Analysis</DialogTitle>
+                  <DialogDescription>
+                    Save your current analysis to access it later without recalculation.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="grid gap-4 py-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="analysis-name">Analysis Name</Label>
+                    <Input
+                      id="analysis-name"
+                      value={saveForm.name}
+                      onChange={(e) => setSaveForm(prev => ({ ...prev, name: e.target.value }))}
+                      placeholder="e.g., Sales vs Marketing Spend Analysis"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="analysis-description">Description (Optional)</Label>
+                    <Textarea
+                      id="analysis-description"
+                      value={saveForm.description}
+                      onChange={(e) => setSaveForm(prev => ({ ...prev, description: e.target.value }))}
+                      placeholder="Add any notes about this analysis..."
+                      rows={3}
+                    />
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setIsSaveDialogOpen(false)}>
+                    Cancel
+                  </Button>
+                  <Button onClick={handleSaveAnalysis}>
+                    <Save className="h-4 w-4 mr-2" />
+                    Save Analysis
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+
+            {/* History Button */}
+            <Dialog open={isHistoryDialogOpen} onOpenChange={setIsHistoryDialogOpen}>
+              <DialogTrigger asChild>
+                <Button 
+                  variant="outline"
+                  className="flex items-center gap-2"
+                >
+                  <History className="h-4 w-4" />
+                  History ({analysisHistory.length})
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-[800px] max-h-[600px]">
+                <DialogHeader>
+                  <DialogTitle>Analysis History</DialogTitle>
+                  <DialogDescription>
+                    Load, export, or delete previous regression analyses.
+                  </DialogDescription>
+                </DialogHeader>
+                <ScrollArea className="h-[400px] w-full">
+                  {analysisHistory.length === 0 ? (
+                    <div className="text-center py-8 text-muted-foreground">
+                      <History className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                      <p>No saved analyses yet.</p>
+                      <p className="text-sm">Create and save your first analysis to see it here.</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {analysisHistory.map((analysis) => (
+                        <Card key={analysis.id} className="p-4">
+                          <div className="flex items-start justify-between">
+                            <div className="flex-1">
+                              <h4 className="font-medium text-lg">{analysis.name}</h4>
+                              {analysis.description && (
+                                <p className="text-sm text-muted-foreground mt-1">{analysis.description}</p>
+                              )}
+                              <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
+                                <div className="flex items-center gap-1">
+                                  <Clock className="h-3 w-3" />
+                                  {new Date(analysis.timestamp).toLocaleDateString()} {new Date(analysis.timestamp).toLocaleTimeString()}
+                                </div>
+                                <div className="flex items-center gap-1">
+                                  <Database className="h-3 w-3" />
+                                  {analysis.datasets.length} dataset(s)
+                                </div>
+                                <div className="flex items-center gap-1">
+                                  <Calculator className="h-3 w-3" />
+                                  {analysis.calculatedModels.length} model(s)
+                                </div>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-1 ml-4">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleLoadAnalysis(analysis)}
+                                className="h-8 px-2"
+                              >
+                                <FolderOpen className="h-3 w-3 mr-1" />
+                                Load
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleExportAnalysis(analysis)}
+                                className="h-8 px-2"
+                              >
+                                <Download className="h-3 w-3 mr-1" />
+                                Export
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleDeleteAnalysis(analysis.id)}
+                                className="h-8 px-2 text-destructive hover:text-destructive"
+                              >
+                                <Trash2 className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          </div>
+                        </Card>
+                      ))}
+                    </div>
+                  )}
+                </ScrollArea>
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setIsHistoryDialogOpen(false)}>
+                    Close
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+
+            <Badge variant="outline" className="text-lg px-3 py-1">
+              <TrendingUp className="h-4 w-4 mr-2" />
+              Multi-Datasets
+            </Badge>
+          </div>
         </div>
 
         <Tabs defaultValue="data" className="space-y-6">
@@ -3023,7 +3449,8 @@ const RegressionAnalysis: React.FC = () => {
           </TabsContent>
 
           <TabsContent value="models" className="space-y-6">
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {isDataValidated && combinedData ? (
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               <div className="lg:col-span-1">
                 <ModelSelector
                   selectedModel={selectedModel}
@@ -3066,27 +3493,46 @@ const RegressionAnalysis: React.FC = () => {
               </div>
               
               <div className="lg:col-span-2">
-                {combinedData && (
-                  <RegressionChart
-                    data={combinedData.dataPoints}
-                    regression={currentRegression}
-                    title={`${selectedModel.charAt(0).toUpperCase() + selectedModel.slice(1)} Regression`}
-                    xLabel={combinedData.xLabel}
-                    yLabel={combinedData.yLabel}
-                  />
-                )}
+                <RegressionChart
+                  data={combinedData.dataPoints}
+                  regression={currentRegression}
+                  title={`${selectedModel.charAt(0).toUpperCase() + selectedModel.slice(1)} Regression`}
+                  xLabel={combinedData.xLabel}
+                  yLabel={combinedData.yLabel}
+                />
               </div>
             </div>
+            ) : (
+              <Card>
+                <CardContent className="flex items-center justify-center py-8">
+                  <div className="text-center">
+                    <AlertTriangle className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                    <h3 className="text-lg font-semibold mb-2">No Data Available</h3>
+                    <p className="text-muted-foreground">Please validate your data in the Data tab first.</p>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
           </TabsContent>
 
           <TabsContent value="results" className="space-y-6">
-            {combinedData && (
+            {isDataValidated && combinedData ? (
               <RegressionTable
                 data={combinedData.dataPoints}
                 regression={currentRegression}
                 xLabel={combinedData.xLabel}
                 yLabel={combinedData.yLabel}
               />
+            ) : (
+              <Card>
+                <CardContent className="flex items-center justify-center py-8">
+                  <div className="text-center">
+                    <AlertTriangle className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                    <h3 className="text-lg font-semibold mb-2">No Results Available</h3>
+                    <p className="text-muted-foreground">Please validate your data and calculate models first.</p>
+                  </div>
+                </CardContent>
+              </Card>
             )}
           </TabsContent>
 
