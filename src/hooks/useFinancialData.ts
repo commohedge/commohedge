@@ -356,11 +356,12 @@ export const useFinancialData = (): UseFinancialDataReturn => {
             
             const exposureType: 'receivable' | 'payable' = hasReceivableInstruments ? 'receivable' : 'payable';
             
-            // ✅ CORRECTION : Utiliser le volume d'exposition sous-jacente réel
-            const exposureAmount = exposureType === 'receivable' ? underlyingExposureVolume : -underlyingExposureVolume;
+            // ✅ CORRECTION : Utiliser la somme des notional des instruments de couverture
+            const totalHedgingNotional = maturityInstruments.reduce((sum, inst) => sum + Math.abs(inst.notional), 0);
+            const exposureAmount = exposureType === 'receivable' ? totalHedgingNotional : -totalHedgingNotional;
             
-            // ✅ CORRECTION : Calculer le montant couvert basé sur le hedge ratio réel ET l'exposition sous-jacente
-            const hedgedAmount = (maxHedgeQuantity / 100) * Math.abs(exposureAmount);
+            // ✅ CORRECTION : Le montant couvert = somme des notional des instruments
+            const hedgedAmount = totalHedgingNotional;
             const finalHedgedAmount = exposureType === 'receivable' ? hedgedAmount : -hedgedAmount;
             
             if (!existingExposure) {
@@ -370,7 +371,7 @@ export const useFinancialData = (): UseFinancialDataReturn => {
                 amount: exposureAmount,
                 type: exposureType,
                 maturity: maturityDate,
-                description: `Auto-generated from ${maturityInstruments.length} hedging instrument(s) - Maturity: ${maturityStr} - Hedge Ratio: ${maxHedgeQuantity}% (Underlying: ${underlyingExposureVolume.toLocaleString()})`,
+                description: `Auto-generated from ${maturityInstruments.length} hedging instrument(s) - Maturity: ${maturityStr} - Total Notional: ${totalHedgingNotional.toLocaleString()}`,
                 subsidiary: 'Auto-Generated',
                 hedgeRatio: maxHedgeQuantity,
                 hedgedAmount: finalHedgedAmount
@@ -384,7 +385,7 @@ export const useFinancialData = (): UseFinancialDataReturn => {
               const updatedExposure = {
                 amount: exposureAmount,
                 type: exposureType,
-                description: `Auto-updated from ${maturityInstruments.length} hedging instrument(s) - Maturity: ${maturityStr} - Hedge Ratio: ${maxHedgeQuantity}% (Underlying: ${underlyingExposureVolume.toLocaleString()})`,
+                description: `Auto-updated from ${maturityInstruments.length} hedging instrument(s) - Maturity: ${maturityStr} - Total Notional: ${totalHedgingNotional.toLocaleString()}`,
                 hedgeRatio: maxHedgeQuantity,
                 hedgedAmount: finalHedgedAmount
               };
