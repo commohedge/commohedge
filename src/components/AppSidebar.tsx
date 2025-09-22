@@ -150,17 +150,25 @@ export function AppSidebar() {
     return unsubscribe;
   }, []);
   
-  // Load market status data
+  // Load market status data - CORRECTION: Use same logic as Dashboard
   useEffect(() => {
     const loadMarketStatusData = async () => {
       try {
         const exchangeData = await exchangeRateService.getExchangeRates('USD');
+        
+        // CORRECTION: Invert EUR and GBP rates to match Dashboard logic
+        // API returns USD-based rates, but we need EUR/USD and GBP/USD
         setMarketStatusData({
-          EUR_USD: exchangeData.rates.EUR || 1.0856,
-          GBP_USD: exchangeData.rates.GBP || 1.2734
+          EUR_USD: 1 / (exchangeData.rates.EUR || 1.0856), // Invert: 1/EUR_rate = EUR/USD
+          GBP_USD: 1 / (exchangeData.rates.GBP || 1.2734)  // Invert: 1/GBP_rate = GBP/USD
         });
       } catch (error) {
         console.error('Error loading market status data:', error);
+        // Fallback to default values if API fails
+        setMarketStatusData({
+          EUR_USD: 1.1737, // Default EUR/USD rate
+          GBP_USD: 1.3477  // Default GBP/USD rate
+        });
       }
     };
 
@@ -330,52 +338,59 @@ export function AppSidebar() {
       <SidebarFooter className="p-4 border-t border-border/40 sidebar-footer">
         <div className="space-y-3">
           {/* User Info */}
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="h-8 w-8 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full flex items-center justify-center sidebar-user-avatar">
-                <User className="h-4 w-4 text-white sidebar-icon" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="text-sm font-medium text-foreground truncate">
-                  {user?.name || 'User'}
+            <div className="space-y-3">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full flex items-center justify-center sidebar-user-avatar shadow-lg">
+                  <User className="h-5 w-5 text-white sidebar-icon" />
                 </div>
-                <div className="text-xs text-muted-foreground truncate">
-                  {user?.email}
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-semibold text-foreground truncate">
+                    {user?.name || 'Commodity Hedge Manager'}
+                  </div>
                 </div>
               </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  logout();
+                  window.location.href = '/';
+                }}
+                className="w-full h-9 bg-red-500/10 border-red-500/30 text-red-500 hover:bg-red-500/20 hover:border-red-400/50 hover:text-red-400 transition-all duration-200 shadow-sm hover:shadow-md hover:shadow-red-500/20 font-medium"
+                title="Logout"
+              >
+                <LogOut className="h-4 w-4 mr-2" />
+                Logout
+              </Button>
             </div>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => {
-                logout();
-                window.location.href = '/';
-              }}
-              className="h-8 w-8 p-0 hover:bg-destructive/10 hover:text-destructive"
-              title="Logout"
-            >
-              <LogOut className="h-4 w-4" />
-            </Button>
-          </div>
 
           {/* Market Status */}
           <div className="space-y-2">
             <div className="flex items-center justify-between text-xs text-muted-foreground sidebar-group-label">
-              <span>Market Status</span>
-              <div className="flex items-center gap-1">
-                <div className="h-2 w-2 bg-green-500 rounded-full animate-pulse"></div>
-                <span className="text-green-600 dark:text-green-400">Live</span>
+              <span className="font-semibold">Market Status</span>
+              <div className="flex items-center gap-1.5">
+                <div className="h-2 w-2 bg-emerald-500 rounded-full animate-pulse shadow-sm shadow-emerald-500/50"></div>
+                <span className="text-emerald-500 dark:text-emerald-400 font-medium">Live</span>
               </div>
             </div>
             
             <div className="grid grid-cols-2 gap-2 text-xs">
-              <div className="bg-muted/50 rounded p-2 market-status-card">
-                <div className="text-muted-foreground market-status-label">EUR/USD</div>
-                <div className="font-mono font-medium market-status-content">{marketStatusData.EUR_USD.toFixed(4)}</div>
+              {/* EUR/USD Card */}
+              <div className="relative overflow-hidden bg-gradient-to-br from-blue-900/40 to-blue-800/30 border border-blue-500/30 rounded-lg p-2 market-status-card hover:border-blue-400/50 hover:shadow-lg hover:shadow-blue-500/20 transition-all duration-300 group">
+                <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                <div className="relative">
+                  <div className="text-blue-300/80 market-status-label text-[10px] font-semibold uppercase tracking-wide">EUR/USD</div>
+                  <div className="font-mono font-bold text-sm market-status-content text-blue-100 group-hover:text-white transition-colors">{marketStatusData.EUR_USD.toFixed(4)}</div>
+                </div>
               </div>
-              <div className="bg-muted/50 rounded p-2 market-status-card">
-                <div className="text-muted-foreground market-status-label">GBP/USD</div>
-                <div className="font-mono font-medium market-status-content">{marketStatusData.GBP_USD.toFixed(4)}</div>
+              
+              {/* GBP/USD Card */}
+              <div className="relative overflow-hidden bg-gradient-to-br from-purple-900/40 to-purple-800/30 border border-purple-500/30 rounded-lg p-2 market-status-card hover:border-purple-400/50 hover:shadow-lg hover:shadow-purple-500/20 transition-all duration-300 group">
+                <div className="absolute inset-0 bg-gradient-to-br from-purple-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                <div className="relative">
+                  <div className="text-purple-300/80 market-status-label text-[10px] font-semibold uppercase tracking-wide">GBP/USD</div>
+                  <div className="font-mono font-bold text-sm market-status-content text-purple-100 group-hover:text-white transition-colors">{marketStatusData.GBP_USD.toFixed(4)}</div>
+                </div>
               </div>
             </div>
           </div>
