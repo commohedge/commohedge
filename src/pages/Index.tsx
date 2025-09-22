@@ -6735,35 +6735,35 @@ const pricingFunctions = {
                   </div>
                     
                     {/* Spot Rate */}
-                    <div className="space-y-1">
-                      <label className="text-xs font-medium text-muted-foreground">
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-foreground">
                         Spot Rate ({params.currencyPair?.symbol || 'EUR/USD'})
-                  </label>
-                      <div className="flex items-center gap-1">
-                    <Input
-                      type="number"
-                      value={params.spotPrice}
-                      onChange={(e) => handleSpotPriceChange(Number(e.target.value))}
-                          className="h-8 text-xs flex-1"
-                      step="0.0001"
-                      placeholder={`${params.currencyPair?.defaultSpotRate || 1.0850}`}
-                    />
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        if (params.currencyPair) {
-                          setParams({...params, spotPrice: params.currencyPair.defaultSpotRate});
-                          setInitialSpotPrice(params.currencyPair.defaultSpotRate);
-                        }
-                      }}
-                          className="h-8 px-2 text-xs"
-                      title="Reset to default market rate"
-                    >
-                      Reset
-                    </Button>
-                  </div>
-                </div>
+                      </label>
+                      <div className="flex items-center gap-2">
+                        <Input
+                          type="number"
+                          value={params.spotPrice}
+                          onChange={(e) => handleSpotPriceChange(Number(e.target.value))}
+                          className="h-10 text-base font-mono flex-1 min-w-[120px]"
+                          step="0.0001"
+                          placeholder={`${params.currencyPair?.defaultSpotRate || 1.0850}`}
+                        />
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            if (params.currencyPair) {
+                              setParams({...params, spotPrice: params.currencyPair.defaultSpotRate});
+                              setInitialSpotPrice(params.currencyPair.defaultSpotRate);
+                            }
+                          }}
+                          className="h-10 px-3 text-sm"
+                          title="Reset to default market rate"
+                        >
+                          Reset
+                        </Button>
+                      </div>
+                    </div>
               </div>
 
                   {/* Auto-sync Status */}

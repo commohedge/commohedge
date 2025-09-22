@@ -327,6 +327,28 @@ const Exposures = () => {
     return `${symbol}${absAmount.toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
   };
 
+  // ✅ NOUVEAU : Calculer les totaux par devise
+  const currencyTotals = useMemo(() => {
+    const totals: { [currency: string]: { receivables: number; payables: number; total: number } } = {};
+    
+    exposures.forEach(exp => {
+      if (!totals[exp.currency]) {
+        totals[exp.currency] = { receivables: 0, payables: 0, total: 0 };
+      }
+      
+      const absAmount = Math.abs(exp.amount);
+      totals[exp.currency].total += absAmount;
+      
+      if (exp.type === 'receivable') {
+        totals[exp.currency].receivables += absAmount;
+      } else {
+        totals[exp.currency].payables += absAmount;
+      }
+    });
+    
+    return totals;
+  }, [exposures]);
+
   const getStatusBadge = (status: string) => {
     switch (status) {
       case "active":
@@ -723,13 +745,18 @@ const Exposures = () => {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-muted-foreground">Total Receivables</p>
-                  <p className="text-2xl font-bold text-green-600">
-                    {formatCurrency(
-                      exposures
-                        .filter(exp => exp.type === 'receivable')
-                        .reduce((sum, exp) => sum + exp.amount, 0)
+                  <div className="space-y-1">
+                    {Object.entries(currencyTotals).map(([currency, totals]) => (
+                      totals.receivables > 0 && (
+                        <p key={currency} className="text-lg font-bold text-green-600">
+                          {formatCurrency(totals.receivables, currency)}
+                        </p>
+                      )
+                    ))}
+                    {Object.values(currencyTotals).every(totals => totals.receivables === 0) && (
+                      <p className="text-2xl font-bold text-gray-400">$0</p>
                     )}
-                  </p>
+                  </div>
                 </div>
                 <div className="h-8 w-8 bg-green-100 dark:bg-green-900 rounded-full flex items-center justify-center">
                   <TrendingUp className="h-4 w-4 text-green-600 dark:text-green-400" />
@@ -743,13 +770,18 @@ const Exposures = () => {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-muted-foreground">Total Payables</p>
-                  <p className="text-2xl font-bold text-red-600">
-                    {formatCurrency(
-                      Math.abs(exposures
-                        .filter(exp => exp.type === 'payable')
-                        .reduce((sum, exp) => sum + exp.amount, 0))
+                  <div className="space-y-1">
+                    {Object.entries(currencyTotals).map(([currency, totals]) => (
+                      totals.payables > 0 && (
+                        <p key={currency} className="text-lg font-bold text-red-600">
+                          {formatCurrency(totals.payables, currency)}
+                        </p>
+                      )
+                    ))}
+                    {Object.values(currencyTotals).every(totals => totals.payables === 0) && (
+                      <p className="text-2xl font-bold text-gray-400">$0</p>
                     )}
-                  </p>
+                  </div>
                 </div>
                 <div className="h-8 w-8 bg-red-100 dark:bg-red-900 rounded-full flex items-center justify-center">
                   <TrendingDown className="h-4 w-4 text-red-600 dark:text-red-400" />

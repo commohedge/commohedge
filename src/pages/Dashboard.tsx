@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { useFinancialData } from "@/hooks/useFinancialData";
+import { useTheme } from "@/hooks/useTheme";
 import ExchangeRateService from "@/services/ExchangeRateService";
 import { 
   TrendingUp, 
@@ -24,6 +25,7 @@ import {
 } from "lucide-react";
 
 const Dashboard = () => {
+  const { theme } = useTheme();
   const { 
     riskMetrics, 
     currencyExposures, 
@@ -35,18 +37,21 @@ const Dashboard = () => {
     generateStressScenarios
   } = useFinancialData();
 
-  // State for market overview data
+  // State for market overview data - Only real data from API
   const [marketOverviewData, setMarketOverviewData] = useState<{
     EUR_USD: { rate: number; change: number };
     GBP_USD: { rate: number; change: number };
     USD_JPY: { rate: number; change: number };
     USD_CHF: { rate: number; change: number };
-  }>({
-    EUR_USD: { rate: 1.0856, change: 0.12 },
-    GBP_USD: { rate: 1.2734, change: -0.08 },
-    USD_JPY: { rate: 161.85, change: 0.24 },
-    USD_CHF: { rate: 0.9642, change: 0.05 }
-  });
+    USD_CAD: { rate: number; change: number };
+    AUD_USD: { rate: number; change: number };
+    NZD_USD: { rate: number; change: number };
+    USD_CNY: { rate: number; change: number };
+    USD_INR: { rate: number; change: number };
+    USD_BRL: { rate: number; change: number };
+    USD_MXN: { rate: number; change: number };
+    USD_TRY: { rate: number; change: number };
+  } | null>(null);
 
   // State to track previous rates for change calculation
   const [previousRates, setPreviousRates] = useState<{
@@ -54,45 +59,120 @@ const Dashboard = () => {
     GBP_USD: number;
     USD_JPY: number;
     USD_CHF: number;
-  }>({
-    EUR_USD: 1.0856,
-    GBP_USD: 1.2734,
-    USD_JPY: 161.85,
-    USD_CHF: 0.9642
-  });
+    USD_CAD: number;
+    AUD_USD: number;
+    NZD_USD: number;
+    USD_CNY: number;
+    USD_INR: number;
+    USD_BRL: number;
+    USD_MXN: number;
+    USD_TRY: number;
+  } | null>(null);
 
   const exchangeRateService = ExchangeRateService.getInstance();
+
+
+  // Function to get theme-adaptive text colors using CSS classes
+  const getTextColors = () => {
+    return {
+      rate: 'text-slate-700 group-hover:text-slate-600 dark:text-blue-300 dark:group-hover:text-blue-200 bloomberg-theme:text-orange-300 bloomberg-theme:group-hover:text-orange-200',
+      pair: 'text-slate-500 dark:text-blue-400/80 bloomberg-theme:text-orange-400/80',
+      change: 'text-emerald-600 dark:text-emerald-400 bloomberg-theme:text-emerald-400'
+    };
+  };
+
+  const textColors = getTextColors();
+
+  // Function to get theme-adaptive currency card colors using CSS classes
+  const getCurrencyCardClasses = (baseColor: string) => {
+    const colorMap = {
+      blue: 'from-blue-100/80 to-blue-50/60 border-blue-300/40 hover:border-blue-400/60 hover:shadow-blue-400/20 dark:from-blue-900/30 dark:to-blue-800/20 dark:border-blue-500/30 dark:hover:border-blue-400/60 dark:hover:shadow-blue-500/20 bloomberg-theme:from-orange-800/30 bloomberg-theme:to-orange-700/20 bloomberg-theme:border-orange-500/30 bloomberg-theme:hover:border-orange-400/60 bloomberg-theme:hover:shadow-orange-500/20',
+      purple: 'from-purple-100/80 to-purple-50/60 border-purple-300/40 hover:border-purple-400/60 hover:shadow-purple-400/20 dark:from-purple-900/30 dark:to-purple-800/20 dark:border-purple-500/30 dark:hover:border-purple-400/60 dark:hover:shadow-purple-500/20 bloomberg-theme:from-yellow-800/30 bloomberg-theme:to-yellow-700/20 bloomberg-theme:border-yellow-500/30 bloomberg-theme:hover:border-yellow-400/60 bloomberg-theme:hover:shadow-yellow-500/20',
+      cyan: 'from-cyan-100/80 to-cyan-50/60 border-cyan-300/40 hover:border-cyan-400/60 hover:shadow-cyan-400/20 dark:from-cyan-900/30 dark:to-cyan-800/20 dark:border-cyan-500/30 dark:hover:border-cyan-400/60 dark:hover:shadow-cyan-500/20 bloomberg-theme:from-orange-700/30 bloomberg-theme:to-orange-600/20 bloomberg-theme:border-orange-400/30 bloomberg-theme:hover:border-orange-300/60 bloomberg-theme:hover:shadow-orange-400/20',
+      emerald: 'from-emerald-100/80 to-emerald-50/60 border-emerald-300/40 hover:border-emerald-400/60 hover:shadow-emerald-400/20 dark:from-emerald-900/30 dark:to-emerald-800/20 dark:border-emerald-500/30 dark:hover:border-emerald-400/60 dark:hover:shadow-emerald-500/20 bloomberg-theme:from-yellow-700/30 bloomberg-theme:to-yellow-600/20 bloomberg-theme:border-yellow-400/30 bloomberg-theme:hover:border-yellow-300/60 bloomberg-theme:hover:shadow-yellow-400/20',
+      orange: 'from-orange-100/80 to-orange-50/60 border-orange-300/40 hover:border-orange-400/60 hover:shadow-orange-400/20 dark:from-orange-900/30 dark:to-orange-800/20 dark:border-orange-500/30 dark:hover:border-orange-400/60 dark:hover:shadow-orange-500/20 bloomberg-theme:from-orange-600/30 bloomberg-theme:to-orange-500/20 bloomberg-theme:border-orange-300/30 bloomberg-theme:hover:border-orange-200/60 bloomberg-theme:hover:shadow-orange-300/20',
+      rose: 'from-rose-100/80 to-rose-50/60 border-rose-300/40 hover:border-rose-400/60 hover:shadow-rose-400/20 dark:from-rose-900/30 dark:to-rose-800/20 dark:border-rose-500/30 dark:hover:border-rose-400/60 dark:hover:shadow-rose-500/20 bloomberg-theme:from-red-800/30 bloomberg-theme:to-red-700/20 bloomberg-theme:border-red-500/30 bloomberg-theme:hover:border-red-400/60 bloomberg-theme:hover:shadow-red-500/20',
+      indigo: 'from-indigo-100/80 to-indigo-50/60 border-indigo-300/40 hover:border-indigo-400/60 hover:shadow-indigo-400/20 dark:from-indigo-900/30 dark:to-indigo-800/20 dark:border-indigo-500/30 dark:hover:border-indigo-400/60 dark:hover:shadow-indigo-500/20 bloomberg-theme:from-orange-900/30 bloomberg-theme:to-orange-800/20 bloomberg-theme:border-orange-600/30 bloomberg-theme:hover:border-orange-500/60 bloomberg-theme:hover:shadow-orange-600/20',
+      yellow: 'from-yellow-100/80 to-yellow-50/60 border-yellow-300/40 hover:border-yellow-400/60 hover:shadow-yellow-400/20 dark:from-yellow-900/30 dark:to-yellow-800/20 dark:border-yellow-500/30 dark:hover:border-yellow-400/60 dark:hover:shadow-yellow-500/20 bloomberg-theme:from-yellow-600/30 bloomberg-theme:to-yellow-500/20 bloomberg-theme:border-yellow-300/30 bloomberg-theme:hover:border-yellow-200/60 bloomberg-theme:hover:shadow-yellow-300/20',
+      teal: 'from-teal-100/80 to-teal-50/60 border-teal-300/40 hover:border-teal-400/60 hover:shadow-teal-400/20 dark:from-teal-900/30 dark:to-teal-800/20 dark:border-teal-500/30 dark:hover:border-teal-400/60 dark:hover:shadow-teal-500/20 bloomberg-theme:from-orange-800/30 bloomberg-theme:to-orange-700/20 bloomberg-theme:border-orange-500/30 bloomberg-theme:hover:border-orange-400/60 bloomberg-theme:hover:shadow-orange-500/20',
+      pink: 'from-pink-100/80 to-pink-50/60 border-pink-300/40 hover:border-pink-400/60 hover:shadow-pink-400/20 dark:from-pink-900/30 dark:to-pink-800/20 dark:border-pink-500/30 dark:hover:border-pink-400/60 dark:hover:shadow-pink-500/20 bloomberg-theme:from-red-700/30 bloomberg-theme:to-red-600/20 bloomberg-theme:border-red-400/30 bloomberg-theme:hover:border-red-300/60 bloomberg-theme:hover:shadow-red-400/20',
+      violet: 'from-violet-100/80 to-violet-50/60 border-violet-300/40 hover:border-violet-400/60 hover:shadow-violet-400/20 dark:from-violet-900/30 dark:to-violet-800/20 dark:border-violet-500/30 dark:hover:border-violet-400/60 dark:hover:shadow-violet-500/20 bloomberg-theme:from-orange-800/30 bloomberg-theme:to-orange-700/20 bloomberg-theme:border-orange-500/30 bloomberg-theme:hover:border-orange-400/60 bloomberg-theme:hover:shadow-orange-500/20',
+      amber: 'from-amber-100/80 to-amber-50/60 border-amber-300/40 hover:border-amber-400/60 hover:shadow-amber-400/20 dark:from-amber-900/30 dark:to-amber-800/20 dark:border-amber-500/30 dark:hover:border-amber-400/60 dark:hover:shadow-amber-500/20 bloomberg-theme:from-yellow-700/30 bloomberg-theme:to-yellow-600/20 bloomberg-theme:border-yellow-400/30 bloomberg-theme:hover:border-yellow-300/60 bloomberg-theme:hover:shadow-yellow-400/20'
+    };
+
+    return colorMap[baseColor as keyof typeof colorMap] || colorMap.blue;
+  };
 
   // Function to load market overview data from Forex Market
   const loadMarketOverviewData = async () => {
     try {
       const exchangeData = await exchangeRateService.getExchangeRates('USD');
       
-      // Get current rates
+      // Get current rates - CORRECTION: Invert EUR, GBP, AUD, NZD rates since API returns USD-based rates
       const currentRates = {
-        EUR_USD: exchangeData.rates.EUR || 1.0856,
-        GBP_USD: exchangeData.rates.GBP || 1.2734,
-        USD_JPY: exchangeData.rates.JPY || 161.85,
-        USD_CHF: exchangeData.rates.CHF || 0.9642
+        EUR_USD: 1 / exchangeData.rates.EUR, // Invert: 1/EUR_rate = EUR/USD
+        GBP_USD: 1 / exchangeData.rates.GBP, // Invert: 1/GBP_rate = GBP/USD
+        USD_JPY: exchangeData.rates.JPY, // Direct: USD/JPY
+        USD_CHF: exchangeData.rates.CHF, // Direct: USD/CHF
+        USD_CAD: exchangeData.rates.CAD, // Direct: USD/CAD
+        AUD_USD: 1 / exchangeData.rates.AUD, // Invert: 1/AUD_rate = AUD/USD
+        NZD_USD: 1 / exchangeData.rates.NZD, // Invert: 1/NZD_rate = NZD/USD
+        USD_CNY: exchangeData.rates.CNY, // Direct: USD/CNY
+        USD_INR: exchangeData.rates.INR, // Direct: USD/INR
+        USD_BRL: exchangeData.rates.BRL, // Direct: USD/BRL
+        USD_MXN: exchangeData.rates.MXN, // Direct: USD/MXN
+        USD_TRY: exchangeData.rates.TRY  // Direct: USD/TRY
       };
       
-      // Calculate changes based on previous rates
+      // Calculate changes based on previous rates (only if we have previous data)
       const newMarketData = {
         EUR_USD: { 
           rate: currentRates.EUR_USD, 
-          change: calculateChange(currentRates.EUR_USD, previousRates.EUR_USD) 
+          change: previousRates ? calculateChange(currentRates.EUR_USD, previousRates.EUR_USD) : 0
         },
         GBP_USD: { 
           rate: currentRates.GBP_USD, 
-          change: calculateChange(currentRates.GBP_USD, previousRates.GBP_USD) 
+          change: previousRates ? calculateChange(currentRates.GBP_USD, previousRates.GBP_USD) : 0
         },
         USD_JPY: { 
           rate: currentRates.USD_JPY, 
-          change: calculateChange(currentRates.USD_JPY, previousRates.USD_JPY) 
+          change: previousRates ? calculateChange(currentRates.USD_JPY, previousRates.USD_JPY) : 0
         },
         USD_CHF: { 
           rate: currentRates.USD_CHF, 
-          change: calculateChange(currentRates.USD_CHF, previousRates.USD_CHF) 
+          change: previousRates ? calculateChange(currentRates.USD_CHF, previousRates.USD_CHF) : 0
+        },
+        USD_CAD: { 
+          rate: currentRates.USD_CAD, 
+          change: previousRates ? calculateChange(currentRates.USD_CAD, previousRates.USD_CAD) : 0
+        },
+        AUD_USD: { 
+          rate: currentRates.AUD_USD, 
+          change: previousRates ? calculateChange(currentRates.AUD_USD, previousRates.AUD_USD) : 0
+        },
+        NZD_USD: { 
+          rate: currentRates.NZD_USD, 
+          change: previousRates ? calculateChange(currentRates.NZD_USD, previousRates.NZD_USD) : 0
+        },
+        USD_CNY: { 
+          rate: currentRates.USD_CNY, 
+          change: previousRates ? calculateChange(currentRates.USD_CNY, previousRates.USD_CNY) : 0
+        },
+        USD_INR: { 
+          rate: currentRates.USD_INR, 
+          change: previousRates ? calculateChange(currentRates.USD_INR, previousRates.USD_INR) : 0
+        },
+        USD_BRL: { 
+          rate: currentRates.USD_BRL, 
+          change: previousRates ? calculateChange(currentRates.USD_BRL, previousRates.USD_BRL) : 0
+        },
+        USD_MXN: { 
+          rate: currentRates.USD_MXN, 
+          change: previousRates ? calculateChange(currentRates.USD_MXN, previousRates.USD_MXN) : 0
+        },
+        USD_TRY: { 
+          rate: currentRates.USD_TRY, 
+          change: previousRates ? calculateChange(currentRates.USD_TRY, previousRates.USD_TRY) : 0
         }
       };
       
@@ -418,64 +498,214 @@ const Dashboard = () => {
         </Card>
       </div>
 
-      {/* Market Overview Footer */}
-      <Card>
-        <CardHeader>
+      {/* Market Overview - Theme-Adaptive Futuristic Design */}
+      <Card className="relative overflow-hidden bg-gradient-to-br from-slate-50 via-white to-slate-100 border-slate-200 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 dark:border-slate-700 bloomberg-theme:from-orange-950 bloomberg-theme:via-orange-900 bloomberg-theme:to-orange-950 bloomberg-theme:border-orange-800">
+        {/* Animated background pattern - Theme adaptive */}
+        <div className="absolute inset-0 opacity-10">
+          <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 to-purple-500/5 dark:from-blue-500/10 dark:to-purple-500/10 bloomberg-theme:from-orange-500/15 bloomberg-theme:to-yellow-500/15 rounded-lg"></div>
+          <div className="absolute top-0 left-0 w-full h-full bg-[linear-gradient(45deg,transparent_25%,rgba(59,130,246,0.05)_50%,transparent_75%)] bg-[length:20px_20px] animate-pulse"></div>
+        </div>
+        
+        <CardHeader className="relative z-10">
           <div className="flex items-center justify-between">
             <div>
-              <CardTitle className="text-base">Market Overview</CardTitle>
-              <CardDescription>Current FX rates and recent changes</CardDescription>
+              <CardTitle className="text-xl font-bold bg-gradient-to-r from-blue-600 via-purple-600 to-cyan-600 dark:from-blue-400 dark:via-purple-400 dark:to-cyan-400 bloomberg-theme:from-orange-400 bloomberg-theme:via-yellow-400 bloomberg-theme:to-orange-300 bg-clip-text text-transparent">
+                Market Overview
+              </CardTitle>
+              <CardDescription className="text-slate-600 dark:text-slate-300 bloomberg-theme:text-orange-200">
+                Real-time FX rates and market movements
+              </CardDescription>
             </div>
             <Button
               variant="outline"
               size="sm"
               onClick={loadMarketOverviewData}
-              className="flex items-center gap-2"
+              className="flex items-center gap-2 bg-slate-100/80 border-slate-300 text-slate-700 hover:bg-slate-200/80 hover:border-blue-500 dark:bg-slate-800/50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-700/50 dark:hover:border-blue-400 bloomberg-theme:bg-orange-900/50 bloomberg-theme:border-orange-700 bloomberg-theme:text-orange-200 bloomberg-theme:hover:bg-orange-800/50 bloomberg-theme:hover:border-orange-500 transition-all duration-300"
             >
               <RefreshCw className="h-4 w-4" />
               Refresh
             </Button>
           </div>
         </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div className="text-center">
-              <div className="text-lg font-mono font-bold">
-                {marketOverviewData.EUR_USD.rate.toFixed(4)}
+        
+        <CardContent className="relative z-10">
+          {marketOverviewData ? (
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4">
+              {/* Major Pairs */}
+              <div className={`group relative p-4 rounded-xl bg-gradient-to-br ${getCurrencyCardClasses('blue')} transition-all duration-300 hover:shadow-lg`}>
+                <div className="absolute inset-0 bg-gradient-to-br from-blue-500/10 to-transparent rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                <div className="relative">
+                  <div className={`text-lg font-mono font-bold ${textColors.rate} transition-colors`}>
+                    {marketOverviewData.EUR_USD.rate.toFixed(4)}
+                  </div>
+                  <div className={`text-sm ${textColors.pair} font-medium`}>EUR/USD</div>
+                  <div className={`text-xs font-semibold ${marketOverviewData.EUR_USD.change >= 0 ? textColors.change : 'text-red-400'}`}>
+                    {marketOverviewData.EUR_USD.change >= 0 ? '↗' : '↘'} {marketOverviewData.EUR_USD.change >= 0 ? '+' : ''}{marketOverviewData.EUR_USD.change.toFixed(2)}%
+                  </div>
+                </div>
               </div>
-              <div className="text-sm text-muted-foreground">EUR/USD</div>
-              <div className={`text-xs ${marketOverviewData.EUR_USD.change >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                {marketOverviewData.EUR_USD.change >= 0 ? '+' : ''}{marketOverviewData.EUR_USD.change.toFixed(2)}%
+
+              <div className={`group relative p-4 rounded-xl bg-gradient-to-br ${getCurrencyCardClasses('purple')} transition-all duration-300 hover:shadow-lg`}>
+                <div className="absolute inset-0 bg-gradient-to-br from-purple-500/10 to-transparent rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                <div className="relative">
+                  <div className="text-lg font-mono font-bold text-purple-300 group-hover:text-purple-200 transition-colors">
+                    {marketOverviewData.GBP_USD.rate.toFixed(4)}
+                  </div>
+                  <div className="text-sm text-purple-400/80 font-medium">GBP/USD</div>
+                  <div className={`text-xs font-semibold ${marketOverviewData.GBP_USD.change >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                    {marketOverviewData.GBP_USD.change >= 0 ? '↗' : '↘'} {marketOverviewData.GBP_USD.change >= 0 ? '+' : ''}{marketOverviewData.GBP_USD.change.toFixed(2)}%
+                  </div>
+                </div>
+              </div>
+
+              <div className={`group relative p-4 rounded-xl bg-gradient-to-br ${getCurrencyCardClasses('cyan')} transition-all duration-300 hover:shadow-lg`}>
+                <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/10 to-transparent rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                <div className="relative">
+                  <div className="text-lg font-mono font-bold text-cyan-300 group-hover:text-cyan-200 transition-colors">
+                    {marketOverviewData.USD_JPY.rate.toFixed(2)}
+                  </div>
+                  <div className="text-sm text-cyan-400/80 font-medium">USD/JPY</div>
+                  <div className={`text-xs font-semibold ${marketOverviewData.USD_JPY.change >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                    {marketOverviewData.USD_JPY.change >= 0 ? '↗' : '↘'} {marketOverviewData.USD_JPY.change >= 0 ? '+' : ''}{marketOverviewData.USD_JPY.change.toFixed(2)}%
+                  </div>
+                </div>
+              </div>
+
+              <div className={`group relative p-4 rounded-xl bg-gradient-to-br ${getCurrencyCardClasses('emerald')} transition-all duration-300 hover:shadow-lg`}>
+                <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/10 to-transparent rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                <div className="relative">
+                  <div className="text-lg font-mono font-bold text-emerald-300 group-hover:text-emerald-200 transition-colors">
+                    {marketOverviewData.USD_CHF.rate.toFixed(4)}
+                  </div>
+                  <div className="text-sm text-emerald-400/80 font-medium">USD/CHF</div>
+                  <div className={`text-xs font-semibold ${marketOverviewData.USD_CHF.change >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                    {marketOverviewData.USD_CHF.change >= 0 ? '↗' : '↘'} {marketOverviewData.USD_CHF.change >= 0 ? '+' : ''}{marketOverviewData.USD_CHF.change.toFixed(2)}%
+                  </div>
+                </div>
+              </div>
+
+              <div className={`group relative p-4 rounded-xl bg-gradient-to-br ${getCurrencyCardClasses('orange')} transition-all duration-300 hover:shadow-lg`}>
+                <div className="absolute inset-0 bg-gradient-to-br from-orange-500/10 to-transparent rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                <div className="relative">
+                  <div className="text-lg font-mono font-bold text-orange-300 group-hover:text-orange-200 transition-colors">
+                    {marketOverviewData.USD_CAD.rate.toFixed(4)}
+                  </div>
+                  <div className="text-sm text-orange-400/80 font-medium">USD/CAD</div>
+                  <div className={`text-xs font-semibold ${marketOverviewData.USD_CAD.change >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                    {marketOverviewData.USD_CAD.change >= 0 ? '↗' : '↘'} {marketOverviewData.USD_CAD.change >= 0 ? '+' : ''}{marketOverviewData.USD_CAD.change.toFixed(2)}%
+                  </div>
+                </div>
+              </div>
+
+              <div className={`group relative p-4 rounded-xl bg-gradient-to-br ${getCurrencyCardClasses('rose')} transition-all duration-300 hover:shadow-lg`}>
+                <div className="absolute inset-0 bg-gradient-to-br from-rose-500/10 to-transparent rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                <div className="relative">
+                  <div className="text-lg font-mono font-bold text-rose-300 group-hover:text-rose-200 transition-colors">
+                    {marketOverviewData.AUD_USD.rate.toFixed(4)}
+                  </div>
+                  <div className="text-sm text-rose-400/80 font-medium">AUD/USD</div>
+                  <div className={`text-xs font-semibold ${marketOverviewData.AUD_USD.change >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                    {marketOverviewData.AUD_USD.change >= 0 ? '↗' : '↘'} {marketOverviewData.AUD_USD.change >= 0 ? '+' : ''}{marketOverviewData.AUD_USD.change.toFixed(2)}%
+                  </div>
+                </div>
+              </div>
+
+              <div className={`group relative p-4 rounded-xl bg-gradient-to-br ${getCurrencyCardClasses('indigo')} transition-all duration-300 hover:shadow-lg`}>
+                <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/10 to-transparent rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                <div className="relative">
+                  <div className="text-lg font-mono font-bold text-indigo-300 group-hover:text-indigo-200 transition-colors">
+                    {marketOverviewData.NZD_USD.rate.toFixed(4)}
+                  </div>
+                  <div className="text-sm text-indigo-400/80 font-medium">NZD/USD</div>
+                  <div className={`text-xs font-semibold ${marketOverviewData.NZD_USD.change >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                    {marketOverviewData.NZD_USD.change >= 0 ? '↗' : '↘'} {marketOverviewData.NZD_USD.change >= 0 ? '+' : ''}{marketOverviewData.NZD_USD.change.toFixed(2)}%
               </div>
             </div>
-            <div className="text-center">
-              <div className="text-lg font-mono font-bold">
-                {marketOverviewData.GBP_USD.rate.toFixed(4)}
               </div>
-              <div className="text-sm text-muted-foreground">GBP/USD</div>
-              <div className={`text-xs ${marketOverviewData.GBP_USD.change >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                {marketOverviewData.GBP_USD.change >= 0 ? '+' : ''}{marketOverviewData.GBP_USD.change.toFixed(2)}%
+
+              <div className={`group relative p-4 rounded-xl bg-gradient-to-br ${getCurrencyCardClasses('yellow')} transition-all duration-300 hover:shadow-lg`}>
+                <div className="absolute inset-0 bg-gradient-to-br from-yellow-500/10 to-transparent rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                <div className="relative">
+                  <div className="text-lg font-mono font-bold text-yellow-300 group-hover:text-yellow-200 transition-colors">
+                    {marketOverviewData.USD_CNY.rate.toFixed(4)}
+                  </div>
+                  <div className="text-sm text-yellow-400/80 font-medium">USD/CNY</div>
+                  <div className={`text-xs font-semibold ${marketOverviewData.USD_CNY.change >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                    {marketOverviewData.USD_CNY.change >= 0 ? '↗' : '↘'} {marketOverviewData.USD_CNY.change >= 0 ? '+' : ''}{marketOverviewData.USD_CNY.change.toFixed(2)}%
+                  </div>
+                </div>
+              </div>
+
+              <div className={`group relative p-4 rounded-xl bg-gradient-to-br ${getCurrencyCardClasses('teal')} transition-all duration-300 hover:shadow-lg`}>
+                <div className="absolute inset-0 bg-gradient-to-br from-teal-500/10 to-transparent rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                <div className="relative">
+                  <div className="text-lg font-mono font-bold text-teal-300 group-hover:text-teal-200 transition-colors">
+                    {marketOverviewData.USD_INR.rate.toFixed(2)}
+                  </div>
+                  <div className="text-sm text-teal-400/80 font-medium">USD/INR</div>
+                  <div className={`text-xs font-semibold ${marketOverviewData.USD_INR.change >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                    {marketOverviewData.USD_INR.change >= 0 ? '↗' : '↘'} {marketOverviewData.USD_INR.change >= 0 ? '+' : ''}{marketOverviewData.USD_INR.change.toFixed(2)}%
               </div>
             </div>
-            <div className="text-center">
-              <div className="text-lg font-mono font-bold">
-                {marketOverviewData.USD_JPY.rate.toFixed(2)}
               </div>
-              <div className="text-sm text-muted-foreground">USD/JPY</div>
-              <div className={`text-xs ${marketOverviewData.USD_JPY.change >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                {marketOverviewData.USD_JPY.change >= 0 ? '+' : ''}{marketOverviewData.USD_JPY.change.toFixed(2)}%
+
+              <div className={`group relative p-4 rounded-xl bg-gradient-to-br ${getCurrencyCardClasses('pink')} transition-all duration-300 hover:shadow-lg`}>
+                <div className="absolute inset-0 bg-gradient-to-br from-pink-500/10 to-transparent rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                <div className="relative">
+                  <div className="text-lg font-mono font-bold text-pink-300 group-hover:text-pink-200 transition-colors">
+                    {marketOverviewData.USD_BRL.rate.toFixed(4)}
+                  </div>
+                  <div className="text-sm text-pink-400/80 font-medium">USD/BRL</div>
+                  <div className={`text-xs font-semibold ${marketOverviewData.USD_BRL.change >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                    {marketOverviewData.USD_BRL.change >= 0 ? '↗' : '↘'} {marketOverviewData.USD_BRL.change >= 0 ? '+' : ''}{marketOverviewData.USD_BRL.change.toFixed(2)}%
+                  </div>
+                </div>
+              </div>
+
+              <div className={`group relative p-4 rounded-xl bg-gradient-to-br ${getCurrencyCardClasses('violet')} transition-all duration-300 hover:shadow-lg`}>
+                <div className="absolute inset-0 bg-gradient-to-br from-violet-500/10 to-transparent rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                <div className="relative">
+                  <div className="text-lg font-mono font-bold text-violet-300 group-hover:text-violet-200 transition-colors">
+                    {marketOverviewData.USD_MXN.rate.toFixed(4)}
+                  </div>
+                  <div className="text-sm text-violet-400/80 font-medium">USD/MXN</div>
+                  <div className={`text-xs font-semibold ${marketOverviewData.USD_MXN.change >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                    {marketOverviewData.USD_MXN.change >= 0 ? '↗' : '↘'} {marketOverviewData.USD_MXN.change >= 0 ? '+' : ''}{marketOverviewData.USD_MXN.change.toFixed(2)}%
               </div>
             </div>
-            <div className="text-center">
-              <div className="text-lg font-mono font-bold">
-                {marketOverviewData.USD_CHF.rate.toFixed(4)}
               </div>
-              <div className="text-sm text-muted-foreground">USD/CHF</div>
-              <div className={`text-xs ${marketOverviewData.USD_CHF.change >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                {marketOverviewData.USD_CHF.change >= 0 ? '+' : ''}{marketOverviewData.USD_CHF.change.toFixed(2)}%
+
+              <div className={`group relative p-4 rounded-xl bg-gradient-to-br ${getCurrencyCardClasses('amber')} transition-all duration-300 hover:shadow-lg`}>
+                <div className="absolute inset-0 bg-gradient-to-br from-amber-500/10 to-transparent rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                <div className="relative">
+                  <div className="text-lg font-mono font-bold text-amber-300 group-hover:text-amber-200 transition-colors">
+                    {marketOverviewData.USD_TRY.rate.toFixed(4)}
+                  </div>
+                  <div className="text-sm text-amber-400/80 font-medium">USD/TRY</div>
+                  <div className={`text-xs font-semibold ${marketOverviewData.USD_TRY.change >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                    {marketOverviewData.USD_TRY.change >= 0 ? '↗' : '↘'} {marketOverviewData.USD_TRY.change >= 0 ? '+' : ''}{marketOverviewData.USD_TRY.change.toFixed(2)}%
+                  </div>
+                </div>
               </div>
             </div>
-          </div>
+          ) : (
+            <div className="text-center py-12">
+              <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gradient-to-r from-blue-500/30 to-purple-500/30 border-blue-500/40 dark:from-blue-500/20 dark:to-purple-500/20 dark:border-blue-500/30 bloomberg-theme:from-orange-500/25 bloomberg-theme:to-yellow-500/25 bloomberg-theme:border-orange-500/40 mb-4">
+                <Activity className="h-8 w-8 text-blue-400 animate-pulse" />
+              </div>
+              <div className="text-slate-600 dark:text-slate-300 bloomberg-theme:text-orange-200 text-lg font-medium mb-2">Loading Market Data</div>
+              <div className="text-slate-500 dark:text-slate-400 bloomberg-theme:text-orange-300 text-sm mb-4">Fetching real-time FX rates...</div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={loadMarketOverviewData}
+                className="bg-slate-100/80 border-slate-300 text-slate-700 hover:bg-slate-200/80 hover:border-blue-500 dark:bg-slate-800/50 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-700/50 dark:hover:border-blue-400 bloomberg-theme:bg-orange-900/50 bloomberg-theme:border-orange-700 bloomberg-theme:text-orange-200 bloomberg-theme:hover:bg-orange-800/50 bloomberg-theme:hover:border-orange-500 transition-all duration-300"
+              >
+                <RefreshCw className="h-4 w-4 mr-2" />
+                Load Data
+              </Button>
+            </div>
+          )}
         </CardContent>
       </Card>
     </Layout>
