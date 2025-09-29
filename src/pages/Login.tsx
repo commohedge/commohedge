@@ -41,12 +41,17 @@ const Login = () => {
     e.preventDefault();
     setError('');
 
-    const result = await signIn(email, password);
-    
-    if (result.success) {
-      navigate('/dashboard');
-    } else {
-      setError(result.error || 'Invalid email or password. Please try again.');
+    try {
+      const result = await signIn(email, password);
+      
+      if (result.success) {
+        navigate('/dashboard');
+      } else {
+        setError(result.error || 'Invalid email or password. Please try again.');
+      }
+    } catch (error: any) {
+      console.error('Login error:', error);
+      setError('An unexpected error occurred. Please try again.');
     }
   };
 
@@ -98,6 +103,14 @@ const Login = () => {
           </CardHeader>
 
           <CardContent className="space-y-6">
+            {/* Test Account Info */}
+            <Alert className="border-blue-500/50 bg-blue-500/10">
+              <CheckCircle className="h-4 w-4" />
+              <AlertDescription>
+                <strong>Test Account:</strong> commohedge@test.com / test
+              </AlertDescription>
+            </Alert>
+
             {/* Error Alert */}
             {error && (
               <Alert variant="destructive" className="border-red-500/50 bg-red-500/10">
@@ -115,7 +128,7 @@ const Login = () => {
                   <Input
                     id="email"
                     type="email"
-                    placeholder="your.email@company.com"
+                    placeholder="commohedge@test.com"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     className="pl-10 bg-slate-800/50 border-slate-600 text-white placeholder:text-slate-400 focus:border-blue-500"
@@ -131,7 +144,7 @@ const Login = () => {
                   <Input
                     id="password"
                     type={showPassword ? "text" : "password"}
-                    placeholder="Enter your password"
+                    placeholder="test"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     className="pl-10 pr-10 bg-slate-800/50 border-slate-600 text-white placeholder:text-slate-400 focus:border-blue-500"

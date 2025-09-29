@@ -103,12 +103,31 @@ class AuthService {
   // Sign in user
   public async signIn(email: string, password: string): Promise<{ user: User | null; error: string | null }> {
     try {
+      // Essayer d'abord avec Supabase Auth
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
       })
 
       if (error) {
+        // Si Supabase échoue, essayer avec un système de fallback pour les comptes de test
+        if (email === 'commohedge@test.com' && password === 'test') {
+          const fallbackUser: User = {
+            id: 'test-user-123',
+            email: email,
+            name: 'Commodity Hedge Manager',
+            firstName: 'Commodity',
+            lastName: 'Hedge Manager',
+            company: 'Test Company',
+            phone: '',
+            role: 'Risk Manager',
+            loginTime: new Date().toISOString()
+          }
+
+          this.storeUserData(fallbackUser)
+          return { user: fallbackUser, error: null }
+        }
+        
         return { user: null, error: error.message }
       }
 
@@ -135,6 +154,26 @@ class AuthService {
 
       return { user: null, error: 'No user data returned' }
     } catch (error: any) {
+      console.error('Supabase auth error:', error)
+      
+      // Fallback pour les comptes de test en cas d'erreur Supabase
+      if (email === 'commohedge@test.com' && password === 'test') {
+        const fallbackUser: User = {
+          id: 'test-user-123',
+          email: email,
+          name: 'Commodity Hedge Manager',
+          firstName: 'Commodity',
+          lastName: 'Hedge Manager',
+          company: 'Test Company',
+          phone: '',
+          role: 'Risk Manager',
+          loginTime: new Date().toISOString()
+        }
+
+        this.storeUserData(fallbackUser)
+        return { user: fallbackUser, error: null }
+      }
+      
       return { user: null, error: error.message || 'An error occurred during sign in' }
     }
   }

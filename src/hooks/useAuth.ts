@@ -268,6 +268,12 @@ export const useAuth = () => {
     }
   }, [authService, toast])
 
+  // Alias pour logout (pour la compatibilité avec l'interface)
+  const logout = useCallback(async () => {
+    const result = await signOut()
+    return result
+  }, [signOut])
+
   return {
     // State
     user,
@@ -278,6 +284,7 @@ export const useAuth = () => {
     signUp,
     signIn,
     signOut,
+    logout, // Alias pour logout
     updateProfile,
     resetPassword,
     getUserStrategies,

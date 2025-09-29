@@ -366,9 +366,16 @@ export function AppSidebar() {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => {
-                  logout();
-                  window.location.href = '/';
+                onClick={async () => {
+                  try {
+                    await logout();
+                    // Redirection après déconnexion réussie
+                    window.location.href = '/';
+                  } catch (error) {
+                    console.error('Logout error:', error);
+                    // Redirection même en cas d'erreur pour éviter d'être bloqué
+                    window.location.href = '/';
+                  }
                 }}
                 className="w-full h-9 bg-red-500/10 border-red-500/30 text-red-500 hover:bg-red-500/20 hover:border-red-400/50 hover:text-red-400 transition-all duration-200 shadow-sm hover:shadow-md hover:shadow-red-500/20 font-medium"
                 title="Logout"
