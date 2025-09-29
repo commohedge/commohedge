@@ -30,30 +30,13 @@ import LandingPage from "./pages/LandingPage";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
 import UserProfile from "./pages/UserProfile";
-import ConfirmEmail from "./pages/ConfirmEmail";
-import EmailConfirmationPending from "./pages/EmailConfirmationPending";
 import NotFound from "./pages/NotFound";
 import ProtectedRoute from "./components/ProtectedRoute";
-import { useLocation } from "react-router-dom";
 
 // Theme toggle component
 import { ThemeToggle } from "./components/ui/theme-toggle";
 
 const queryClient = new QueryClient();
-
-// Wrapper pour EmailConfirmationPending
-const EmailConfirmationPendingWrapper = () => {
-  const location = useLocation();
-  const email = location.state?.email || '';
-  
-  if (!email) {
-    // Rediriger vers la page d'inscription si pas d'email
-    window.location.href = '/signup';
-    return null;
-  }
-  
-  return <EmailConfirmationPending email={email} />;
-};
 
 const App = () => {
   // Initialiser les hooks de scroll fluide
@@ -86,8 +69,6 @@ const App = () => {
             {/* Authentication */}
             <Route path="/login" element={<Login />} />
             <Route path="/signup" element={<Signup />} />
-            <Route path="/confirm-email" element={<ConfirmEmail />} />
-            <Route path="/email-confirmation-pending" element={<EmailConfirmationPendingWrapper />} />
             
             {/* FX Risk Management Routes */}
             <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />

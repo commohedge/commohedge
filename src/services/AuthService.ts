@@ -54,13 +54,12 @@ class AuthService {
   }
 
   // Sign up new user
-  public async signUp(data: SignupData): Promise<{ user: User | null; error: string | null; needsConfirmation: boolean }> {
+  public async signUp(data: SignupData): Promise<{ user: User | null; error: string | null }> {
     try {
       const { data: authData, error } = await supabase.auth.signUp({
         email: data.email,
         password: data.password,
         options: {
-          emailRedirectTo: `${window.location.origin}/confirm-email`,
           data: {
             first_name: data.firstName,
             last_name: data.lastName,
@@ -73,23 +72,10 @@ class AuthService {
       })
 
       if (error) {
-        return { user: null, error: error.message, needsConfirmation: false }
+        return { user: null, error: error.message }
       }
 
       if (authData.user) {
-        // Vérifier si l'email est confirmé
-        const isEmailConfirmed = authData.user.email_confirmed_at !== null
-        
-        if (!isEmailConfirmed) {
-          // L'utilisateur doit confirmer son email
-          return { 
-            user: null, 
-            error: null, 
-            needsConfirmation: true 
-          }
-        }
-
-        // Email confirmé, créer l'utilisateur
         const user: User = {
           id: authData.user.id,
           email: authData.user.email || '',
@@ -105,12 +91,12 @@ class AuthService {
         // Store user data
         this.storeUserData(user)
         
-        return { user, error: null, needsConfirmation: false }
+        return { user, error: null }
       }
 
-      return { user: null, error: 'No user data returned', needsConfirmation: false }
+      return { user: null, error: 'No user data returned' }
     } catch (error: any) {
-      return { user: null, error: error.message || 'An error occurred during signup', needsConfirmation: false }
+      return { user: null, error: error.message || 'An error occurred during signup' }
     }
   }
 
@@ -263,42 +249,6 @@ class AuthService {
       return { error: error?.message || null }
     } catch (error: any) {
       return { error: error.message || 'An error occurred during password reset' }
-    }
-  }
-
-  // Check if user email is confirmed
-  public async checkEmailConfirmation(): Promise<{ confirmed: boolean; error: string | null }> {
-    try {
-      const { data: { user }, error } = await supabase.auth.getUser()
-      
-      if (error) {
-        return { confirmed: false, error: error.message }
-      }
-
-      if (user) {
-        return { confirmed: user.email_confirmed_at !== null, error: null }
-      }
-
-      return { confirmed: false, error: 'No user found' }
-    } catch (error: any) {
-      return { confirmed: false, error: error.message || 'An error occurred while checking email confirmation' }
-    }
-  }
-
-  // Resend confirmation email
-  public async resendConfirmationEmail(email: string): Promise<{ error: string | null }> {
-    try {
-      const { error } = await supabase.auth.resend({
-        type: 'signup',
-        email: email,
-        options: {
-          emailRedirectTo: `${window.location.origin}/confirm-email`
-        }
-      })
-
-      return { error: error?.message || null }
-    } catch (error: any) {
-      return { error: error.message || 'An error occurred while resending confirmation email' }
     }
   }
 

@@ -36,7 +36,7 @@ export const useAuth = () => {
   const signUp = useCallback(async (data: SignupData) => {
     setIsLoading(true)
     try {
-      const { user: newUser, error, needsConfirmation } = await authService.signUp(data)
+      const { user: newUser, error } = await authService.signUp(data)
       
       if (error) {
         toast({
@@ -44,15 +44,7 @@ export const useAuth = () => {
           description: error,
           variant: "destructive",
         })
-        return { success: false, error, needsConfirmation: false }
-      }
-
-      if (needsConfirmation) {
-        toast({
-          title: "Email Confirmation Required",
-          description: "Please check your email and click the confirmation link to activate your account",
-        })
-        return { success: true, user: null, needsConfirmation: true }
+        return { success: false, error }
       }
 
       if (newUser) {
@@ -62,10 +54,10 @@ export const useAuth = () => {
           title: "Account Created Successfully!",
           description: "Welcome to FX hedging Risk Management Platform",
         })
-        return { success: true, user: newUser, needsConfirmation: false }
+        return { success: true, user: newUser }
       }
 
-      return { success: false, error: 'No user data returned', needsConfirmation: false }
+      return { success: false, error: 'No user data returned' }
     } catch (error: any) {
       const errorMessage = error.message || 'An error occurred during signup'
       toast({
@@ -73,7 +65,7 @@ export const useAuth = () => {
         description: errorMessage,
         variant: "destructive",
       })
-      return { success: false, error: errorMessage, needsConfirmation: false }
+      return { success: false, error: errorMessage }
     } finally {
       setIsLoading(false)
     }
@@ -276,54 +268,6 @@ export const useAuth = () => {
     }
   }, [authService, toast])
 
-  // Check email confirmation
-  const checkEmailConfirmation = useCallback(async () => {
-    try {
-      const { confirmed, error } = await authService.checkEmailConfirmation()
-      
-      if (error) {
-        console.error('Error checking email confirmation:', error)
-        return { confirmed: false, error }
-      }
-
-      return { confirmed, error: null }
-    } catch (error: any) {
-      const errorMessage = error.message || 'An error occurred while checking email confirmation'
-      console.error('Error checking email confirmation:', errorMessage)
-      return { confirmed: false, error: errorMessage }
-    }
-  }, [authService])
-
-  // Resend confirmation email
-  const resendConfirmationEmail = useCallback(async (email: string) => {
-    try {
-      const { error } = await authService.resendConfirmationEmail(email)
-      
-      if (error) {
-        toast({
-          title: "Failed to Resend Email",
-          description: error,
-          variant: "destructive",
-        })
-        return { success: false, error }
-      }
-
-      toast({
-        title: "Confirmation Email Sent",
-        description: "Please check your email and click the confirmation link",
-      })
-      return { success: true, error: null }
-    } catch (error: any) {
-      const errorMessage = error.message || 'An error occurred while resending confirmation email'
-      toast({
-        title: "Failed to Resend Email",
-        description: errorMessage,
-        variant: "destructive",
-      })
-      return { success: false, error: errorMessage }
-    }
-  }, [authService, toast])
-
   // Alias pour logout (pour la compatibilité avec l'interface)
   const logout = useCallback(async () => {
     const result = await signOut()
@@ -343,8 +287,6 @@ export const useAuth = () => {
     logout, // Alias pour logout
     updateProfile,
     resetPassword,
-    checkEmailConfirmation,
-    resendConfirmationEmail,
     getUserStrategies,
     saveUserStrategy,
     
