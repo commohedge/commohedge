@@ -1,5 +1,5 @@
 import { supabase, SupabaseService } from '../lib/supabase'
-import { testSupabaseConnection } from '../utils/supabaseTest'
+import { config } from '../config/environment'
 
 interface SyncOptions {
   autoSync: boolean
@@ -10,9 +10,9 @@ interface SyncOptions {
 class AutoSyncService {
   private static instance: AutoSyncService
   private syncOptions: SyncOptions = {
-    autoSync: true,
-    syncInterval: 30000, // 30 secondes
-    maxRetries: 3
+    autoSync: config.features.supabaseSync,
+    syncInterval: config.performance.syncInterval,
+    maxRetries: config.performance.maxRetries
   }
   private syncTimer: NodeJS.Timeout | null = null
   private isConnected: boolean = false
@@ -34,8 +34,7 @@ class AutoSyncService {
 
   private async initializeConnection() {
     try {
-      const result = await testSupabaseConnection()
-      this.isConnected = result.success
+      this.isConnected = await SupabaseService.checkConnection()
       console.log(`🔄 AutoSync: ${this.isConnected ? 'Connecté' : 'Déconnecté'} à Supabase`)
     } catch (error) {
       console.error('❌ Erreur d\'initialisation AutoSync:', error)
@@ -84,7 +83,6 @@ class AutoSyncService {
   // Marquer qu'il y a des changements à synchroniser
   public markPendingChanges() {
     this.pendingChanges = true
-    console.log('📝 AutoSync: Changements détectés, synchronisation programmée')
   }
 
   // Synchronisation manuelle
@@ -95,7 +93,6 @@ class AutoSyncService {
     }
 
     try {
-      console.log('🔄 AutoSync: Début de la synchronisation...')
       
       // Récupérer les données du localStorage
       const calculatorState = localStorage.getItem('calculatorState')
@@ -206,8 +203,6 @@ class AutoSyncService {
       this.lastSyncTime = new Date()
       this.pendingChanges = false
       this.retryCount = 0
-
-      console.log(`✅ AutoSync: Synchronisation réussie (${syncCount} éléments)`)
       return true
 
     } catch (error) {
@@ -227,8 +222,7 @@ class AutoSyncService {
   // Vérifier la connexion périodiquement
   public async checkConnection(): Promise<boolean> {
     try {
-      const result = await testSupabaseConnection()
-      this.isConnected = result.success
+      this.isConnected = await SupabaseService.checkConnection()
       return this.isConnected
     } catch (error) {
       this.isConnected = false

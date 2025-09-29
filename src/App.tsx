@@ -8,8 +8,9 @@ import { useSmoothScroll, useMomentumScroll } from "./hooks/useSmoothScroll";
 import { useZoom } from "./hooks/useZoom";
 import { useAutoSync } from "./hooks/useAutoSync";
 import LocalStorageWatcher from "./services/LocalStorageWatcher";
-import "./utils/testSupabaseIntegration";
-import "./utils/initSupabaseTables";
+import ErrorService from "./services/ErrorService";
+import MonitoringService from "./services/MonitoringService";
+import CacheService from "./services/CacheService";
 
 // Import pages
 import Dashboard from "./pages/Dashboard";
@@ -50,9 +51,14 @@ const App = () => {
   
   // Initialiser la synchronisation automatique
   useAutoSync();
-  
+
   // Initialiser la surveillance du localStorage
   LocalStorageWatcher.getInstance();
+
+  // Initialiser les services de production
+  ErrorService.getInstance();
+  MonitoringService.getInstance();
+  CacheService.getInstance();
 
   return (
     <QueryClientProvider client={queryClient}>

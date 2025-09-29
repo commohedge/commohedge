@@ -10,7 +10,8 @@ export const config = {
   app: {
     name: import.meta.env.VITE_APP_NAME || 'Forex Pricers',
     version: import.meta.env.VITE_APP_VERSION || '1.0.0',
-    environment: import.meta.env.VITE_APP_ENVIRONMENT || 'development'
+    environment: import.meta.env.VITE_APP_ENVIRONMENT || 'development',
+    baseUrl: import.meta.env.VITE_APP_BASE_URL || window.location.origin
   },
   
   // External APIs
@@ -25,10 +26,17 @@ export const config = {
   
   // Feature Flags
   features: {
-    supabaseSync: true,
-    realTimeData: false,
-    advancedAnalytics: true,
-    userAuthentication: false
+    supabaseSync: import.meta.env.VITE_ENABLE_SUPABASE_SYNC !== 'false',
+    realTimeData: import.meta.env.VITE_ENABLE_REAL_TIME_DATA === 'true',
+    advancedAnalytics: import.meta.env.VITE_ENABLE_ADVANCED_ANALYTICS !== 'false',
+    userAuthentication: import.meta.env.VITE_ENABLE_USER_AUTHENTICATION !== 'false'
+  },
+  
+  // Performance Configuration
+  performance: {
+    syncInterval: parseInt(import.meta.env.VITE_SYNC_INTERVAL || '30000'), // 30 secondes
+    maxRetries: parseInt(import.meta.env.VITE_MAX_RETRIES || '3'),
+    requestTimeout: parseInt(import.meta.env.VITE_REQUEST_TIMEOUT || '10000') // 10 secondes
   }
 }
 
