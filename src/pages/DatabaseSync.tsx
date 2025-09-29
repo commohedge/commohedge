@@ -15,7 +15,10 @@ import {
   Upload,
   CheckCircle,
   AlertCircle,
-  Info
+  Info,
+  FileText,
+  BarChart3,
+  Shield
 } from 'lucide-react'
 import { useSupabase } from '../hooks/useSupabase'
 import { useToast } from '../hooks/use-toast'

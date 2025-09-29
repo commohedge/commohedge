@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useSupabaseAuth } from './useSupabaseAuth';
 
 interface User {
   email: string;
@@ -8,48 +9,28 @@ interface User {
 }
 
 export const useAuth = () => {
+  // Utiliser uniquement Supabase Auth
+  const supabaseAuth = useSupabaseAuth();
+  
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    checkAuthStatus();
-  }, []);
+    // Synchroniser avec Supabase Auth
+    setIsAuthenticated(supabaseAuth.isAuthenticated);
+    setUser(supabaseAuth.user);
+    setIsLoading(supabaseAuth.isLoading);
+  }, [supabaseAuth.isAuthenticated, supabaseAuth.user, supabaseAuth.isLoading]);
 
-  const checkAuthStatus = () => {
-    try {
-      const authStatus = localStorage.getItem('fx_hedging_auth');
-      const userData = localStorage.getItem('fx_hedging_user');
-      
-      if (authStatus === 'true' && userData) {
-        const parsedUser = JSON.parse(userData);
-        setIsAuthenticated(true);
-        setUser(parsedUser);
-      } else {
-        setIsAuthenticated(false);
-        setUser(null);
-      }
-    } catch (error) {
-      console.error('Error checking auth status:', error);
-      setIsAuthenticated(false);
-      setUser(null);
-    } finally {
-      setIsLoading(false);
-    }
+  const login = async (email: string, password: string) => {
+    // Rediriger vers Supabase Login
+    window.location.href = '/supabase-login';
   };
 
-  const login = (email: string, userData: User) => {
-    localStorage.setItem('fx_hedging_auth', 'true');
-    localStorage.setItem('fx_hedging_user', JSON.stringify(userData));
-    setIsAuthenticated(true);
-    setUser(userData);
-  };
-
-  const logout = () => {
-    localStorage.removeItem('fx_hedging_auth');
-    localStorage.removeItem('fx_hedging_user');
-    setIsAuthenticated(false);
-    setUser(null);
+  const logout = async () => {
+    // Utiliser la déconnexion Supabase
+    await supabaseAuth.signOut();
   };
 
   return {
@@ -58,6 +39,6 @@ export const useAuth = () => {
     isLoading,
     login,
     logout,
-    checkAuthStatus
+    checkAuthStatus: () => supabaseAuth.checkAuthStatus()
   };
 };

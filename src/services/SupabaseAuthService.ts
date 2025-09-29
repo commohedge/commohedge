@@ -44,23 +44,28 @@ class SupabaseAuthService {
       role: user.user_metadata?.role || 'Risk Manager',
       loginTime: new Date().toISOString()
     }
-
-    // Stocker dans localStorage pour compatibilité avec l'ancien système
-    localStorage.setItem('fx_hedging_auth', 'true')
-    localStorage.setItem('fx_hedging_user', JSON.stringify(authUser))
     
     console.log('✅ User signed in:', authUser.email)
   }
 
   private handleSignOut() {
-    localStorage.removeItem('fx_hedging_auth')
-    localStorage.removeItem('fx_hedging_user')
     console.log('👋 User signed out')
   }
 
   // Inscription avec email/password
   async signUp(email: string, password: string, userData?: { name?: string; role?: string }) {
     try {
+      console.log('🔄 Tentative d\'inscription pour:', email)
+      
+      // Validation des données
+      if (!email || !password) {
+        throw new Error('Email et mot de passe requis')
+      }
+      
+      if (password.length < 6) {
+        throw new Error('Le mot de passe doit contenir au moins 6 caractères')
+      }
+      
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
@@ -72,18 +77,42 @@ class SupabaseAuthService {
         }
       })
 
-      if (error) throw error
+      if (error) {
+        console.error('❌ Erreur Supabase signUp:', error)
+        throw error
+      }
+
+      console.log('✅ Inscription réussie:', data.user?.email)
+      console.log('📧 Email confirmé:', !!data.user?.email_confirmed_at)
 
       return {
         success: true,
         user: data.user,
-        message: 'Inscription réussie ! Vérifiez votre email pour confirmer votre compte.'
+        message: data.user?.email_confirmed_at 
+          ? 'Inscription réussie ! Vous pouvez maintenant vous connecter.'
+          : 'Inscription réussie ! Vérifiez votre email pour confirmer votre compte.'
       }
     } catch (error: any) {
-      console.error('Erreur d\'inscription:', error)
+      console.error('❌ Erreur d\'inscription:', error)
+      
+      // Messages d'erreur plus spécifiques
+      let errorMessage = 'Erreur lors de l\'inscription'
+      
+      if (error.message?.includes('User already registered')) {
+        errorMessage = 'Cet email est déjà utilisé. Essayez de vous connecter.'
+      } else if (error.message?.includes('Invalid email')) {
+        errorMessage = 'Format d\'email invalide'
+      } else if (error.message?.includes('Password should be at least')) {
+        errorMessage = 'Le mot de passe doit contenir au moins 6 caractères'
+      } else if (error.message?.includes('Unable to validate email address')) {
+        errorMessage = 'Impossible de valider l\'adresse email'
+      } else if (error.message) {
+        errorMessage = error.message
+      }
+      
       return {
         success: false,
-        error: error.message || 'Erreur lors de l\'inscription'
+        error: errorMessage
       }
     }
   }

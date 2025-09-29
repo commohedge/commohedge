@@ -17,45 +17,20 @@ export const useSupabaseAuth = () => {
     try {
       setIsLoading(true)
       
-      // Vérifier d'abord avec Supabase
+      // Vérifier uniquement avec Supabase
       const supabaseUser = await authService.getCurrentUser()
       
       if (supabaseUser) {
         setUser(supabaseUser)
         setIsAuthenticated(true)
-        
-        // Synchroniser avec localStorage pour compatibilité
-        localStorage.setItem('fx_hedging_auth', 'true')
-        localStorage.setItem('fx_hedging_user', JSON.stringify(supabaseUser))
-      } else {
-        // Fallback sur l'ancien système si Supabase n'est pas disponible
-        const authStatus = localStorage.getItem('fx_hedging_auth')
-        const userData = localStorage.getItem('fx_hedging_user')
-        
-        if (authStatus === 'true' && userData) {
-          const parsedUser = JSON.parse(userData)
-          setUser(parsedUser)
-          setIsAuthenticated(true)
-        } else {
-          setIsAuthenticated(false)
-          setUser(null)
-        }
-      }
-    } catch (error) {
-      console.error('Erreur lors de la vérification de l\'authentification:', error)
-      
-      // Fallback sur l'ancien système en cas d'erreur
-      const authStatus = localStorage.getItem('fx_hedging_auth')
-      const userData = localStorage.getItem('fx_hedging_user')
-      
-      if (authStatus === 'true' && userData) {
-        const parsedUser = JSON.parse(userData)
-        setUser(parsedUser)
-        setIsAuthenticated(true)
       } else {
         setIsAuthenticated(false)
         setUser(null)
       }
+    } catch (error) {
+      console.error('Erreur lors de la vérification de l\'authentification:', error)
+      setIsAuthenticated(false)
+      setUser(null)
     } finally {
       setIsLoading(false)
     }

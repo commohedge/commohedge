@@ -10,6 +10,9 @@ import { useAutoSync } from "./hooks/useAutoSync";
 import LocalStorageWatcher from "./services/LocalStorageWatcher";
 import "./utils/testSupabaseIntegration";
 import "./utils/initSupabaseTables";
+import "./utils/testSupabaseFinal";
+import "./utils/testSignUp";
+import "./utils/cleanupLocalStorage";
 
 // Import pages
 import Dashboard from "./pages/Dashboard";
@@ -29,7 +32,6 @@ import SavedScenarios from "./pages/SavedScenarios";
 import RegressionAnalysis from "./pages/RegressionAnalysis";
 import OptionsMarketData from "./pages/OptionsMarketData";
 import LandingPage from "./pages/LandingPage";
-import Login from "./pages/Login";
 import SupabaseLogin from "./pages/SupabaseLogin";
 import NotFound from "./pages/NotFound";
 import ProtectedRoute from "./components/ProtectedRoute";
@@ -68,7 +70,7 @@ const App = () => {
             <Route path="/" element={<LandingPage />} />
             
             {/* Authentication */}
-            <Route path="/login" element={<Login />} />
+            <Route path="/login" element={<SupabaseLogin />} />
             <Route path="/supabase-login" element={<SupabaseLogin />} />
             
             {/* FX Risk Management Routes */}

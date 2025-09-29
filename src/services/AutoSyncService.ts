@@ -97,13 +97,19 @@ class AutoSyncService {
     try {
       console.log('🔄 AutoSync: Début de la synchronisation...')
       
-      // Récupérer l'utilisateur actuel
-      const userData = localStorage.getItem('fx_hedging_user')
-      const currentUser = userData ? JSON.parse(userData) : null
+      // Vérifier l'utilisateur Supabase actuel
+      const { data: { user } } = await supabase.auth.getUser()
       
-      if (!currentUser) {
-        console.warn('⚠️ AutoSync: Aucun utilisateur connecté')
+      if (!user) {
+        console.warn('⚠️ AutoSync: Aucun utilisateur Supabase connecté')
         return false
+      }
+      
+      const currentUser = {
+        id: user.id,
+        email: user.email || '',
+        name: user.user_metadata?.name || user.email?.split('@')[0] || 'User',
+        role: user.user_metadata?.role || 'Risk Manager'
       }
       
       // Récupérer les données du localStorage

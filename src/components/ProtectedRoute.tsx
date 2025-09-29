@@ -25,7 +25,8 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
   }
 
   if (!isAuthenticated) {
-    return <Navigate to="/login" replace />;
+    // Rediriger vers Supabase Login au lieu de l'ancien système
+    return <Navigate to="/supabase-login" replace />;
   }
 
   return <>{children}</>;

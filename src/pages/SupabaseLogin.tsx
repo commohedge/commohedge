@@ -53,20 +53,40 @@ const SupabaseLogin: React.FC = () => {
     e.preventDefault()
     setError('')
 
+    // Validation des champs
     if (!email || !password) {
       setError('Veuillez remplir tous les champs')
       return
     }
 
+    if (isSignUp && !name.trim()) {
+      setError('Veuillez entrer votre nom complet')
+      return
+    }
+
+    if (password.length < 6) {
+      setError('Le mot de passe doit contenir au moins 6 caractères')
+      return
+    }
+
     try {
+      console.log('🔄 Tentative d\'authentification:', { email, isSignUp })
+      
       let result
       if (isSignUp) {
         result = await signUp(email, password, { name, role })
         if (result.success) {
           toast({
             title: "Inscription réussie",
-            description: "Vérifiez votre email pour confirmer votre compte",
+            description: result.message || "Vérifiez votre email pour confirmer votre compte",
           })
+          
+          // Si l'email est confirmé automatiquement, rediriger
+          if (result.user?.email_confirmed_at) {
+            setTimeout(() => {
+              navigate('/dashboard')
+            }, 2000)
+          }
         }
       } else {
         result = await signIn(email, password)
@@ -77,10 +97,12 @@ const SupabaseLogin: React.FC = () => {
 
       if (!result.success) {
         setError(result.error || 'Une erreur est survenue')
+        console.error('❌ Erreur d\'authentification:', result.error)
       }
     } catch (err) {
-      setError('Une erreur inattendue est survenue')
-      console.error('Erreur d\'authentification:', err)
+      const errorMessage = 'Une erreur inattendue est survenue'
+      setError(errorMessage)
+      console.error('❌ Erreur d\'authentification:', err)
     }
   }
 
