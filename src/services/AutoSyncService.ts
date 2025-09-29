@@ -1,4 +1,5 @@
 import { supabase, SupabaseService } from '../lib/supabase'
+import { testSupabaseConnection } from '../utils/supabaseTest'
 
 interface SyncOptions {
   autoSync: boolean
@@ -33,8 +34,8 @@ class AutoSyncService {
 
   private async initializeConnection() {
     try {
-      const { error } = await supabase.from('forex_strategies').select('count').limit(1)
-      this.isConnected = !error
+      const result = await testSupabaseConnection()
+      this.isConnected = result.success
       console.log(`🔄 AutoSync: ${this.isConnected ? 'Connecté' : 'Déconnecté'} à Supabase`)
     } catch (error) {
       console.error('❌ Erreur d\'initialisation AutoSync:', error)
@@ -83,6 +84,7 @@ class AutoSyncService {
   // Marquer qu'il y a des changements à synchroniser
   public markPendingChanges() {
     this.pendingChanges = true
+    console.log('📝 AutoSync: Changements détectés, synchronisation programmée')
   }
 
   // Synchronisation manuelle
@@ -93,6 +95,16 @@ class AutoSyncService {
     }
 
     try {
+      console.log('🔄 AutoSync: Début de la synchronisation...')
+      
+      // Récupérer l'utilisateur actuel
+      const userData = localStorage.getItem('fx_hedging_user')
+      const currentUser = userData ? JSON.parse(userData) : null
+      
+      if (!currentUser) {
+        console.warn('⚠️ AutoSync: Aucun utilisateur connecté')
+        return false
+      }
       
       // Récupérer les données du localStorage
       const calculatorState = localStorage.getItem('calculatorState')
@@ -108,6 +120,7 @@ class AutoSyncService {
         const strategyData = {
           name: `AutoSync Strategy ${new Date().toLocaleString()}`,
           description: 'Stratégie synchronisée automatiquement',
+          user_id: currentUser.id, // Utiliser l'ID utilisateur Supabase
           start_date: state.params?.startDate || new Date().toISOString().split('T')[0],
           strategy_start_date: state.params?.strategyStartDate || new Date().toISOString().split('T')[0],
           months_to_hedge: state.params?.monthsToHedge || 12,
@@ -158,6 +171,7 @@ class AutoSyncService {
           await SupabaseService.saveScenario({
             name: scenario.name,
             description: scenario.description || '',
+            user_id: currentUser.id, // Utiliser l'ID utilisateur Supabase
             params: scenario.params,
             strategy: scenario.strategy,
             results: scenario.results,
@@ -180,6 +194,7 @@ class AutoSyncService {
           await SupabaseService.saveRiskMatrix({
             name: matrix.name,
             description: matrix.description || '',
+            user_id: currentUser.id, // Utiliser l'ID utilisateur Supabase
             components: matrix.components || [],
             coverage_ratio: matrix.coverageRatio || 0,
             results: matrix.results || []
@@ -194,6 +209,7 @@ class AutoSyncService {
         for (const instrument of instruments) {
           await SupabaseService.saveHedgingInstrument({
             ...instrument,
+            user_id: currentUser.id, // Utiliser l'ID utilisateur Supabase
             created_at: new Date().toISOString()
           })
           syncCount++
@@ -203,6 +219,8 @@ class AutoSyncService {
       this.lastSyncTime = new Date()
       this.pendingChanges = false
       this.retryCount = 0
+
+      console.log(`✅ AutoSync: Synchronisation réussie (${syncCount} éléments)`)
       return true
 
     } catch (error) {
@@ -222,8 +240,8 @@ class AutoSyncService {
   // Vérifier la connexion périodiquement
   public async checkConnection(): Promise<boolean> {
     try {
-      const { error } = await supabase.from('forex_strategies').select('count').limit(1)
-      this.isConnected = !error
+      const result = await testSupabaseConnection()
+      this.isConnected = result.success
       return this.isConnected
     } catch (error) {
       this.isConnected = false

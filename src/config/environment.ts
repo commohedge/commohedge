@@ -28,7 +28,7 @@ export const config = {
     supabaseSync: true,
     realTimeData: false,
     advancedAnalytics: true,
-    userAuthentication: true
+    userAuthentication: false
   }
 }
 

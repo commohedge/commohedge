@@ -116,12 +116,6 @@ const reportingItems = [
 
 const managementItems = [
   {
-    title: "User Profile",
-    url: "/profile",
-    icon: User,
-    description: "Manage your account"
-  },
-  {
     title: "User Management",
     url: "/users",
     icon: Users,
@@ -366,16 +360,9 @@ export function AppSidebar() {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={async () => {
-                  try {
-                    await logout();
-                    // Redirection après déconnexion réussie
-                    window.location.href = '/';
-                  } catch (error) {
-                    console.error('Logout error:', error);
-                    // Redirection même en cas d'erreur pour éviter d'être bloqué
-                    window.location.href = '/';
-                  }
+                onClick={() => {
+                  logout();
+                  window.location.href = '/';
                 }}
                 className="w-full h-9 bg-red-500/10 border-red-500/30 text-red-500 hover:bg-red-500/20 hover:border-red-400/50 hover:text-red-400 transition-all duration-200 shadow-sm hover:shadow-md hover:shadow-red-500/20 font-medium"
                 title="Logout"

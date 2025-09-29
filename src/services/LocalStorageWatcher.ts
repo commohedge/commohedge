@@ -35,6 +35,7 @@ class LocalStorageWatcher {
       this.originalSetItem(key, value)
       
       if (this.watchedKeys.has(key)) {
+        console.log(`📝 LocalStorageWatcher: Changement détecté dans ${key}`)
         this.autoSyncService.markPendingChanges()
       }
     }
@@ -44,6 +45,7 @@ class LocalStorageWatcher {
       this.originalRemoveItem(key)
       
       if (this.watchedKeys.has(key)) {
+        console.log(`🗑️ LocalStorageWatcher: Suppression détectée dans ${key}`)
         this.autoSyncService.markPendingChanges()
       }
     }
@@ -51,6 +53,7 @@ class LocalStorageWatcher {
     // Écouter les événements de stockage (pour les onglets multiples)
     window.addEventListener('storage', (event) => {
       if (event.key && this.watchedKeys.has(event.key)) {
+        console.log(`🔄 LocalStorageWatcher: Changement externe détecté dans ${event.key}`)
         this.autoSyncService.markPendingChanges()
       }
     })
@@ -61,11 +64,13 @@ class LocalStorageWatcher {
   // Ajouter une clé à surveiller
   public watchKey(key: string) {
     this.watchedKeys.add(key)
+    console.log(`👀 LocalStorageWatcher: Ajout de la surveillance pour ${key}`)
   }
 
   // Retirer une clé de la surveillance
   public unwatchKey(key: string) {
     this.watchedKeys.delete(key)
+    console.log(`👀 LocalStorageWatcher: Suppression de la surveillance pour ${key}`)
   }
 
   // Obtenir les clés surveillées
@@ -75,6 +80,7 @@ class LocalStorageWatcher {
 
   // Forcer la synchronisation
   public forceSync() {
+    console.log('🔄 LocalStorageWatcher: Synchronisation forcée')
     this.autoSyncService.markPendingChanges()
   }
 
@@ -82,6 +88,7 @@ class LocalStorageWatcher {
   public stop() {
     localStorage.setItem = this.originalSetItem
     localStorage.removeItem = this.originalRemoveItem
+    console.log('🛑 LocalStorageWatcher: Surveillance arrêtée')
   }
 }
 

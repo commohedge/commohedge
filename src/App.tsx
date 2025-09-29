@@ -8,6 +8,8 @@ import { useSmoothScroll, useMomentumScroll } from "./hooks/useSmoothScroll";
 import { useZoom } from "./hooks/useZoom";
 import { useAutoSync } from "./hooks/useAutoSync";
 import LocalStorageWatcher from "./services/LocalStorageWatcher";
+import "./utils/testSupabaseIntegration";
+import "./utils/initSupabaseTables";
 
 // Import pages
 import Dashboard from "./pages/Dashboard";
@@ -28,8 +30,7 @@ import RegressionAnalysis from "./pages/RegressionAnalysis";
 import OptionsMarketData from "./pages/OptionsMarketData";
 import LandingPage from "./pages/LandingPage";
 import Login from "./pages/Login";
-import Signup from "./pages/Signup";
-import UserProfile from "./pages/UserProfile";
+import SupabaseLogin from "./pages/SupabaseLogin";
 import NotFound from "./pages/NotFound";
 import ProtectedRoute from "./components/ProtectedRoute";
 
@@ -68,7 +69,7 @@ const App = () => {
             
             {/* Authentication */}
             <Route path="/login" element={<Login />} />
-            <Route path="/signup" element={<Signup />} />
+            <Route path="/supabase-login" element={<SupabaseLogin />} />
             
             {/* FX Risk Management Routes */}
             <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
@@ -84,7 +85,6 @@ const App = () => {
             <Route path="/forex-market" element={<ProtectedRoute><ForexMarket /></ProtectedRoute>} />
             <Route path="/options-market-data" element={<ProtectedRoute><OptionsMarketData /></ProtectedRoute>} />
             <Route path="/users" element={<ProtectedRoute><UserManagement /></ProtectedRoute>} />
-            <Route path="/profile" element={<ProtectedRoute><UserProfile /></ProtectedRoute>} />
             <Route path="/database-sync" element={<ProtectedRoute><DatabaseSync /></ProtectedRoute>} />
             <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
             <Route path="/regression-analysis" element={<ProtectedRoute><RegressionAnalysis /></ProtectedRoute>} />

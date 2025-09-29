@@ -8,7 +8,6 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate, Link } from "react-router-dom";
-import { useAuth } from "@/hooks/useAuth";
 import { 
   Mail, 
   Lock, 
@@ -25,34 +24,55 @@ const Login = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const { toast } = useToast();
   const navigate = useNavigate();
-  const { signIn, isLoading, isAuthenticated } = useAuth();
 
   // Check if user is already logged in
   useEffect(() => {
-    if (isAuthenticated) {
+    const isLoggedIn = localStorage.getItem('fx_hedging_auth');
+    if (isLoggedIn === 'true') {
       navigate('/dashboard');
     }
-  }, [isAuthenticated, navigate]);
+  }, [navigate]);
 
   const handleEmailLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    setIsLoading(true);
     setError('');
 
-    try {
-      const result = await signIn(email, password);
-      
-      if (result.success) {
-        navigate('/dashboard');
-      } else {
-        setError(result.error || 'Invalid email or password. Please try again.');
-      }
-    } catch (error: any) {
-      console.error('Login error:', error);
-      setError('An unexpected error occurred. Please try again.');
+    // Simulate API call delay
+    await new Promise(resolve => setTimeout(resolve, 1000));
+
+    // Check credentials
+    if (email === 'commohedge@test.com' && password === 'test') {
+      // Success - store auth state
+      localStorage.setItem('fx_hedging_auth', 'true');
+      localStorage.setItem('fx_hedging_user', JSON.stringify({
+        email: email,
+        name: 'Commodity Hedge Manager',
+        role: 'Risk Manager',
+        loginTime: new Date().toISOString()
+      }));
+
+      toast({
+        title: "Login Successful",
+        description: "Welcome to FX hedging Risk Management Platform",
+      });
+
+      // Redirect to dashboard
+      navigate('/dashboard');
+    } else {
+      setError('Invalid email or password. Please try again.');
+      toast({
+        title: "Login Failed",
+        description: "Invalid credentials provided",
+        variant: "destructive",
+      });
     }
+
+    setIsLoading(false);
   };
 
   const handleSocialLogin = (provider: string) => {
@@ -103,14 +123,6 @@ const Login = () => {
           </CardHeader>
 
           <CardContent className="space-y-6">
-            {/* Test Account Info */}
-            <Alert className="border-blue-500/50 bg-blue-500/10">
-              <CheckCircle className="h-4 w-4" />
-              <AlertDescription>
-                <strong>Test Account:</strong> commohedge@test.com / test
-              </AlertDescription>
-            </Alert>
-
             {/* Error Alert */}
             {error && (
               <Alert variant="destructive" className="border-red-500/50 bg-red-500/10">
@@ -144,7 +156,7 @@ const Login = () => {
                   <Input
                     id="password"
                     type={showPassword ? "text" : "password"}
-                    placeholder="test"
+                    placeholder="Enter your password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     className="pl-10 pr-10 bg-slate-800/50 border-slate-600 text-white placeholder:text-slate-400 focus:border-blue-500"
@@ -223,12 +235,12 @@ const Login = () => {
             <div className="text-center">
               <p className="text-slate-400 text-sm">
                 Don't have an account?{' '}
-                <Link 
-                  to="/signup"
+                <button 
+                  onClick={() => toast({ title: "Coming Soon", description: "Registration will be available soon" })}
                   className="text-blue-400 hover:text-blue-300 font-semibold"
                 >
                   Sign up
-                </Link>
+                </button>
               </p>
             </div>
           </CardContent>
