@@ -6,6 +6,10 @@ import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import { ThemeProvider } from "./hooks/ThemeProvider";
 import { useSmoothScroll, useMomentumScroll } from "./hooks/useSmoothScroll";
 import { useZoom } from "./hooks/useZoom";
+import { useAutoSync } from "./hooks/useAutoSync";
+import LocalStorageWatcher from "./services/LocalStorageWatcher";
+import "./utils/testSupabaseIntegration";
+import "./utils/initSupabaseTables";
 
 // Import pages
 import Dashboard from "./pages/Dashboard";
@@ -20,11 +24,14 @@ import Reports from "./pages/Reports";
 import ForexMarket from "./pages/ForexMarket";
 import UserManagement from "./pages/UserManagement";
 import Settings from "./pages/Settings";
+import DatabaseSync from "./pages/DatabaseSync";
 import SavedScenarios from "./pages/SavedScenarios";
 import RegressionAnalysis from "./pages/RegressionAnalysis";
 import OptionsMarketData from "./pages/OptionsMarketData";
 import LandingPage from "./pages/LandingPage";
 import Login from "./pages/Login";
+import Signup from "./pages/Signup";
+import UserProfile from "./pages/UserProfile";
 import NotFound from "./pages/NotFound";
 import ProtectedRoute from "./components/ProtectedRoute";
 
@@ -40,6 +47,12 @@ const App = () => {
   
   // Initialiser le zoom
   useZoom();
+  
+  // Initialiser la synchronisation automatique
+  useAutoSync();
+  
+  // Initialiser la surveillance du localStorage
+  LocalStorageWatcher.getInstance();
 
   return (
     <QueryClientProvider client={queryClient}>
@@ -57,6 +70,7 @@ const App = () => {
             
             {/* Authentication */}
             <Route path="/login" element={<Login />} />
+            <Route path="/signup" element={<Signup />} />
             
             {/* FX Risk Management Routes */}
             <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
@@ -72,6 +86,8 @@ const App = () => {
             <Route path="/forex-market" element={<ProtectedRoute><ForexMarket /></ProtectedRoute>} />
             <Route path="/options-market-data" element={<ProtectedRoute><OptionsMarketData /></ProtectedRoute>} />
             <Route path="/users" element={<ProtectedRoute><UserManagement /></ProtectedRoute>} />
+            <Route path="/profile" element={<ProtectedRoute><UserProfile /></ProtectedRoute>} />
+            <Route path="/database-sync" element={<ProtectedRoute><DatabaseSync /></ProtectedRoute>} />
             <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
             <Route path="/regression-analysis" element={<ProtectedRoute><RegressionAnalysis /></ProtectedRoute>} />
             

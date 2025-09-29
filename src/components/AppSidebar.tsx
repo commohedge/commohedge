@@ -14,7 +14,8 @@ import {
   Briefcase,
   Activity,
   Calculator,
-  Zap
+  Zap,
+  Database
 } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import {
@@ -37,6 +38,7 @@ import ExchangeRateService from "@/services/ExchangeRateService";
 import { ScrollArea } from "@/components/ui/ScrollArea";
 import { useAuth } from "@/hooks/useAuth";
 import { LogOut, User } from "lucide-react";
+import { SyncIndicator } from "./SyncIndicator";
 import "@/styles/sidebar-zoom.css";
 
 const menuItems = [
@@ -114,10 +116,22 @@ const reportingItems = [
 
 const managementItems = [
   {
+    title: "User Profile",
+    url: "/profile",
+    icon: User,
+    description: "Manage your account"
+  },
+  {
     title: "User Management",
     url: "/users",
     icon: Users,
     description: "Roles and permissions"
+  },
+  {
+    title: "Database Sync",
+    url: "/database-sync",
+    icon: Database,
+    description: "Synchronize with Supabase"
   },
   {
     title: "Settings",
@@ -363,6 +377,14 @@ export function AppSidebar() {
                 Logout
               </Button>
             </div>
+
+          {/* Sync Status */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between text-xs text-muted-foreground sidebar-group-label">
+              <span className="font-semibold">Synchronisation</span>
+              <SyncIndicator />
+            </div>
+          </div>
 
           {/* Market Status */}
           <div className="space-y-2">
