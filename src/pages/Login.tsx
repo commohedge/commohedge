@@ -28,7 +28,7 @@ const Login = () => {
   const [error, setError] = useState('');
   const { toast } = useToast();
   const navigate = useNavigate();
-  const { signIn, isLoading, isAuthenticated } = useAuth();
+  const { signIn, isLoading, isAuthenticated, checkEmailConfirmation } = useAuth();
 
   // Check if user is already logged in
   useEffect(() => {
@@ -45,6 +45,14 @@ const Login = () => {
       const result = await signIn(email, password);
       
       if (result.success) {
+        // Vérifier si l'email est confirmé
+        const { confirmed } = await checkEmailConfirmation();
+        
+        if (!confirmed) {
+          setError('Please confirm your email address before logging in. Check your inbox for a confirmation link.');
+          return;
+        }
+        
         navigate('/dashboard');
       } else {
         setError(result.error || 'Invalid email or password. Please try again.');

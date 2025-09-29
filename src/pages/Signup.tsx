@@ -123,7 +123,15 @@ const Signup = () => {
     const result = await signUp(formData);
     
     if (result.success) {
-      navigate('/dashboard');
+      if (result.needsConfirmation) {
+        // Rediriger vers la page d'attente de confirmation
+        navigate('/email-confirmation-pending', { 
+          state: { email: formData.email } 
+        });
+      } else {
+        // Inscription réussie, rediriger vers le dashboard
+        navigate('/dashboard');
+      }
     } else {
       setError(result.error || 'An error occurred during signup');
     }
