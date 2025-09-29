@@ -1,5 +1,4 @@
 import { supabase, SupabaseService } from '../lib/supabase'
-import { config } from '../config/environment'
 
 interface SyncOptions {
   autoSync: boolean
@@ -10,9 +9,9 @@ interface SyncOptions {
 class AutoSyncService {
   private static instance: AutoSyncService
   private syncOptions: SyncOptions = {
-    autoSync: config.features.supabaseSync,
-    syncInterval: config.performance.syncInterval,
-    maxRetries: config.performance.maxRetries
+    autoSync: true,
+    syncInterval: 30000, // 30 secondes
+    maxRetries: 3
   }
   private syncTimer: NodeJS.Timeout | null = null
   private isConnected: boolean = false
@@ -34,7 +33,8 @@ class AutoSyncService {
 
   private async initializeConnection() {
     try {
-      this.isConnected = await SupabaseService.checkConnection()
+      const { error } = await supabase.from('forex_strategies').select('count').limit(1)
+      this.isConnected = !error
       console.log(`🔄 AutoSync: ${this.isConnected ? 'Connecté' : 'Déconnecté'} à Supabase`)
     } catch (error) {
       console.error('❌ Erreur d\'initialisation AutoSync:', error)
@@ -222,7 +222,8 @@ class AutoSyncService {
   // Vérifier la connexion périodiquement
   public async checkConnection(): Promise<boolean> {
     try {
-      this.isConnected = await SupabaseService.checkConnection()
+      const { error } = await supabase.from('forex_strategies').select('count').limit(1)
+      this.isConnected = !error
       return this.isConnected
     } catch (error) {
       this.isConnected = false

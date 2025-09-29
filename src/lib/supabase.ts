@@ -1,32 +1,7 @@
-import { createClient, SupabaseClient } from '@supabase/supabase-js'
+import { createClient } from '@supabase/supabase-js'
 import { config } from '../config/environment'
-import CacheService from '../services/CacheService'
-import ErrorService from '../services/ErrorService'
 
-// Configuration Supabase avec options de production
-const supabaseOptions = {
-  auth: {
-    autoRefreshToken: true,
-    persistSession: true,
-    detectSessionInUrl: true
-  },
-  realtime: {
-    params: {
-      eventsPerSecond: 10
-    }
-  },
-  global: {
-    headers: {
-      'X-Client-Info': `forex-pricers@${config.app.version}`
-    }
-  }
-}
-
-export const supabase: SupabaseClient = createClient(
-  config.supabase.url, 
-  config.supabase.anonKey,
-  supabaseOptions
-)
+export const supabase = createClient(config.supabase.url, config.supabase.anonKey)
 
 // Types pour les données Forex
 export interface ForexStrategy {
@@ -156,105 +131,58 @@ export interface RiskMatrix {
 
 // Service pour gérer les données Supabase
 export class SupabaseService {
-  private static cacheService = CacheService.getInstance()
-  private static errorService = ErrorService.getInstance()
-
-  // Gestion d'erreur centralisée
-  private static handleError(error: any, operation: string) {
-    return this.errorService.handleSupabaseError(error, operation)
-  }
-
-  // Vérification de la connexion
-  static async checkConnection(): Promise<boolean> {
-    try {
-      const { error } = await supabase
-        .from('forex_strategies')
-        .select('count')
-        .limit(1)
-      
-      return !error
-    } catch (error) {
-      return false
-    }
-  }
-
   // Stratégies Forex
   static async saveStrategy(strategy: Omit<ForexStrategy, 'id' | 'created_at' | 'updated_at'>) {
-    try {
-      const { data, error } = await supabase
-        .from('forex_strategies')
-        .insert([strategy])
-        .select()
-        .single()
-      
-      if (error) this.handleError(error, 'sauvegarde de stratégie')
-      return data
-    } catch (error) {
-      this.handleError(error, 'sauvegarde de stratégie')
-    }
+    const { data, error } = await supabase
+      .from('forex_strategies')
+      .insert([strategy])
+      .select()
+      .single()
+    
+    if (error) throw error
+    return data
   }
   
   static async getStrategies() {
-    const cacheKey = 'forex_strategies_all'
+    const { data, error } = await supabase
+      .from('forex_strategies')
+      .select('*')
+      .order('created_at', { ascending: false })
     
-    return this.cacheService.cacheSupabaseQuery(
-      cacheKey,
-      async () => {
-        const { data, error } = await supabase
-          .from('forex_strategies')
-          .select('*')
-          .order('created_at', { ascending: false })
-        
-        if (error) throw this.handleError(error, 'récupération des stratégies')
-        return data || []
-      },
-      5 * 60 * 1000 // Cache pendant 5 minutes
-    )
+    if (error) throw error
+    return data
   }
   
   static async getStrategy(id: string) {
-    try {
-      const { data, error } = await supabase
-        .from('forex_strategies')
-        .select('*')
-        .eq('id', id)
-        .single()
-      
-      if (error) this.handleError(error, 'récupération de stratégie')
-      return data
-    } catch (error) {
-      this.handleError(error, 'récupération de stratégie')
-    }
+    const { data, error } = await supabase
+      .from('forex_strategies')
+      .select('*')
+      .eq('id', id)
+      .single()
+    
+    if (error) throw error
+    return data
   }
   
   static async updateStrategy(id: string, updates: Partial<ForexStrategy>) {
-    try {
-      const { data, error } = await supabase
-        .from('forex_strategies')
-        .update(updates)
-        .eq('id', id)
-        .select()
-        .single()
-      
-      if (error) this.handleError(error, 'mise à jour de stratégie')
-      return data
-    } catch (error) {
-      this.handleError(error, 'mise à jour de stratégie')
-    }
+    const { data, error } = await supabase
+      .from('forex_strategies')
+      .update(updates)
+      .eq('id', id)
+      .select()
+      .single()
+    
+    if (error) throw error
+    return data
   }
   
   static async deleteStrategy(id: string) {
-    try {
-      const { error } = await supabase
-        .from('forex_strategies')
-        .delete()
-        .eq('id', id)
-      
-      if (error) this.handleError(error, 'suppression de stratégie')
-      return true
-    } catch (error) {
-      this.handleError(error, 'suppression de stratégie')
-    }
+    const { error } = await supabase
+      .from('forex_strategies')
+      .delete()
+      .eq('id', id)
+    
+    if (error) throw error
   }
   
   // Scénarios sauvegardés
