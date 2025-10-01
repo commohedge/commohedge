@@ -59,11 +59,11 @@ class SupabaseAuthService {
       
       // Validation des données
       if (!email || !password) {
-        throw new Error('Email et mot de passe requis')
+        throw new Error('Email and password required')
       }
       
       if (password.length < 6) {
-        throw new Error('Le mot de passe doit contenir au moins 6 caractères')
+        throw new Error('Password must be at least 6 characters')
       }
       
       const { data, error } = await supabase.auth.signUp({
@@ -89,23 +89,23 @@ class SupabaseAuthService {
         success: true,
         user: data.user,
         message: data.user?.email_confirmed_at 
-          ? 'Inscription réussie ! Vous pouvez maintenant vous connecter.'
-          : 'Inscription réussie ! Vérifiez votre email pour confirmer votre compte.'
+          ? 'Registration successful! You can now sign in.'
+          : 'Registration successful! Please check your email to confirm your account.'
       }
     } catch (error: any) {
       console.error('❌ Erreur d\'inscription:', error)
       
       // Messages d'erreur plus spécifiques
-      let errorMessage = 'Erreur lors de l\'inscription'
+      let errorMessage = 'Error during registration'
       
       if (error.message?.includes('User already registered')) {
-        errorMessage = 'Cet email est déjà utilisé. Essayez de vous connecter.'
+        errorMessage = 'This email is already in use. Try signing in.'
       } else if (error.message?.includes('Invalid email')) {
-        errorMessage = 'Format d\'email invalide'
+        errorMessage = 'Invalid email format'
       } else if (error.message?.includes('Password should be at least')) {
-        errorMessage = 'Le mot de passe doit contenir au moins 6 caractères'
+        errorMessage = 'Password must be at least 6 characters'
       } else if (error.message?.includes('Unable to validate email address')) {
-        errorMessage = 'Impossible de valider l\'adresse email'
+        errorMessage = 'Unable to validate email address'
       } else if (error.message) {
         errorMessage = error.message
       }

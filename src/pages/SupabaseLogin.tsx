@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Button } from '../components/ui/button'
 import { Input } from '../components/ui/input'
 import { Label } from '../components/ui/label'
@@ -23,6 +23,7 @@ import {
 
 const SupabaseLogin: React.FC = () => {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const { toast } = useToast()
   const { 
     isAuthenticated, 
@@ -41,6 +42,16 @@ const SupabaseLogin: React.FC = () => {
   const [isSignUp, setIsSignUp] = useState(false)
   const [name, setName] = useState('')
   const [role, setRole] = useState('Risk Manager')
+
+  // Détecter le paramètre mode pour forcer l'inscription ou la connexion
+  useEffect(() => {
+    const mode = searchParams.get('mode')
+    if (mode === 'signup') {
+      setIsSignUp(true)
+    } else if (mode === 'login') {
+      setIsSignUp(false)
+    }
+  }, [searchParams])
 
   // Rediriger si déjà connecté
   useEffect(() => {
@@ -145,7 +156,7 @@ const SupabaseLogin: React.FC = () => {
       <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900 flex items-center justify-center">
         <div className="flex items-center gap-2 text-white">
           <Loader2 className="h-6 w-6 animate-spin" />
-          <span>Vérification de l'authentification...</span>
+          <span>Checking authentication...</span>
         </div>
       </div>
     )
@@ -167,7 +178,7 @@ const SupabaseLogin: React.FC = () => {
           className="absolute -top-16 left-0 text-white/70 hover:text-white"
         >
           <ArrowLeft className="h-4 w-4 mr-2" />
-          Retour à l'accueil
+          Back to home
         </Button>
 
         <Card className="backdrop-blur-xl bg-white/10 border-white/20 shadow-2xl">
@@ -180,12 +191,12 @@ const SupabaseLogin: React.FC = () => {
             
             <div>
               <CardTitle className="text-2xl font-bold text-white">
-                {isSignUp ? 'Créer un compte' : 'Connexion'}
+                {isSignUp ? 'Create Account' : 'Sign In'}
               </CardTitle>
               <CardDescription className="text-white/70">
                 {isSignUp 
-                  ? 'Rejoignez la plateforme de gestion des risques FX' 
-                  : 'Accédez à votre tableau de bord FX'
+                  ? 'Join the FX risk management platform' 
+                  : 'Access your FX dashboard'
                 }
               </CardDescription>
             </div>
@@ -194,7 +205,7 @@ const SupabaseLogin: React.FC = () => {
             <div className="flex justify-center gap-2">
               <Badge variant="outline" className="text-green-400 border-green-400/30">
                 <CheckCircle className="h-3 w-3 mr-1" />
-                Sécurisé
+                Secure
               </Badge>
               <Badge variant="outline" className="text-blue-400 border-blue-400/30">
                 <CheckCircle className="h-3 w-3 mr-1" />
@@ -221,7 +232,7 @@ const SupabaseLogin: React.FC = () => {
                 disabled={isLoading}
               >
                 <Chrome className="h-5 w-5 mr-2" />
-                Continuer avec Google
+                Continue with Google
               </Button>
 
               <Button
@@ -230,8 +241,8 @@ const SupabaseLogin: React.FC = () => {
                 disabled
               >
                 <Apple className="h-5 w-5 mr-2" />
-                Continuer avec Apple
-                <Badge variant="secondary" className="ml-2 text-xs">Bientôt</Badge>
+                Continue with Apple
+                <Badge variant="secondary" className="ml-2 text-xs">Coming Soon</Badge>
               </Button>
             </div>
 
@@ -241,7 +252,7 @@ const SupabaseLogin: React.FC = () => {
                 <div className="w-full border-t border-white/20"></div>
               </div>
               <div className="relative flex justify-center text-sm">
-                <span className="px-2 bg-transparent text-white/70">ou</span>
+                <span className="px-2 bg-transparent text-white/70">or</span>
               </div>
             </div>
 
@@ -249,14 +260,14 @@ const SupabaseLogin: React.FC = () => {
             <form onSubmit={handleEmailAuth} className="space-y-4">
               {isSignUp && (
                 <div className="space-y-2">
-                  <Label htmlFor="name" className="text-white">Nom complet</Label>
+                  <Label htmlFor="name" className="text-white">Full Name</Label>
                   <Input
                     id="name"
                     type="text"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                     className="bg-white/10 border-white/20 text-white placeholder:text-white/50"
-                    placeholder="Votre nom complet"
+                    placeholder="Your full name"
                     required={isSignUp}
                   />
                 </div>
@@ -272,14 +283,14 @@ const SupabaseLogin: React.FC = () => {
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     className="pl-10 bg-white/10 border-white/20 text-white placeholder:text-white/50"
-                    placeholder="votre@email.com"
+                    placeholder="your@email.com"
                     required
                   />
                 </div>
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="password" className="text-white">Mot de passe</Label>
+                <Label htmlFor="password" className="text-white">Password</Label>
                 <div className="relative">
                   <Lock className="absolute left-3 top-3 h-4 w-4 text-white/50" />
                   <Input
@@ -288,7 +299,7 @@ const SupabaseLogin: React.FC = () => {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     className="pl-10 pr-10 bg-white/10 border-white/20 text-white placeholder:text-white/50"
-                    placeholder="Votre mot de passe"
+                    placeholder="Your password"
                     required
                   />
                   <Button
@@ -311,7 +322,7 @@ const SupabaseLogin: React.FC = () => {
                     onClick={handleForgotPassword}
                     className="text-blue-400 hover:text-blue-300 p-0 h-auto"
                   >
-                    Mot de passe oublié ?
+                    Forgot password?
                   </Button>
                 </div>
               )}
@@ -324,7 +335,7 @@ const SupabaseLogin: React.FC = () => {
                 {isLoading ? (
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                 ) : null}
-                {isSignUp ? 'Créer le compte' : 'Se connecter'}
+                {isSignUp ? 'Create Account' : 'Sign In'}
               </Button>
             </form>
 
@@ -340,8 +351,8 @@ const SupabaseLogin: React.FC = () => {
                 className="text-white/70 hover:text-white p-0 h-auto"
               >
                 {isSignUp 
-                  ? 'Déjà un compte ? Se connecter' 
-                  : 'Pas de compte ? Créer un compte'
+                  ? 'Already have an account? Sign in' 
+                  : 'Don\'t have an account? Create one'
                 }
               </Button>
             </div>
@@ -349,10 +360,10 @@ const SupabaseLogin: React.FC = () => {
             {/* Demo credentials info */}
             {!isSignUp && (
               <div className="mt-6 p-4 bg-blue-500/10 border border-blue-500/30 rounded-lg">
-                <h4 className="text-sm font-medium text-blue-200 mb-2">Compte de démonstration</h4>
+                <h4 className="text-sm font-medium text-blue-200 mb-2">Demo Account</h4>
                 <p className="text-xs text-blue-300/80">
                   Email: <code className="bg-blue-500/20 px-1 rounded">demo@fx-hedging.com</code><br/>
-                  Mot de passe: <code className="bg-blue-500/20 px-1 rounded">demo123</code>
+                  Password: <code className="bg-blue-500/20 px-1 rounded">demo123</code>
                 </p>
               </div>
             )}
