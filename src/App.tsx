@@ -36,6 +36,7 @@ import SupabaseLogin from "./pages/SupabaseLogin";
 import AuthCallback from "./pages/AuthCallback";
 import NotFound from "./pages/NotFound";
 import ProtectedRoute from "./components/ProtectedRoute";
+import UserSettingsPage from "./components/UserSettingsPage";
 
 // Theme toggle component
 import { ThemeToggle } from "./components/ui/theme-toggle";
@@ -91,6 +92,7 @@ const App = () => {
             <Route path="/users" element={<ProtectedRoute><UserManagement /></ProtectedRoute>} />
             <Route path="/database-sync" element={<ProtectedRoute><DatabaseSync /></ProtectedRoute>} />
             <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
+            <Route path="/user-settings" element={<ProtectedRoute><UserSettingsPage /></ProtectedRoute>} />
             <Route path="/regression-analysis" element={<ProtectedRoute><RegressionAnalysis /></ProtectedRoute>} />
             
             {/* Legacy routes */}
