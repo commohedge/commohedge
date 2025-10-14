@@ -147,6 +147,7 @@ class StrategyImportService {
       foreignRate: number;
       useCustomPeriods?: boolean;
       customPeriods?: Array<{ maturityDate: string; volume: number }>;
+      volumeType?: 'receivable' | 'payable'; // Type de volume
     },
     detailedResults?: any[] // Optional: results from the Detailed Results table
   ): string {
@@ -169,6 +170,7 @@ class StrategyImportService {
         quoteVolume: params.quoteVolume,
         domesticRate: params.domesticRate,
         foreignRate: params.foreignRate,
+        volumeType: params.volumeType,         // ✅ AJOUT: Sauvegarder le volumeType
       }
     };
 
