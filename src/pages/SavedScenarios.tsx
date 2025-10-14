@@ -857,7 +857,7 @@ const SavedScenarios = () => {
                       // Récupérer les prix personnalisés des options
                       customOptionPrices: scenario.customOptionPrices || {}
                     }));
-                    navigate('/');
+                    navigate('/strategy-builder');
                   }}
                   className="mt-4"
                 >
