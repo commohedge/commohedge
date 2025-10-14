@@ -141,22 +141,111 @@ class SupabaseAuthService {
     }
   }
 
-  // Connexion avec Google
+  // Connexion avec Google via popup
   async signInWithGoogle() {
     try {
+      // Créer une popup pour l'authentification Google
+      const popup = window.open(
+        '',
+        'google-auth',
+        'width=500,height=600,scrollbars=yes,resizable=yes,top=100,left=100'
+      )
+
+      if (!popup) {
+        throw new Error('Popup bloquée. Veuillez autoriser les popups pour ce site.')
+      }
+
+      // Obtenir l'URL d'authentification Google
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: `${window.location.origin}/dashboard`
+          redirectTo: `${window.location.origin}/auth/callback`,
+          queryParams: {
+            access_type: 'offline',
+            prompt: 'consent',
+          }
         }
       })
 
       if (error) throw error
 
-      return {
-        success: true,
-        message: 'Redirection vers Google...'
+      // Rediriger la popup vers l'URL d'authentification
+      if (data.url && popup) {
+        popup.location.href = data.url
       }
+
+      // Attendre que la popup se ferme ou que l'authentification soit terminée
+      return new Promise((resolve) => {
+        // Écouter les messages de la popup
+        const messageHandler = (event: MessageEvent) => {
+          if (event.origin !== window.location.origin) return
+
+          if (event.data.type === 'GOOGLE_AUTH_SUCCESS') {
+            window.removeEventListener('message', messageHandler)
+            clearInterval(checkClosed)
+            // Vérifier si l'utilisateur est maintenant connecté
+            this.getCurrentUser().then(user => {
+              if (user) {
+                resolve({
+                  success: true,
+                  user: user,
+                  message: 'Connexion Google réussie !'
+                })
+              } else {
+                resolve({
+                  success: false,
+                  error: 'Authentification échouée'
+                })
+              }
+            })
+          } else if (event.data.type === 'GOOGLE_AUTH_ERROR') {
+            window.removeEventListener('message', messageHandler)
+            clearInterval(checkClosed)
+            resolve({
+              success: false,
+              error: event.data.error || 'Erreur d\'authentification'
+            })
+          }
+        }
+
+        window.addEventListener('message', messageHandler)
+
+        const checkClosed = setInterval(() => {
+          if (popup.closed) {
+            clearInterval(checkClosed)
+            window.removeEventListener('message', messageHandler)
+            // Vérifier si l'utilisateur est maintenant connecté
+            this.getCurrentUser().then(user => {
+              if (user) {
+                resolve({
+                  success: true,
+                  user: user,
+                  message: 'Connexion Google réussie !'
+                })
+              } else {
+                resolve({
+                  success: false,
+                  error: 'Authentification annulée'
+                })
+              }
+            })
+          }
+        }, 1000)
+
+        // Timeout après 5 minutes
+        setTimeout(() => {
+          if (!popup.closed) {
+            popup.close()
+          }
+          clearInterval(checkClosed)
+          window.removeEventListener('message', messageHandler)
+          resolve({
+            success: false,
+            error: 'Timeout de l\'authentification'
+          })
+        }, 300000) // 5 minutes
+      })
+
     } catch (error: any) {
       console.error('Erreur de connexion Google:', error)
       return {

@@ -120,9 +120,15 @@ export const useSupabaseAuth = () => {
       
       if (result.success) {
         toast({
-          title: "Redirection vers Google",
+          title: "Connexion Google réussie",
           description: result.message,
         })
+        
+        // Mettre à jour l'état local si un utilisateur est retourné
+        if (result.user) {
+          setUser(result.user)
+          setIsAuthenticated(true)
+        }
       } else {
         toast({
           title: "Erreur de connexion Google",

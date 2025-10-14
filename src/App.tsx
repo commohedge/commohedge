@@ -33,6 +33,7 @@ import RegressionAnalysis from "./pages/RegressionAnalysis";
 import OptionsMarketData from "./pages/OptionsMarketData";
 import LandingPage from "./pages/LandingPage";
 import SupabaseLogin from "./pages/SupabaseLogin";
+import AuthCallback from "./pages/AuthCallback";
 import NotFound from "./pages/NotFound";
 import ProtectedRoute from "./components/ProtectedRoute";
 
@@ -72,6 +73,7 @@ const App = () => {
             {/* Authentication */}
             <Route path="/login" element={<SupabaseLogin />} />
             <Route path="/supabase-login" element={<SupabaseLogin />} />
+            <Route path="/auth/callback" element={<AuthCallback />} />
             
             {/* FX Risk Management Routes */}
             <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
