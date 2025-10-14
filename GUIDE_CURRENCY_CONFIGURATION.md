@@ -36,18 +36,19 @@ Paire: EUR/USD
 ## 📊 **2. Direction des Flux (Receivable/Payable)**
 
 ### **Fonctionnalité**
-L'utilisateur peut maintenant spécifier si chaque volume de devise est :
-- **📥 Receivable** : Vous recevez cette devise
-- **📤 Payable** : Vous payez cette devise
+L'utilisateur choisit **une seule devise** qu'il reçoit, l'autre est automatiquement payable :
+- **📥 Receivable** : La devise que vous recevez
+- **📤 Payable** : La devise que vous payez (automatiquement déterminée)
 
 ### **Interface**
-- **Boutons toggle** : Pour chaque devise (Base et Quote)
+- **Sélecteur unique** : "Which Currency Do You Receive?"
+- **Logique automatique** : Si EUR est receivable, USD est automatiquement payable
 - **Indicateurs visuels** : Couleurs et icônes pour distinguer receivable/payable
 - **Résumé de configuration** : Affichage clair de la configuration complète
 
 ### **Indicateurs Visuels**
-- **📥 Receivable** : Bouton bleu avec icône "recevoir"
-- **📤 Payable** : Bouton rouge avec icône "payer"
+- **📥 Receivable** : Vert avec icône "recevoir"
+- **📤 Payable** : Rouge avec icône "payer"
 - **Labels colorés** : Vert pour receivable, rouge pour payable
 
 ---
@@ -63,14 +64,14 @@ L'utilisateur peut maintenant spécifier si chaque volume de devise est :
 │ [Base (EUR) ▼] [Quote (USD) ▼]                             │
 │ Current: USD is domestic                                    │
 │                                                             │
-│ Volume Flow Direction:                                      │
-│ EUR Volume: [📥 Receivable] [📤 Payable]                   │
-│ USD Volume: [📥 Receivable] [📤 Payable]                   │
+│ Which Currency Do You Receive?                              │
+│ [📥 EUR (Receivable) ▼] [📥 USD (Receivable) ▼]           │
+│ Current: You receive EUR and pay USD                       │
 │                                                             │
 │ Configuration Summary:                                      │
 │ • Domestic Currency: USD (for interest rate calculations)  │
-│ • EUR Flow: receivable (you receive EUR)                   │
-│ • USD Flow: payable (you pay USD)                          │
+│ • Receivable: 📥 EUR (you receive this currency)           │
+│ • Payable: 📤 USD (you pay this currency)                  │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -97,8 +98,7 @@ interface FXStrategyParams {
   
   // New fields
   domesticCurrency: string;    // 'base' or 'quote'
-  baseVolumeDirection: 'receivable' | 'payable';
-  quoteVolumeDirection: 'receivable' | 'payable';
+  receivableCurrency: string;  // 'base' or 'quote' - the other is automatically payable
 }
 ```
 
@@ -106,8 +106,7 @@ interface FXStrategyParams {
 ```typescript
 {
   domesticCurrency: 'quote',           // Quote currency is domestic by default
-  baseVolumeDirection: 'receivable',   // Base currency is receivable by default
-  quoteVolumeDirection: 'payable'      // Quote currency is payable by default
+  receivableCurrency: 'base'           // Base currency is receivable by default, quote is automatically payable
 }
 ```
 
@@ -124,42 +123,42 @@ interface FXStrategyParams {
 ```
 Paire: EUR/USD
 Domestic Currency: EUR (Base)
-EUR Flow: receivable (reçoit des euros)
-USD Flow: payable (paye des dollars)
+Receivable Currency: EUR (Base)
+→ USD est automatiquement payable
 
 Configuration:
 • Domestic Rate = EUR Rate
 • Foreign Rate = USD Rate
 • EUR Volume = receivable
-• USD Volume = payable
+• USD Volume = payable (automatique)
 ```
 
 ### **Exemple 2 : Exportateur Américain**
 ```
 Paire: EUR/USD
 Domestic Currency: USD (Quote)
-EUR Flow: receivable (reçoit des euros)
-USD Flow: receivable (reçoit des dollars)
+Receivable Currency: USD (Quote)
+→ EUR est automatiquement payable
 
 Configuration:
 • Domestic Rate = USD Rate
 • Foreign Rate = EUR Rate
-• EUR Volume = receivable
 • USD Volume = receivable
+• EUR Volume = payable (automatique)
 ```
 
 ### **Exemple 3 : Trader Cross-Currency**
 ```
 Paire: GBP/JPY
 Domestic Currency: GBP (Base)
-GBP Flow: payable (paye des livres)
-JPY Flow: receivable (reçoit des yens)
+Receivable Currency: JPY (Quote)
+→ GBP est automatiquement payable
 
 Configuration:
 • Domestic Rate = GBP Rate
 • Foreign Rate = JPY Rate
-• GBP Volume = payable
 • JPY Volume = receivable
+• GBP Volume = payable (automatique)
 ```
 
 ---
