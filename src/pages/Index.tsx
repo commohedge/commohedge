@@ -906,11 +906,11 @@ interface FXStrategyParams {
   currencyPair: CurrencyPair;
   useCustomPeriods: boolean;
   customPeriods: CustomPeriod[];
+  // Volume direction indicators
+  baseVolumeReceivable: boolean;  // true = receivable, false = payable
+  quoteVolumeReceivable: boolean; // true = receivable, false = payable
   // Legacy field for backward compatibility
   interestRate?: number;
-  // New fields for domestic/foreign currency selection and volume direction
-  domesticCurrency: string;    // Which currency is domestic (base or quote)
-  receivableCurrency: string;  // Which currency is receivable (base or quote) - the other is automatically payable
 }
 
 export interface StressTestScenario {
@@ -1172,9 +1172,9 @@ const Index = () => {
       currencyPair: CURRENCY_PAIRS[0], // Default to EUR/USD
       useCustomPeriods: false,
       customPeriods: [],
-      // New fields with defaults
-      domesticCurrency: 'quote', // Default: quote currency (USD) is domestic
-      receivableCurrency: 'base' // Default: base currency (EUR) is receivable, quote (USD) is automatically payable
+      // Volume direction defaults
+      baseVolumeReceivable: true,  // Default: base currency is receivable
+      quoteVolumeReceivable: false // Default: quote currency is payable
     };
     
     try {
@@ -1188,23 +1188,16 @@ const Index = () => {
       if (!savedParams.quoteVolume) {
         savedParams.quoteVolume = (savedParams.totalVolume || 10000000) * (savedParams.spotPrice || 1.0850);
       }
+      // Ensure backward compatibility - add volume direction defaults if missing
+      if (savedParams.baseVolumeReceivable === undefined) {
+        savedParams.baseVolumeReceivable = true; // Default: base currency is receivable
+      }
+      if (savedParams.quoteVolumeReceivable === undefined) {
+        savedParams.quoteVolumeReceivable = false; // Default: quote currency is payable
+      }
       // Ensure backward compatibility - add strategyStartDate if missing
       if (!savedParams.strategyStartDate) {
         savedParams.strategyStartDate = savedParams.startDate || new Date().toISOString().split('T')[0];
-      }
-      // Ensure backward compatibility - add new fields if missing
-      if (!savedParams.domesticCurrency) {
-        savedParams.domesticCurrency = 'quote'; // Default: quote currency is domestic
-      }
-      if (!savedParams.receivableCurrency) {
-        savedParams.receivableCurrency = 'base'; // Default: base currency is receivable
-      }
-      // Handle old format with separate direction fields
-      if (savedParams.baseVolumeDirection && savedParams.quoteVolumeDirection) {
-        // Convert old format to new format
-        savedParams.receivableCurrency = savedParams.baseVolumeDirection === 'receivable' ? 'base' : 'quote';
-        delete savedParams.baseVolumeDirection;
-        delete savedParams.quoteVolumeDirection;
       }
       return savedParams;
       }
@@ -4048,7 +4041,10 @@ const Index = () => {
       spotPrice: CURRENCY_PAIRS[0].defaultSpotRate,
       currencyPair: CURRENCY_PAIRS[0],
       useCustomPeriods: false,
-      customPeriods: []
+      customPeriods: [],
+      // Volume direction defaults
+      baseVolumeReceivable: true,  // Default: base currency is receivable
+      quoteVolumeReceivable: false // Default: quote currency is payable
     });
     setStrategy([]);
     setResults(null);
@@ -4171,7 +4167,10 @@ const Index = () => {
         spotPrice: CURRENCY_PAIRS[0].defaultSpotRate,
         currencyPair: CURRENCY_PAIRS[0],
         useCustomPeriods: false,
-        customPeriods: []
+        customPeriods: [],
+        // Volume direction defaults
+        baseVolumeReceivable: true,  // Default: base currency is receivable
+        quoteVolumeReceivable: false // Default: quote currency is payable
       },
       strategy: [],
       results: null,
@@ -4262,8 +4261,16 @@ const Index = () => {
             <p>Strategy Start Date: ${params.strategyStartDate}</p>
             <p>Hedging Start Date: ${params.startDate}</p>
             <p>Spot Price: ${params.spotPrice}</p>
-                            <p>Base Volume ({params.currencyPair?.base || 'BASE'}): {params.baseVolume.toLocaleString()}</p>
-                <p>Quote Volume ({params.currencyPair?.quote || 'QUOTE'}): {Math.round(params.quoteVolume).toLocaleString()}</p>
+                            <p>Base Volume ({params.currencyPair?.base || 'BASE'}): {params.baseVolume.toLocaleString()} 
+                              <span className={`ml-2 ${params.baseVolumeReceivable ? 'text-green-600' : 'text-red-600'}`}>
+                                ({params.baseVolumeReceivable ? 'Receivable' : 'Payable'})
+                              </span>
+                            </p>
+                <p>Quote Volume ({params.currencyPair?.quote || 'QUOTE'}): {Math.round(params.quoteVolume).toLocaleString()} 
+                  <span className={`ml-2 ${params.quoteVolumeReceivable ? 'text-green-600' : 'text-red-600'}`}>
+                    ({params.quoteVolumeReceivable ? 'Receivable' : 'Payable'})
+                  </span>
+                </p>
                 <p>Current Rate: {params.spotPrice.toFixed(4)}</p>
           </div>
           <div class="stress-parameters">
@@ -5282,12 +5289,9 @@ const Index = () => {
     doc.text(`Hedging Start Date: ${params.startDate}`, 15, 50);
     doc.text(`Months to Hedge: ${params.monthsToHedge}`, 15, 55);
     doc.text(`Domestic Rate: ${params.domesticRate}% | Foreign Rate: ${params.foreignRate}%`, 15, 60);
-    doc.text(`Base Volume (${params.currencyPair?.base || 'BASE'}): ${params.baseVolume.toLocaleString()}`, 15, 65);
-    doc.text(`Quote Volume (${params.currencyPair?.quote || 'QUOTE'}): ${Math.round(params.quoteVolume).toLocaleString()}`, 15, 75);
+    doc.text(`Base Volume (${params.currencyPair?.base || 'BASE'}): ${params.baseVolume.toLocaleString()} (${params.baseVolumeReceivable ? 'Receivable' : 'Payable'})`, 15, 65);
+    doc.text(`Quote Volume (${params.currencyPair?.quote || 'QUOTE'}): ${Math.round(params.quoteVolume).toLocaleString()} (${params.quoteVolumeReceivable ? 'Receivable' : 'Payable'})`, 15, 75);
     doc.text(`Current Spot Rate: ${params.spotPrice.toFixed(4)}`, 15, 85);
-                doc.text(`Base Volume (${params.currencyPair?.base || 'BASE'}): ${params.baseVolume.toLocaleString()}`, 15, 60);
-      doc.text(`Quote Volume (${params.currencyPair?.quote || 'QUOTE'}): ${Math.round(params.quoteVolume).toLocaleString()}`, 15, 70);
-      doc.text(`Current Spot Rate: ${params.spotPrice.toFixed(4)}`, 15, 80);
     
     // Strategy
     doc.setFontSize(14);
@@ -6435,7 +6439,7 @@ const pricingFunctions = {
               <CardTitle className="text-xl font-bold text-primary">FX Options Strategy Parameters</CardTitle>
             </CardHeader>
             <CardContent className="pt-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="compact-form-group">
                   <label className="compact-label">Currency Pair</label>
                   <div className="relative">
@@ -6648,40 +6652,6 @@ const pricingFunctions = {
                     )}
                   </div>
                 </div>
-                
-                {/* Currency Configuration */}
-                <div className="compact-form-group">
-                  <label className="compact-label">Domestic Currency</label>
-                  <Select 
-                    value={params.domesticCurrency} 
-                    onValueChange={(value) => setParams({...params, domesticCurrency: value})}
-                  >
-                    <SelectTrigger className="compact-input">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="base">{params.currencyPair?.base || 'Base'}</SelectItem>
-                      <SelectItem value="quote">{params.currencyPair?.quote || 'Quote'}</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                
-                <div className="compact-form-group">
-                  <label className="compact-label">Receivable Currency</label>
-                  <Select 
-                    value={params.receivableCurrency} 
-                    onValueChange={(value) => setParams({...params, receivableCurrency: value})}
-                  >
-                    <SelectTrigger className="compact-input">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="base">{params.currencyPair?.base || 'Base'}</SelectItem>
-                      <SelectItem value="quote">{params.currencyPair?.quote || 'Quote'}</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                
                 <div className="compact-form-group">
                   <label className="compact-label">Strategy Start Date</label>
                   <Input
@@ -6720,9 +6690,7 @@ const pricingFunctions = {
                 </div>
                 </div>
                 <div className="compact-form-group">
-                  <label className="compact-label">
-                    Domestic Rate (%) - {params.domesticCurrency === 'base' ? params.currencyPair?.base : params.currencyPair?.quote}
-                  </label>
+                  <label className="compact-label">Domestic Rate (%) - {params.currencyPair?.quote || 'USD'}</label>
                   <div className="flex items-center gap-2">
                     <Slider 
                       value={[params.domesticRate]} 
@@ -6741,9 +6709,7 @@ const pricingFunctions = {
                   </div>
                 </div>
                 <div className="compact-form-group">
-                  <label className="compact-label">
-                    Foreign Rate (%) - {params.domesticCurrency === 'base' ? params.currencyPair?.quote : params.currencyPair?.base}
-                  </label>
+                  <label className="compact-label">Foreign Rate (%) - {params.currencyPair?.base || 'EUR'}</label>
                   <div className="flex items-center gap-2">
                     <Slider 
                       value={[params.foreignRate]} 
@@ -6761,73 +6727,115 @@ const pricingFunctions = {
                     />
                   </div>
                 </div>
-                {/* Base Volume */}
-                <div className="compact-form-group">
-                  <label className="compact-label">
-                    {params.currencyPair?.base || 'Base'} Volume
-                    <span className={`ml-1 text-xs px-1 py-0.5 rounded ${
-                      params.receivableCurrency === 'base' 
-                        ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300' 
-                        : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300'
-                    }`}>
-                      {params.receivableCurrency === 'base' ? '📥' : '📤'}
+                {/* Volume & Spot Rate - Compact Grid Layout */}
+                <div className="bg-muted/20 p-3 rounded-lg space-y-3">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    {/* Base Volume */}
+                    <div className="space-y-2">
+                      <label className="text-xs font-medium text-muted-foreground">
+                        {params.currencyPair?.base || 'Base'} Volume
+                      </label>
+                      <Input
+                        type="number"
+                        value={params.baseVolume}
+                        onChange={(e) => handleBaseVolumeChange(Number(e.target.value))}
+                        className="h-8 text-xs"
+                        placeholder="Volume in base currency"
+                      />
+                      {/* Volume Direction Toggle for Base Currency */}
+                      <div className="flex items-center gap-2">
+                        <Switch
+                          checked={params.baseVolumeReceivable}
+                          onCheckedChange={(checked) => setParams({...params, baseVolumeReceivable: checked})}
+                          id="baseVolumeReceivable"
+                          size="sm"
+                        />
+                        <label htmlFor="baseVolumeReceivable" className="text-xs text-muted-foreground cursor-pointer">
+                          {params.baseVolumeReceivable ? '📈 Receivable' : '📉 Payable'}
+                        </label>
+                      </div>
+                    </div>
+                    
+                    {/* Quote Volume */}
+                    <div className="space-y-2">
+                      <label className="text-xs font-medium text-muted-foreground">
+                        {params.currencyPair?.quote || 'Quote'} Volume
+                      </label>
+                      <Input
+                        type="number"
+                        value={Math.round(params.quoteVolume)}
+                        onChange={(e) => handleQuoteVolumeChange(Number(e.target.value))}
+                        className="h-8 text-xs"
+                        placeholder="Volume in quote currency"
+                      />
+                      {/* Volume Direction Toggle for Quote Currency */}
+                      <div className="flex items-center gap-2">
+                        <Switch
+                          checked={params.quoteVolumeReceivable}
+                          onCheckedChange={(checked) => setParams({...params, quoteVolumeReceivable: checked})}
+                          id="quoteVolumeReceivable"
+                          size="sm"
+                        />
+                        <label htmlFor="quoteVolumeReceivable" className="text-xs text-muted-foreground cursor-pointer">
+                          {params.quoteVolumeReceivable ? '📈 Receivable' : '📉 Payable'}
+                        </label>
+                      </div>
+                    </div>
+                    
+                    {/* Spot Rate */}
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-foreground">
+                        Spot Rate ({params.currencyPair?.symbol || 'EUR/USD'})
+                      </label>
+                      <div className="flex items-center gap-2">
+                        <Input
+                          type="number"
+                          value={params.spotPrice}
+                          onChange={(e) => handleSpotPriceChange(Number(e.target.value))}
+                          className="h-10 text-base font-mono flex-1 min-w-[120px]"
+                          step="0.0001"
+                          placeholder={`${params.currencyPair?.defaultSpotRate || 1.0850}`}
+                        />
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            if (params.currencyPair) {
+                              setParams({...params, spotPrice: params.currencyPair.defaultSpotRate});
+                              setInitialSpotPrice(params.currencyPair.defaultSpotRate);
+                            }
+                          }}
+                          className="h-10 px-3 text-sm"
+                          title="Reset to default market rate"
+                        >
+                          Reset
+                        </Button>
+                      </div>
+                    </div>
+              </div>
+
+                  {/* Auto-sync Status */}
+                  <div className="text-xs text-muted-foreground flex items-center gap-1 justify-center bg-primary/5 p-2 rounded border border-primary/10">
+                    <span>💱</span>
+                    <span>Volumes auto-sync at current spot rate: <span className="font-mono font-medium">{params.spotPrice.toFixed(4)}</span></span>
+                  </div>
+                  
+                  {/* Volume Direction Summary */}
+                  <div className="text-xs text-muted-foreground flex items-center gap-2 justify-center bg-muted/10 p-2 rounded border border-muted/20">
+                    <span>📊</span>
+                    <span>
+                      <span className="font-medium">{params.currencyPair?.base || 'Base'}</span>: 
+                      <span className={`ml-1 ${params.baseVolumeReceivable ? 'text-green-600' : 'text-red-600'}`}>
+                        {params.baseVolumeReceivable ? '📈 Receivable' : '📉 Payable'}
+                      </span>
                     </span>
-                  </label>
-                  <Input
-                    type="number"
-                    value={params.baseVolume}
-                    onChange={(e) => handleBaseVolumeChange(Number(e.target.value))}
-                    className="compact-input"
-                    placeholder="Volume in base currency"
-                  />
-                </div>
-                
-                {/* Quote Volume */}
-                <div className="compact-form-group">
-                  <label className="compact-label">
-                    {params.currencyPair?.quote || 'Quote'} Volume
-                    <span className={`ml-1 text-xs px-1 py-0.5 rounded ${
-                      params.receivableCurrency === 'quote' 
-                        ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300' 
-                        : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300'
-                    }`}>
-                      {params.receivableCurrency === 'quote' ? '📥' : '📤'}
+                    <span>•</span>
+                    <span>
+                      <span className="font-medium">{params.currencyPair?.quote || 'Quote'}</span>: 
+                      <span className={`ml-1 ${params.quoteVolumeReceivable ? 'text-green-600' : 'text-red-600'}`}>
+                        {params.quoteVolumeReceivable ? '📈 Receivable' : '📉 Payable'}
+                      </span>
                     </span>
-                  </label>
-                  <Input
-                    type="number"
-                    value={Math.round(params.quoteVolume)}
-                    onChange={(e) => handleQuoteVolumeChange(Number(e.target.value))}
-                    className="compact-input"
-                    placeholder="Volume in quote currency"
-                  />
-                </div>
-                
-                {/* Spot Rate */}
-                <div className="compact-form-group">
-                  <label className="compact-label">Spot Rate ({params.currencyPair?.symbol || 'EUR/USD'})</label>
-                  <div className="flex items-center gap-2">
-                    <Input
-                      type="number"
-                      value={params.spotPrice}
-                      onChange={(e) => handleSpotPriceChange(Number(e.target.value))}
-                      className="compact-input flex-1"
-                      step="0.0001"
-                      placeholder={`${params.currencyPair?.defaultSpotRate || 1.0850}`}
-                    />
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        if (params.currencyPair) {
-                          setParams({...params, spotPrice: params.currencyPair.defaultSpotRate});
-                          setInitialSpotPrice(params.currencyPair.defaultSpotRate);
-                        }
-                      }}
-                      className="h-9 px-3 text-xs"
-                    >
-                      Reset
-                    </Button>
                   </div>
                 </div>
               </div>
