@@ -375,7 +375,7 @@ const Exposures = () => {
     return <Badge variant="destructive">Unhedged</Badge>;
   };
 
-  // ✅ CORRECTION : Enhanced summary calculations utilisant displayExposures
+  // Enhanced summary calculations
   const summaryStats = {
     totalExposure: riskMetrics.totalExposure,
     totalHedged: riskMetrics.hedgedAmount,
@@ -731,7 +731,7 @@ const Exposures = () => {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-muted-foreground">Total Exposures</p>
-                  <p className="text-2xl font-bold">{exposures.length}</p>
+                  <p className="text-2xl font-bold">{displayExposures.length}</p>
                 </div>
                 <div className="h-8 w-8 bg-blue-100 dark:bg-blue-900 rounded-full flex items-center justify-center">
                   <Globe className="h-4 w-4 text-blue-600 dark:text-blue-400" />
@@ -905,7 +905,7 @@ const Exposures = () => {
                 <TabsTrigger value="all" className="flex items-center gap-2">
                   All
                   <Badge variant="secondary" className="ml-1">
-                    {exposures.length}
+                    {displayExposures.length}
                   </Badge>
                 </TabsTrigger>
                 <TabsTrigger value="receivables" className="flex items-center gap-2">
