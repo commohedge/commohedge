@@ -908,6 +908,10 @@ interface FXStrategyParams {
   customPeriods: CustomPeriod[];
   // Legacy field for backward compatibility
   interestRate?: number;
+  // New fields for domestic/foreign currency selection and volume direction
+  domesticCurrency: string;    // Which currency is domestic (base or quote)
+  baseVolumeDirection: 'receivable' | 'payable';  // Direction of base currency flow
+  quoteVolumeDirection: 'receivable' | 'payable'; // Direction of quote currency flow
 }
 
 export interface StressTestScenario {
@@ -1168,7 +1172,11 @@ const Index = () => {
       spotPrice: CURRENCY_PAIRS[0].defaultSpotRate, // Default to EUR/USD spot rate
       currencyPair: CURRENCY_PAIRS[0], // Default to EUR/USD
       useCustomPeriods: false,
-      customPeriods: []
+      customPeriods: [],
+      // New fields with defaults
+      domesticCurrency: 'quote', // Default: quote currency (USD) is domestic
+      baseVolumeDirection: 'receivable' as const, // Default: base currency (EUR) is receivable
+      quoteVolumeDirection: 'payable' as const    // Default: quote currency (USD) is payable
     };
     
     try {
@@ -1185,6 +1193,16 @@ const Index = () => {
       // Ensure backward compatibility - add strategyStartDate if missing
       if (!savedParams.strategyStartDate) {
         savedParams.strategyStartDate = savedParams.startDate || new Date().toISOString().split('T')[0];
+      }
+      // Ensure backward compatibility - add new fields if missing
+      if (!savedParams.domesticCurrency) {
+        savedParams.domesticCurrency = 'quote'; // Default: quote currency is domestic
+      }
+      if (!savedParams.baseVolumeDirection) {
+        savedParams.baseVolumeDirection = 'receivable';
+      }
+      if (!savedParams.quoteVolumeDirection) {
+        savedParams.quoteVolumeDirection = 'payable';
       }
       return savedParams;
       }
@@ -6628,6 +6646,120 @@ const pricingFunctions = {
                     )}
                   </div>
                 </div>
+                
+                {/* New Section: Domestic/Foreign Currency Selection and Volume Direction */}
+                <div className="col-span-full bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/20 dark:to-indigo-950/20 p-4 rounded-lg border border-blue-200 dark:border-blue-800">
+                  <h4 className="text-sm font-semibold text-blue-900 dark:text-blue-100 mb-3 flex items-center gap-2">
+                    <Shield className="h-4 w-4" />
+                    Currency Configuration & Flow Direction
+                  </h4>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Domestic Currency Selection */}
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-blue-800 dark:text-blue-200">
+                        Domestic Currency (for interest rate calculations)
+                      </label>
+                      <Select 
+                        value={params.domesticCurrency} 
+                        onValueChange={(value) => setParams({...params, domesticCurrency: value})}
+                      >
+                        <SelectTrigger className="h-9">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="base">
+                            <div className="flex flex-col">
+                              <span className="font-medium">{params.currencyPair?.base || 'Base'} ({params.currencyPair?.base || 'Base'})</span>
+                              <span className="text-xs text-muted-foreground">Base currency of the pair</span>
+                            </div>
+                          </SelectItem>
+                          <SelectItem value="quote">
+                            <div className="flex flex-col">
+                              <span className="font-medium">{params.currencyPair?.quote || 'Quote'} ({params.currencyPair?.quote || 'Quote'})</span>
+                              <span className="text-xs text-muted-foreground">Quote currency of the pair</span>
+                            </div>
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <div className="text-xs text-blue-700 dark:text-blue-300">
+                        Current: <span className="font-mono font-medium">
+                          {params.domesticCurrency === 'base' ? params.currencyPair?.base : params.currencyPair?.quote}
+                        </span> is domestic
+                      </div>
+                    </div>
+                    
+                    {/* Volume Direction Configuration */}
+                    <div className="space-y-3">
+                      <label className="text-sm font-medium text-blue-800 dark:text-blue-200">
+                        Volume Flow Direction
+                      </label>
+                      
+                      {/* Base Currency Direction */}
+                      <div className="flex items-center justify-between p-2 bg-white dark:bg-gray-800 rounded border">
+                        <div className="flex flex-col">
+                          <span className="text-sm font-medium">{params.currencyPair?.base || 'Base'} Volume</span>
+                          <span className="text-xs text-muted-foreground">Direction of base currency flow</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            variant={params.baseVolumeDirection === 'receivable' ? 'default' : 'outline'}
+                            size="sm"
+                            onClick={() => setParams({...params, baseVolumeDirection: 'receivable'})}
+                            className="h-7 px-3 text-xs"
+                          >
+                            📥 Receivable
+                          </Button>
+                          <Button
+                            variant={params.baseVolumeDirection === 'payable' ? 'default' : 'outline'}
+                            size="sm"
+                            onClick={() => setParams({...params, baseVolumeDirection: 'payable'})}
+                            className="h-7 px-3 text-xs"
+                          >
+                            📤 Payable
+                          </Button>
+                        </div>
+                      </div>
+                      
+                      {/* Quote Currency Direction */}
+                      <div className="flex items-center justify-between p-2 bg-white dark:bg-gray-800 rounded border">
+                        <div className="flex flex-col">
+                          <span className="text-sm font-medium">{params.currencyPair?.quote || 'Quote'} Volume</span>
+                          <span className="text-xs text-muted-foreground">Direction of quote currency flow</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            variant={params.quoteVolumeDirection === 'receivable' ? 'default' : 'outline'}
+                            size="sm"
+                            onClick={() => setParams({...params, quoteVolumeDirection: 'receivable'})}
+                            className="h-7 px-3 text-xs"
+                          >
+                            📥 Receivable
+                          </Button>
+                          <Button
+                            variant={params.quoteVolumeDirection === 'payable' ? 'default' : 'outline'}
+                            size="sm"
+                            onClick={() => setParams({...params, quoteVolumeDirection: 'payable'})}
+                            className="h-7 px-3 text-xs"
+                          >
+                            📤 Payable
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* Summary */}
+                  <div className="mt-3 p-3 bg-blue-100 dark:bg-blue-900/30 rounded border border-blue-200 dark:border-blue-700">
+                    <div className="text-xs text-blue-800 dark:text-blue-200">
+                      <div className="font-medium mb-1">Configuration Summary:</div>
+                      <div>• Domestic Currency: <span className="font-mono">{params.domesticCurrency === 'base' ? params.currencyPair?.base : params.currencyPair?.quote}</span> (for interest rate calculations)</div>
+                      <div>• {params.currencyPair?.base} Flow: <span className="font-mono">{params.baseVolumeDirection}</span> (you {params.baseVolumeDirection === 'receivable' ? 'receive' : 'pay'} {params.currencyPair?.base})</div>
+                      <div>• {params.currencyPair?.quote} Flow: <span className="font-mono">{params.quoteVolumeDirection}</span> (you {params.quoteVolumeDirection === 'receivable' ? 'receive' : 'pay'} {params.currencyPair?.quote})</div>
+                    </div>
+                  </div>
+                </div>
+                
                 <div className="compact-form-group">
                   <label className="compact-label">Strategy Start Date</label>
                   <Input
@@ -6666,7 +6798,10 @@ const pricingFunctions = {
                 </div>
                 </div>
                 <div className="compact-form-group">
-                  <label className="compact-label">Domestic Rate (%) - {params.currencyPair?.quote || 'USD'}</label>
+                  <label className="compact-label">
+                    Domestic Rate (%) - {params.domesticCurrency === 'base' ? params.currencyPair?.base : params.currencyPair?.quote}
+                    <span className="ml-1 text-xs text-muted-foreground" title="Interest rate of the domestic currency">ℹ️</span>
+                  </label>
                   <div className="flex items-center gap-2">
                     <Slider 
                       value={[params.domesticRate]} 
@@ -6685,7 +6820,10 @@ const pricingFunctions = {
                   </div>
                 </div>
                 <div className="compact-form-group">
-                  <label className="compact-label">Foreign Rate (%) - {params.currencyPair?.base || 'EUR'}</label>
+                  <label className="compact-label">
+                    Foreign Rate (%) - {params.domesticCurrency === 'base' ? params.currencyPair?.quote : params.currencyPair?.base}
+                    <span className="ml-1 text-xs text-muted-foreground" title="Interest rate of the foreign currency">ℹ️</span>
+                  </label>
                   <div className="flex items-center gap-2">
                     <Slider 
                       value={[params.foreignRate]} 
@@ -6708,8 +6846,15 @@ const pricingFunctions = {
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                     {/* Base Volume */}
                     <div className="space-y-1">
-                      <label className="text-xs font-medium text-muted-foreground">
+                      <label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
                         {params.currencyPair?.base || 'Base'} Volume
+                        <span className={`text-xs px-1 py-0.5 rounded ${
+                          params.baseVolumeDirection === 'receivable' 
+                            ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300' 
+                            : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300'
+                        }`}>
+                          {params.baseVolumeDirection === 'receivable' ? '📥' : '📤'} {params.baseVolumeDirection}
+                        </span>
                     </label>
                   <Input
                     type="number"
@@ -6722,8 +6867,15 @@ const pricingFunctions = {
                     
                     {/* Quote Volume */}
                     <div className="space-y-1">
-                      <label className="text-xs font-medium text-muted-foreground">
+                      <label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
                         {params.currencyPair?.quote || 'Quote'} Volume
+                        <span className={`text-xs px-1 py-0.5 rounded ${
+                          params.quoteVolumeDirection === 'receivable' 
+                            ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300' 
+                            : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300'
+                        }`}>
+                          {params.quoteVolumeDirection === 'receivable' ? '📥' : '📤'} {params.quoteVolumeDirection}
+                        </span>
                     </label>
                     <Input
                       type="number"
@@ -6770,6 +6922,8 @@ const pricingFunctions = {
                   <div className="text-xs text-muted-foreground flex items-center gap-1 justify-center bg-primary/5 p-2 rounded border border-primary/10">
                     <span>💱</span>
                     <span>Volumes auto-sync at current spot rate: <span className="font-mono font-medium">{params.spotPrice.toFixed(4)}</span></span>
+                    <span className="mx-2">•</span>
+                    <span>Flow: {params.currencyPair?.base} {params.baseVolumeDirection} ↔ {params.currencyPair?.quote} {params.quoteVolumeDirection}</span>
                   </div>
                 </div>
               </div>
