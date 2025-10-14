@@ -15,6 +15,7 @@ export interface ImportedStrategy {
     quoteVolume: number;
     domesticRate: number;
     foreignRate: number;
+    volumeType?: 'receivable' | 'payable'; // Type de volume
   };
 }
 
@@ -71,6 +72,7 @@ export interface HedgingInstrument {
   hedgeQuantity?: number;         // Quantité de couverture (quantity du composant)
   exposureVolume?: number;        // Volume d'exposition de la période (monthlyVolume du detailed results)
   rawVolume?: number;             // Volume brut de la période (sans appliquer la quantité)
+  volumeType?: 'receivable' | 'payable'; // Type de volume du Strategy Builder
   repricingData?: {           // Complete repricing information
     underlyingPrice: number;
     timeToMaturity: number;
@@ -206,6 +208,7 @@ class StrategyImportService {
       foreignRate: number;
       useCustomPeriods?: boolean;
       customPeriods?: Array<{ maturityDate: string; volume: number }>;
+      volumeType?: 'receivable' | 'payable'; // Type de volume
     },
     timestamp: number,
     detailedResults?: any[]
@@ -255,6 +258,7 @@ class StrategyImportService {
           hedgeQuantity: hedgeQuantity,
           exposureVolume: exposureVolume,
           rawVolume: rawVolume,
+          volumeType: params.volumeType || 'receivable', // Type de volume du Strategy Builder
           // ✅ Export dates from Strategy Builder
           exportStrategyStartDate: params.strategyStartDate,
           exportHedgingStartDate: params.startDate

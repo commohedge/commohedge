@@ -349,12 +349,37 @@ export const useFinancialData = (): UseFinancialDataReturn => {
               underlyingExposureVolume = totalNotional;
             }
             
-            // Determine if this should be a receivable or payable based on instrument types
-            const hasReceivableInstruments = maturityInstruments.some(inst => 
-              inst.type === 'vanilla-call' || inst.type === 'forward' || inst.type === 'collar'
-            );
+            // ✅ AMÉLIORATION : Utiliser le volumeType du Strategy Builder si disponible
+            let exposureType: 'receivable' | 'payable' = 'receivable'; // Default
             
-            const exposureType: 'receivable' | 'payable' = hasReceivableInstruments ? 'receivable' : 'payable';
+            // Chercher le volumeType dans les instruments originaux
+            const maturityOriginalInstruments = originalInstruments.filter(orig => {
+              const origMaturity = new Date(orig.maturity).toISOString().split('T')[0];
+              return origMaturity === maturityStr;
+            });
+            
+            if (maturityOriginalInstruments.length > 0) {
+              // Utiliser le volumeType du Strategy Builder
+              const firstInstrument = maturityOriginalInstruments[0];
+              if (firstInstrument.volumeType) {
+                exposureType = firstInstrument.volumeType;
+                console.log(`[FX EXPOSURE] Using volumeType from Strategy Builder: ${exposureType}`);
+              } else {
+                // Fallback: déterminer basé sur les types d'instruments
+                const hasReceivableInstruments = maturityInstruments.some(inst => 
+                  inst.type === 'vanilla-call' || inst.type === 'forward' || inst.type === 'collar'
+                );
+                exposureType = hasReceivableInstruments ? 'receivable' : 'payable';
+                console.log(`[FX EXPOSURE] Using fallback logic based on instrument types: ${exposureType}`);
+              }
+            } else {
+              // Fallback: déterminer basé sur les types d'instruments
+              const hasReceivableInstruments = maturityInstruments.some(inst => 
+                inst.type === 'vanilla-call' || inst.type === 'forward' || inst.type === 'collar'
+              );
+              exposureType = hasReceivableInstruments ? 'receivable' : 'payable';
+              console.log(`[FX EXPOSURE] Using fallback logic (no original instruments): ${exposureType}`);
+            }
             
             // ✅ CORRECTION : Utiliser la somme des notional des instruments de couverture
             const totalHedgingNotional = maturityInstruments.reduce((sum, inst) => sum + Math.abs(inst.notional), 0);
@@ -371,7 +396,7 @@ export const useFinancialData = (): UseFinancialDataReturn => {
                 amount: exposureAmount,
                 type: exposureType,
                 maturity: maturityDate,
-                description: `Auto-generated from ${maturityInstruments.length} hedging instrument(s) - Maturity: ${maturityStr} - Total Notional: ${totalHedgingNotional.toLocaleString()}`,
+                description: `Auto-generated from ${maturityInstruments.length} hedging instrument(s) - Maturity: ${maturityStr} - Type: ${exposureType} - Total Notional: ${totalHedgingNotional.toLocaleString()}`,
                 subsidiary: 'Auto-Generated',
                 hedgeRatio: maxHedgeQuantity,
                 hedgedAmount: finalHedgedAmount
@@ -385,7 +410,7 @@ export const useFinancialData = (): UseFinancialDataReturn => {
               const updatedExposure = {
                 amount: exposureAmount,
                 type: exposureType,
-                description: `Auto-updated from ${maturityInstruments.length} hedging instrument(s) - Maturity: ${maturityStr} - Total Notional: ${totalHedgingNotional.toLocaleString()}`,
+                description: `Auto-updated from ${maturityInstruments.length} hedging instrument(s) - Maturity: ${maturityStr} - Type: ${exposureType} - Total Notional: ${totalHedgingNotional.toLocaleString()}`,
                 hedgeRatio: maxHedgeQuantity,
                 hedgedAmount: finalHedgedAmount
               };
