@@ -267,41 +267,24 @@ export const useFinancialData = (): UseFinancialDataReturn => {
           const instruments = instrumentGroup.financialInstruments;
           const originalInstruments = instrumentGroup.originalInstruments;
           
-          // ✅ CORRECTION : Grouper par échéance ET volumeType au sein de chaque devise
-          const maturityVolumeGroups: { [key: string]: { instruments: HedgingInstrument[], originalInstruments: HedgingInstrument[] } } = {};
+          // Grouper par échéance au sein de chaque devise
+          const maturityGroups: { [maturity: string]: HedgingInstrument[] } = {};
           instruments.forEach(instrument => {
             const maturityStr = instrument.maturity.toISOString().split('T')[0];
-            const volumeType = instrument.volumeType || 'receivable'; // Default si pas défini
-            const groupKey = `${maturityStr}_${volumeType}`; // Clé unique par maturité + volumeType
-            
-            if (!maturityVolumeGroups[groupKey]) {
-              maturityVolumeGroups[groupKey] = { instruments: [], originalInstruments: [] };
+            if (!maturityGroups[maturityStr]) {
+              maturityGroups[maturityStr] = [];
             }
-            maturityVolumeGroups[groupKey].instruments.push(instrument);
-            
-            // Ajouter l'instrument original correspondant
-            const originalInstrument = originalInstruments.find(orig => 
-              orig.currency === instrument.currencyPair && 
-              Math.abs(orig.notional - instrument.notional) < 0.01 &&
-              orig.volumeType === instrument.volumeType
-            );
-            if (originalInstrument) {
-              maturityVolumeGroups[groupKey].originalInstruments.push(originalInstrument);
-            }
+            maturityGroups[maturityStr].push(instrument);
           });
           
-          // ✅ CORRECTION : Créer une exposition pour chaque combinaison devise-échéance-volumeType
-          Object.entries(maturityVolumeGroups).forEach(([groupKey, groupData]) => {
-            const [maturityStr, volumeType] = groupKey.split('_');
-            const maturityInstruments = groupData.instruments;
-            const groupOriginalInstruments = groupData.originalInstruments;
-            const currencyMaturityVolumePair = `${currency}-${maturityStr}-${volumeType}`;
+          // Créer une exposition pour chaque combinaison devise-échéance qui n'existe pas
+          Object.entries(maturityGroups).forEach(([maturityStr, maturityInstruments]) => {
+            const currencyMaturityPair = `${currency}-${maturityStr}`;
             
-            // ✅ CORRECTION : Vérifier si cette combinaison devise-échéance-volumeType existe déjà
+            // Vérifier si cette combinaison existe déjà
             const existingExposure = currentExposures.find(exp => 
               exp.currency === currency && 
-              exp.maturity.toISOString().split('T')[0] === maturityStr &&
-              exp.type === volumeType
+              exp.maturity.toISOString().split('T')[0] === maturityStr
             );
             
             // ✅ CORRECTION : Traiter les expositions existantes ET nouvelles
@@ -311,26 +294,46 @@ export const useFinancialData = (): UseFinancialDataReturn => {
             // ✅ CORRECTION : Calculer le hedge ratio basé sur les vraies quantités des instruments originaux
             let maxHedgeQuantity = 95; // Default fallback
             
-            if (groupOriginalInstruments.length > 0) {
-              // ✅ CORRECTION : Utiliser les instruments originaux de ce groupe spécifique
-              maxHedgeQuantity = Math.max(...groupOriginalInstruments.map(inst => {
-                const quantity = inst.hedgeQuantity !== undefined ? 
-                  inst.hedgeQuantity : 
-                  (inst.quantity !== undefined ? Math.abs(inst.quantity) : 95);
-                return quantity; // ✅ SUPPRESSION du plafonnement Math.min(100, quantity)
-              }));
+            if (originalInstruments.length > 0) {
+              // ✅ CORRECTION : Prendre le maximum des quantités absolues des instruments originaux SANS plafonnement
+              const maturityOriginalInstruments = originalInstruments.filter(orig => {
+                const origMaturity = new Date(orig.maturity).toISOString().split('T')[0];
+                return origMaturity === maturityStr;
+              });
+              
+              if (maturityOriginalInstruments.length > 0) {
+                // Utiliser les instruments de cette échéance spécifique
+                maxHedgeQuantity = Math.max(...maturityOriginalInstruments.map(inst => {
+                  const quantity = inst.hedgeQuantity !== undefined ? 
+                    inst.hedgeQuantity : 
+                    (inst.quantity !== undefined ? Math.abs(inst.quantity) : 95);
+                  return quantity; // ✅ SUPPRESSION du plafonnement Math.min(100, quantity)
+                }));
+              } else {
+                // Fallback: utiliser tous les instruments originaux
+                maxHedgeQuantity = Math.max(...originalInstruments.map(inst => {
+                  const quantity = inst.hedgeQuantity !== undefined ? 
+                    inst.hedgeQuantity : 
+                    (inst.quantity !== undefined ? Math.abs(inst.quantity) : 95);
+                  return quantity; // ✅ SUPPRESSION du plafonnement Math.min(100, quantity)
+                }));
+              }
             }
             
             // ✅ CORRECTION : Calculer l'exposition sous-jacente réelle, pas la somme des instruments de couverture
             let underlyingExposureVolume = 0;
             
-            if (groupOriginalInstruments.length > 0) {
-              // ✅ CORRECTION : Utiliser le volume d'exposition original depuis les données de stratégie du groupe
+            if (originalInstruments.length > 0) {
+              // Chercher le volume d'exposition original depuis les données de stratégie
+              const maturityOriginalInstruments = originalInstruments.filter(orig => {
+                const origMaturity = new Date(orig.maturity).toISOString().split('T')[0];
+                return origMaturity === maturityStr;
+              });
               
-              if (groupOriginalInstruments.length > 0) {
+              if (maturityOriginalInstruments.length > 0) {
                 // ✅ CORRECTION : Prendre le volume d'exposition brut (rawVolume ou exposureVolume) 
                 // du premier instrument car ils représentent tous la même exposition sous-jacente
-                const firstInstrument = groupOriginalInstruments[0];
+                const firstInstrument = maturityOriginalInstruments[0];
                 underlyingExposureVolume = firstInstrument.rawVolume !== undefined ? firstInstrument.rawVolume : 
                                          firstInstrument.exposureVolume !== undefined ? firstInstrument.exposureVolume : 
                                          firstInstrument.baseVolume !== undefined ? firstInstrument.baseVolume :
@@ -346,9 +349,37 @@ export const useFinancialData = (): UseFinancialDataReturn => {
               underlyingExposureVolume = totalNotional;
             }
             
-            // ✅ CORRECTION : Utiliser directement le volumeType du groupe
-            const exposureType = volumeType as 'receivable' | 'payable';
-            console.log(`[FX EXPOSURE] Using volumeType from group: ${exposureType} for ${currencyMaturityVolumePair}`);
+            // ✅ AMÉLIORATION : Utiliser le volumeType du Strategy Builder si disponible
+            let exposureType: 'receivable' | 'payable' = 'receivable'; // Default
+            
+            // Chercher le volumeType dans les instruments originaux
+            const maturityOriginalInstruments = originalInstruments.filter(orig => {
+              const origMaturity = new Date(orig.maturity).toISOString().split('T')[0];
+              return origMaturity === maturityStr;
+            });
+            
+            if (maturityOriginalInstruments.length > 0) {
+              // Utiliser le volumeType du Strategy Builder
+              const firstInstrument = maturityOriginalInstruments[0];
+              if (firstInstrument.volumeType) {
+                exposureType = firstInstrument.volumeType;
+                console.log(`[FX EXPOSURE] Using volumeType from Strategy Builder: ${exposureType}`);
+              } else {
+                // Fallback: déterminer basé sur les types d'instruments
+                const hasReceivableInstruments = maturityInstruments.some(inst => 
+                  inst.type === 'vanilla-call' || inst.type === 'forward' || inst.type === 'collar'
+                );
+                exposureType = hasReceivableInstruments ? 'receivable' : 'payable';
+                console.log(`[FX EXPOSURE] Using fallback logic based on instrument types: ${exposureType}`);
+              }
+            } else {
+              // Fallback: déterminer basé sur les types d'instruments
+              const hasReceivableInstruments = maturityInstruments.some(inst => 
+                inst.type === 'vanilla-call' || inst.type === 'forward' || inst.type === 'collar'
+              );
+              exposureType = hasReceivableInstruments ? 'receivable' : 'payable';
+              console.log(`[FX EXPOSURE] Using fallback logic (no original instruments): ${exposureType}`);
+            }
             
             // ✅ CORRECTION : Utiliser la somme des notional des instruments de couverture
             const totalHedgingNotional = maturityInstruments.reduce((sum, inst) => sum + Math.abs(inst.notional), 0);

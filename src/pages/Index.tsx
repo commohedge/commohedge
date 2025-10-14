@@ -3918,7 +3918,7 @@ const Index = () => {
         foreignRate: params.foreignRate,
         useCustomPeriods: params.useCustomPeriods,
         customPeriods: params.customPeriods,
-        volumeType: params.volumeType,         // ✅ Ajouter le volumeType
+        volumeType: params.volumeType, // ✅ EXPORT du type de volume
       }, enrichedDetailedResults); // Passer TOUS les résultats enrichis
 
       // Dispatch custom event to notify HedgingInstruments page

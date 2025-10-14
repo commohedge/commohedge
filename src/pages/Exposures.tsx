@@ -327,11 +327,11 @@ const Exposures = () => {
     return `${symbol}${absAmount.toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
   };
 
-  // ✅ CORRECTION : Calculer les totaux par devise en utilisant displayExposures
+  // ✅ NOUVEAU : Calculer les totaux par devise
   const currencyTotals = useMemo(() => {
     const totals: { [currency: string]: { receivables: number; payables: number; total: number } } = {};
     
-    displayExposures.forEach(exp => {
+    exposures.forEach(exp => {
       if (!totals[exp.currency]) {
         totals[exp.currency] = { receivables: 0, payables: 0, total: 0 };
       }
@@ -339,15 +339,15 @@ const Exposures = () => {
       const absAmount = Math.abs(exp.amount);
       totals[exp.currency].total += absAmount;
       
-      if (exp.type === 'Receivable') {
+      if (exp.type === 'receivable') {
         totals[exp.currency].receivables += absAmount;
-      } else if (exp.type === 'Payable') {
+      } else {
         totals[exp.currency].payables += absAmount;
       }
     });
     
     return totals;
-  }, [displayExposures]);
+  }, [exposures]);
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -905,25 +905,25 @@ const Exposures = () => {
                 <TabsTrigger value="all" className="flex items-center gap-2">
                   All
                   <Badge variant="secondary" className="ml-1">
-                    {displayExposures.length}
+                    {exposures.length}
                   </Badge>
                 </TabsTrigger>
                 <TabsTrigger value="receivables" className="flex items-center gap-2">
                   Receivables
                   <Badge variant="secondary" className="ml-1">
-                    {displayExposures.filter(exp => exp.type === 'Receivable').length}
+                    {exposures.filter(exp => exp.type === 'receivable').length}
                   </Badge>
                 </TabsTrigger>
                 <TabsTrigger value="payables" className="flex items-center gap-2">
                   Payables
                   <Badge variant="secondary" className="ml-1">
-                    {displayExposures.filter(exp => exp.type === 'Payable').length}
+                    {exposures.filter(exp => exp.type === 'payable').length}
                   </Badge>
                 </TabsTrigger>
                 <TabsTrigger value="unhedged" className="flex items-center gap-2">
                   Unhedged
                   <Badge variant="destructive" className="ml-1">
-                    {displayExposures.filter(exp => exp.hedgeRatio === 0).length}
+                    {exposures.filter(exp => exp.hedgeRatio === 0).length}
                   </Badge>
                 </TabsTrigger>
             </TabsList>
