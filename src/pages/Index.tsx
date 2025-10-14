@@ -906,9 +906,7 @@ interface FXStrategyParams {
   currencyPair: CurrencyPair;
   useCustomPeriods: boolean;
   customPeriods: CustomPeriod[];
-  // Volume direction indicators
-  baseVolumeReceivable: boolean;  // true = receivable, false = payable
-  quoteVolumeReceivable: boolean; // true = receivable, false = payable
+  volumeType: 'receivable' | 'payable'; // Type de volume: receivable ou payable
   // Legacy field for backward compatibility
   interestRate?: number;
 }
@@ -995,6 +993,7 @@ interface SavedScenario {
     currencyPair?: CurrencyPair;
     useCustomPeriods?: boolean;
     customPeriods?: CustomPeriod[];
+    volumeType?: 'receivable' | 'payable'; // Type de volume
   };
   strategy: StrategyComponent[];
   results: Result[];
@@ -1172,9 +1171,7 @@ const Index = () => {
       currencyPair: CURRENCY_PAIRS[0], // Default to EUR/USD
       useCustomPeriods: false,
       customPeriods: [],
-      // Volume direction defaults
-      baseVolumeReceivable: true,  // Default: base currency is receivable
-      quoteVolumeReceivable: false // Default: quote currency is payable
+      volumeType: 'receivable' // Default to receivable
     };
     
     try {
@@ -1188,16 +1185,13 @@ const Index = () => {
       if (!savedParams.quoteVolume) {
         savedParams.quoteVolume = (savedParams.totalVolume || 10000000) * (savedParams.spotPrice || 1.0850);
       }
-      // Ensure backward compatibility - add volume direction defaults if missing
-      if (savedParams.baseVolumeReceivable === undefined) {
-        savedParams.baseVolumeReceivable = true; // Default: base currency is receivable
-      }
-      if (savedParams.quoteVolumeReceivable === undefined) {
-        savedParams.quoteVolumeReceivable = false; // Default: quote currency is payable
-      }
       // Ensure backward compatibility - add strategyStartDate if missing
       if (!savedParams.strategyStartDate) {
         savedParams.strategyStartDate = savedParams.startDate || new Date().toISOString().split('T')[0];
+      }
+      // Ensure backward compatibility - add volumeType if missing
+      if (!savedParams.volumeType) {
+        savedParams.volumeType = 'receivable'; // Default to receivable
       }
       return savedParams;
       }
@@ -4042,9 +4036,7 @@ const Index = () => {
       currencyPair: CURRENCY_PAIRS[0],
       useCustomPeriods: false,
       customPeriods: [],
-      // Volume direction defaults
-      baseVolumeReceivable: true,  // Default: base currency is receivable
-      quoteVolumeReceivable: false // Default: quote currency is payable
+      volumeType: 'receivable'
     });
     setStrategy([]);
     setResults(null);
@@ -4168,9 +4160,7 @@ const Index = () => {
         currencyPair: CURRENCY_PAIRS[0],
         useCustomPeriods: false,
         customPeriods: [],
-        // Volume direction defaults
-        baseVolumeReceivable: true,  // Default: base currency is receivable
-        quoteVolumeReceivable: false // Default: quote currency is payable
+        volumeType: 'receivable'
       },
       strategy: [],
       results: null,
@@ -4261,16 +4251,9 @@ const Index = () => {
             <p>Strategy Start Date: ${params.strategyStartDate}</p>
             <p>Hedging Start Date: ${params.startDate}</p>
             <p>Spot Price: ${params.spotPrice}</p>
-                            <p>Base Volume ({params.currencyPair?.base || 'BASE'}): {params.baseVolume.toLocaleString()} 
-                              <span className={`ml-2 ${params.baseVolumeReceivable ? 'text-green-600' : 'text-red-600'}`}>
-                                ({params.baseVolumeReceivable ? 'Receivable' : 'Payable'})
-                              </span>
-                            </p>
-                <p>Quote Volume ({params.currencyPair?.quote || 'QUOTE'}): {Math.round(params.quoteVolume).toLocaleString()} 
-                  <span className={`ml-2 ${params.quoteVolumeReceivable ? 'text-green-600' : 'text-red-600'}`}>
-                    ({params.quoteVolumeReceivable ? 'Receivable' : 'Payable'})
-                  </span>
-                </p>
+                            <p>Base Volume ({params.currencyPair?.base || 'BASE'}): {params.baseVolume.toLocaleString()}</p>
+                <p>Quote Volume ({params.currencyPair?.quote || 'QUOTE'}): {Math.round(params.quoteVolume).toLocaleString()}</p>
+                <p>Volume Type: {params.volumeType === 'receivable' ? 'Receivable' : 'Payable'}</p>
                 <p>Current Rate: {params.spotPrice.toFixed(4)}</p>
           </div>
           <div class="stress-parameters">
@@ -5289,13 +5272,14 @@ const Index = () => {
     doc.text(`Hedging Start Date: ${params.startDate}`, 15, 50);
     doc.text(`Months to Hedge: ${params.monthsToHedge}`, 15, 55);
     doc.text(`Domestic Rate: ${params.domesticRate}% | Foreign Rate: ${params.foreignRate}%`, 15, 60);
-    doc.text(`Base Volume (${params.currencyPair?.base || 'BASE'}): ${params.baseVolume.toLocaleString()} (${params.baseVolumeReceivable ? 'Receivable' : 'Payable'})`, 15, 65);
-    doc.text(`Quote Volume (${params.currencyPair?.quote || 'QUOTE'}): ${Math.round(params.quoteVolume).toLocaleString()} (${params.quoteVolumeReceivable ? 'Receivable' : 'Payable'})`, 15, 75);
-    doc.text(`Current Spot Rate: ${params.spotPrice.toFixed(4)}`, 15, 85);
+    doc.text(`Base Volume (${params.currencyPair?.base || 'BASE'}): ${params.baseVolume.toLocaleString()}`, 15, 65);
+    doc.text(`Quote Volume (${params.currencyPair?.quote || 'QUOTE'}): ${Math.round(params.quoteVolume).toLocaleString()}`, 15, 75);
+    doc.text(`Volume Type: ${params.volumeType === 'receivable' ? 'Receivable' : 'Payable'}`, 15, 85);
+    doc.text(`Current Spot Rate: ${params.spotPrice.toFixed(4)}`, 15, 95);
     
     // Strategy
     doc.setFontSize(14);
-    doc.text('Strategy Components', 10, 95);
+    doc.text('Strategy Components', 10, 110);
     strategy.forEach((comp, index) => {
       const yPos = 105 + (index * 10);
       const strike = comp.strikeType === 'percent' 
@@ -6731,54 +6715,73 @@ const pricingFunctions = {
                 <div className="bg-muted/20 p-3 rounded-lg space-y-3">
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                     {/* Base Volume */}
-                    <div className="space-y-2">
+                    <div className="space-y-1">
                       <label className="text-xs font-medium text-muted-foreground">
                         {params.currencyPair?.base || 'Base'} Volume
-                      </label>
-                      <Input
-                        type="number"
-                        value={params.baseVolume}
-                        onChange={(e) => handleBaseVolumeChange(Number(e.target.value))}
+                    </label>
+                  <Input
+                    type="number"
+                      value={params.baseVolume}
+                      onChange={(e) => handleBaseVolumeChange(Number(e.target.value))}
                         className="h-8 text-xs"
-                        placeholder="Volume in base currency"
-                      />
-                      {/* Volume Direction Toggle for Base Currency */}
-                      <div className="flex items-center gap-2">
-                        <Switch
-                          checked={params.baseVolumeReceivable}
-                          onCheckedChange={(checked) => setParams({...params, baseVolumeReceivable: checked})}
-                          id="baseVolumeReceivable"
-                          size="sm"
-                        />
-                        <label htmlFor="baseVolumeReceivable" className="text-xs text-muted-foreground cursor-pointer">
-                          {params.baseVolumeReceivable ? '📈 Receivable' : '📉 Payable'}
-                        </label>
-                      </div>
-                    </div>
+                      placeholder="Volume in base currency"
+                    />
+                  </div>
                     
                     {/* Quote Volume */}
-                    <div className="space-y-2">
+                    <div className="space-y-1">
                       <label className="text-xs font-medium text-muted-foreground">
                         {params.currencyPair?.quote || 'Quote'} Volume
-                      </label>
-                      <Input
-                        type="number"
-                        value={Math.round(params.quoteVolume)}
-                        onChange={(e) => handleQuoteVolumeChange(Number(e.target.value))}
+                    </label>
+                    <Input
+                      type="number"
+                      value={Math.round(params.quoteVolume)}
+                      onChange={(e) => handleQuoteVolumeChange(Number(e.target.value))}
                         className="h-8 text-xs"
-                        placeholder="Volume in quote currency"
-                      />
-                      {/* Volume Direction Toggle for Quote Currency */}
-                      <div className="flex items-center gap-2">
-                        <Switch
-                          checked={params.quoteVolumeReceivable}
-                          onCheckedChange={(checked) => setParams({...params, quoteVolumeReceivable: checked})}
-                          id="quoteVolumeReceivable"
-                          size="sm"
-                        />
-                        <label htmlFor="quoteVolumeReceivable" className="text-xs text-muted-foreground cursor-pointer">
-                          {params.quoteVolumeReceivable ? '📈 Receivable' : '📉 Payable'}
-                        </label>
+                      placeholder="Volume in quote currency"
+                    />
+                  </div>
+
+                    {/* Volume Type */}
+                    <div className="space-y-1">
+                      <label className="text-xs font-medium text-muted-foreground">
+                        Volume Type
+                      </label>
+                      <Select
+                        value={params.volumeType}
+                        onValueChange={(value: 'receivable' | 'payable') => 
+                          setParams(prev => ({ ...prev, volumeType: value }))
+                        }
+                      >
+                        <SelectTrigger className="h-8 text-xs">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="receivable">
+                            <div className="flex items-center gap-2">
+                              <span className="text-green-600">📈</span>
+                              <span>Receivable</span>
+                            </div>
+                          </SelectItem>
+                          <SelectItem value="payable">
+                            <div className="flex items-center gap-2">
+                              <span className="text-red-600">📉</span>
+                              <span>Payable</span>
+                            </div>
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
+                      {/* Help text */}
+                      <div className="text-xs text-muted-foreground">
+                        {params.volumeType === 'receivable' ? (
+                          <span className="text-green-600">
+                            💰 You will receive {params.currencyPair?.base || 'Base'} currency
+                          </span>
+                        ) : (
+                          <span className="text-red-600">
+                            💸 You will pay {params.currencyPair?.base || 'Base'} currency
+                          </span>
+                        )}
                       </div>
                     </div>
                     
@@ -6818,24 +6821,6 @@ const pricingFunctions = {
                   <div className="text-xs text-muted-foreground flex items-center gap-1 justify-center bg-primary/5 p-2 rounded border border-primary/10">
                     <span>💱</span>
                     <span>Volumes auto-sync at current spot rate: <span className="font-mono font-medium">{params.spotPrice.toFixed(4)}</span></span>
-                  </div>
-                  
-                  {/* Volume Direction Summary */}
-                  <div className="text-xs text-muted-foreground flex items-center gap-2 justify-center bg-muted/10 p-2 rounded border border-muted/20">
-                    <span>📊</span>
-                    <span>
-                      <span className="font-medium">{params.currencyPair?.base || 'Base'}</span>: 
-                      <span className={`ml-1 ${params.baseVolumeReceivable ? 'text-green-600' : 'text-red-600'}`}>
-                        {params.baseVolumeReceivable ? '📈 Receivable' : '📉 Payable'}
-                      </span>
-                    </span>
-                    <span>•</span>
-                    <span>
-                      <span className="font-medium">{params.currencyPair?.quote || 'Quote'}</span>: 
-                      <span className={`ml-1 ${params.quoteVolumeReceivable ? 'text-green-600' : 'text-red-600'}`}>
-                        {params.quoteVolumeReceivable ? '📈 Receivable' : '📉 Payable'}
-                      </span>
-                    </span>
                   </div>
                 </div>
               </div>

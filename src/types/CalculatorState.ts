@@ -19,6 +19,7 @@ export interface CalculatorState {
       currencyPair: any; // CurrencyPair interface
       useCustomPeriods: boolean;
       customPeriods: CustomPeriod[];
+      volumeType: 'receivable' | 'payable'; // Type de volume
     };
     strategy: any[];
     results: any;
