@@ -48,19 +48,19 @@ const LandingPage = () => {
   const features = [
     {
       title: "Advanced Pricing Engine",
-      description: "Sophisticated pricing engine utilizing Garman-Kohlhagen and Black-Scholes models for FX options, forwards and swaps. Monte Carlo simulations with 1000+ scenarios, real-time Greeks calculations, and support for 15+ instrument types including barriers, digitals and exotic structures with precise dual-currency pricing.",
+      description: "Sophisticated pricing engine utilizing Black-76 model for commodity options, forwards and swaps. Monte Carlo simulations with 1000+ scenarios, real-time Greeks calculations, and support for 15+ instrument types including barriers, digitals and exotic structures with cost of carry adjustments.",
       image: "/landing-page/{3592FF96-8AEC-47B4-8581-4AC78DF523BB}.png",
       icon: <Calculator className="w-6 h-6" />,
-      features: ["Garman-Kohlhagen Model", "Monte Carlo 1000+", "Greeks Calculation", "15+ Instruments"],
+      features: ["Black-76 Model", "Monte Carlo 1000+", "Greeks Calculation", "15+ Instruments"],
       path: "/pricers"
     },
     {
-      title: "Advanced Forex Market Data",
-      description: "Market data center with professional widgets, real-time screeners, and 150+ currency pairs. Custom pair creation, advanced filtering by volatility and performance, with automatic exchange rate updates via multi-source APIs for 24/7 global coverage.",
+      title: "Advanced Commodity Market Data",
+      description: "Market data center with professional widgets, real-time screeners, and 26+ commodities across Energy, Metals, Agriculture and Livestock. Custom commodity tracking, advanced filtering by volatility and performance, with automatic price updates via multi-source APIs for 24/7 global coverage.",
       image: "/landing-page/{75261304-660E-49FD-8593-8A2457028C93}.png",
       icon: <Globe className="w-6 h-6" />,
-      features: ["150+ Currency Pairs", "Custom Pairs", "Real-time Screeners", "Multi-Source APIs"],
-      path: "/forex-market"
+      features: ["26+ Commodities", "Custom Tracking", "Real-time Screeners", "Multi-Source APIs"],
+      path: "/commodity-market"
     },
     {
       title: "Intelligent Strategy Builder",
@@ -72,10 +72,10 @@ const LandingPage = () => {
     },
     {
       title: "Executive Risk Dashboard",
-      description: "Executive dashboard with advanced risk metrics: multi-currency VaR, hedge ratios, unhedged exposures with automatic alerts. Real-time monitoring of 4 major pairs (EUR/USD, GBP/USD, USD/JPY, USD/CHF) and live/pause toggle to control data flows.",
+      description: "Executive dashboard with advanced risk metrics: multi-commodity VaR, hedge ratios, unhedged exposures with automatic alerts. Real-time monitoring of major commodities (WTI, Brent, Gold, Copper) across Energy, Metals, Agriculture and Livestock with live/pause toggle to control data flows.",
       image: "/landing-page/{D5CFFF7D-7606-4F9D-BC9E-070AB4022E25}.png",
       icon: <FileText className="w-6 h-6" />,
-      features: ["Multi-Currency VaR", "Hedge Ratio Tracking", "Real-time Alerts", "Major Pairs Monitor"],
+      features: ["Multi-Commodity VaR", "Hedge Ratio Tracking", "Real-time Alerts", "Major Commodities Monitor"],
       path: "/dashboard"
     }
   ];
@@ -91,13 +91,13 @@ const LandingPage = () => {
     {
       name: "Sarah Chen",
       role: "Treasury Director, TechCorp Global",
-      content: "FX hedging has transformed our risk management. We've reduced forex exposure by 85% while maintaining operational flexibility.",
+      content: "Commodity Risk Manager has transformed our risk management. We've reduced commodity exposure by 85% while maintaining operational flexibility.",
       rating: 5
     },
     {
       name: "Marcus Rodriguez",
       role: "CFO, International Manufacturing",
-      content: "The automated hedging strategies have saved us millions in currency losses. The platform is intuitive and incredibly powerful.",
+      content: "The automated hedging strategies have saved us millions in commodity price fluctuation losses. The platform is intuitive and incredibly powerful.",
       rating: 5
     },
     {
@@ -110,8 +110,8 @@ const LandingPage = () => {
 
   const faqs = [
     {
-      question: "How does automated forex hedging work?",
-      answer: "Our AI-powered platform continuously monitors your currency exposures and market conditions, automatically executing hedging strategies based on your risk parameters and market opportunities."
+      question: "How does automated commodity hedging work?",
+      answer: "Our AI-powered platform continuously monitors your commodity exposures and market conditions, automatically executing hedging strategies based on your risk parameters and market opportunities."
     },
     {
       question: "What types of hedging instruments are supported?",
@@ -119,7 +119,7 @@ const LandingPage = () => {
     },
     {
       question: "Is the platform suitable for small to medium businesses?",
-      answer: "Absolutely! Our platform scales from SMEs with monthly exposures of €100K to large enterprises managing billions in currency risk."
+      answer: "Absolutely! Our platform scales from SMEs with monthly exposures of $100K to large enterprises managing billions in commodity risk."
     },
     {
       question: "How secure is your platform?",
@@ -149,18 +149,18 @@ const LandingPage = () => {
         {/* Hero Content */}
         <div className="relative z-20 text-center max-w-6xl mx-auto px-6 hero-content">
           <Badge className="mb-6 bg-blue-500/20 text-blue-300 border-blue-400/30 px-4 py-2 text-sm">
-            Next-Generation Forex Risk Management
+            Next-Generation Commodity Risk Management
           </Badge>
           
           <h1 className="hero-title text-5xl md:text-7xl font-bold text-white mb-6 leading-tight">
-            Automate Your
+            Master Your
             <span className="gradient-text">
-              {" "}Forex Hedging
+              {" "}Commodity Risk
             </span>
           </h1>
           
           <p className="hero-subtitle text-xl md:text-2xl text-slate-300 mb-8 leading-relaxed max-w-4xl mx-auto">
-            Intelligent risk management platform that protects your business from currency volatility 
+            Intelligent risk management platform that protects your business from commodity price volatility 
             with automated hedging strategies, real-time analytics, and enterprise-grade security.
           </p>
           
@@ -207,10 +207,10 @@ const LandingPage = () => {
               </Badge>
               <h2 className="text-4xl md:text-5xl font-bold text-slate-900 mb-6">
                 Complete Platform for
-                <span className="text-blue-600"> FX Risk Management</span>
+                <span className="text-blue-600"> Commodity Risk Management</span>
               </h2>
               <p className="text-xl text-slate-600 max-w-3xl mx-auto">
-                Advanced pricing engine, real-time market data, sophisticated strategy builder, and executive dashboard for optimal foreign exchange risk management
+                Advanced pricing engine, real-time market data, sophisticated strategy builder, and executive dashboard for optimal commodity risk management across Energy, Metals, Agriculture and Livestock
               </p>
             </div>
           </ScrollReveal>

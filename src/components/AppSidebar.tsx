@@ -34,7 +34,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useCompanySettings, getCompanyNameSync, companySettingsEmitter } from "@/hooks/useCompanySettings";
-import ExchangeRateService from "@/services/ExchangeRateService";
 import { ScrollArea } from "@/components/ui/ScrollArea";
 import { useAuth } from "@/hooks/useAuth";
 import { LogOut, User } from "lucide-react";
@@ -49,16 +48,16 @@ const menuItems = [
     description: "Global overview and key metrics"
   },
   {
-    title: "Forex Market",
-    url: "/forex-market",
+    title: "Commodity Market",
+    url: "/commodity-market",
     icon: Globe,
-    description: "Real-time forex market data and rates"
+    description: "Real-time commodity market data and prices"
   },
   {
-    title: "FX Exposures",
+    title: "Commodity Exposures",
     url: "/exposures",
     icon: DollarSign,
-    description: "Manage currency exposures and flows",
+    description: "Manage commodity exposures and positions",
     badge: "Active"
   },
   {
@@ -143,13 +142,11 @@ export function AppSidebar() {
   // Utilise le cache mémoire pour le nom dès le premier render
   const [companyName, setCompanyName] = useState(getCompanyNameSync());
   
-  // State for market status data
+  // State for market status data (Commodity prices)
   const [marketStatusData, setMarketStatusData] = useState({
-    EUR_USD: 1.0856,
-    GBP_USD: 1.2734
+    WTI: 75.50,
+    GOLD: 1850.25
   });
-  
-  const exchangeRateService = ExchangeRateService.getInstance();
   
   useEffect(() => {
     const unsubscribe = companySettingsEmitter.subscribe(() => {
@@ -158,24 +155,20 @@ export function AppSidebar() {
     return unsubscribe;
   }, []);
   
-  // Load market status data - CORRECTION: Use same logic as Dashboard
+  // Load market status data for commodities
   useEffect(() => {
-    const loadMarketStatusData = async () => {
+    const loadMarketStatusData = () => {
       try {
-        const exchangeData = await exchangeRateService.getExchangeRates('USD');
-        
-        // CORRECTION: Invert EUR and GBP rates to match Dashboard logic
-        // API returns USD-based rates, but we need EUR/USD and GBP/USD
+        // For now, use static data. Later can integrate with real commodity price API
         setMarketStatusData({
-          EUR_USD: 1 / (exchangeData.rates.EUR || 1.0856), // Invert: 1/EUR_rate = EUR/USD
-          GBP_USD: 1 / (exchangeData.rates.GBP || 1.2734)  // Invert: 1/GBP_rate = GBP/USD
+          WTI: 75.50 + (Math.random() - 0.5) * 2, // Simulate price movement
+          GOLD: 1850.25 + (Math.random() - 0.5) * 20
         });
       } catch (error) {
         console.error('Error loading market status data:', error);
-        // Fallback to default values if API fails
         setMarketStatusData({
-          EUR_USD: 1.1737, // Default EUR/USD rate
-          GBP_USD: 1.3477  // Default GBP/USD rate
+          WTI: 75.50,
+          GOLD: 1850.25
         });
       }
     };
@@ -219,8 +212,8 @@ export function AppSidebar() {
             <div className="text-xs text-muted-foreground mb-2">
               {secondaryName}
             </div>
-            <h2 className="text-lg font-bold text-foreground">FX Risk Manager</h2>
-            <p className="text-sm text-muted-foreground">Currency Hedging Platform</p>
+            <h2 className="text-lg font-bold text-foreground">Commodity Risk Manager</h2>
+            <p className="text-sm text-muted-foreground">Commodity Hedging Platform</p>
           </div>
         </div>
       </SidebarHeader>
@@ -323,7 +316,7 @@ export function AppSidebar() {
                   <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-medium text-amber-800 dark:text-amber-200">High Volatility</p>
-                    <p className="text-xs text-amber-600 dark:text-amber-400 truncate">EUR/USD above threshold</p>
+                    <p className="text-xs text-amber-600 dark:text-amber-400 truncate">WTI above threshold</p>
                   </div>
                 </div>
               </div>
@@ -333,7 +326,7 @@ export function AppSidebar() {
                   <AlertTriangle className="h-4 w-4 text-red-600 dark:text-red-400" />
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-medium text-red-800 dark:text-red-200">Exposure Limit</p>
-                    <p className="text-xs text-red-600 dark:text-red-400 truncate">GBP exposure at 95%</p>
+                    <p className="text-xs text-red-600 dark:text-red-400 truncate">Gold exposure at 95%</p>
                   </div>
                 </div>
               </div>
@@ -391,21 +384,21 @@ export function AppSidebar() {
             </div>
             
             <div className="grid grid-cols-2 gap-2 text-xs">
-              {/* EUR/USD Card */}
-              <div className="relative overflow-hidden bg-gradient-to-br from-blue-900/40 to-blue-800/30 border border-blue-500/30 rounded-lg p-2 market-status-card hover:border-blue-400/50 hover:shadow-lg hover:shadow-blue-500/20 transition-all duration-300 group">
-                <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+              {/* WTI Crude Oil Card */}
+              <div className="relative overflow-hidden bg-gradient-to-br from-orange-900/40 to-orange-800/30 border border-orange-500/30 rounded-lg p-2 market-status-card hover:border-orange-400/50 hover:shadow-lg hover:shadow-orange-500/20 transition-all duration-300 group">
+                <div className="absolute inset-0 bg-gradient-to-br from-orange-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
                 <div className="relative">
-                  <div className="text-blue-300/80 market-status-label text-[10px] font-semibold uppercase tracking-wide">EUR/USD</div>
-                  <div className="font-mono font-bold text-sm market-status-content text-blue-100 group-hover:text-white transition-colors">{marketStatusData.EUR_USD.toFixed(4)}</div>
+                  <div className="text-orange-300/80 market-status-label text-[10px] font-semibold uppercase tracking-wide">WTI Oil</div>
+                  <div className="font-mono font-bold text-sm market-status-content text-orange-100 group-hover:text-white transition-colors">${marketStatusData.WTI.toFixed(2)}</div>
                 </div>
               </div>
               
-              {/* GBP/USD Card */}
-              <div className="relative overflow-hidden bg-gradient-to-br from-purple-900/40 to-purple-800/30 border border-purple-500/30 rounded-lg p-2 market-status-card hover:border-purple-400/50 hover:shadow-lg hover:shadow-purple-500/20 transition-all duration-300 group">
-                <div className="absolute inset-0 bg-gradient-to-br from-purple-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+              {/* Gold Card */}
+              <div className="relative overflow-hidden bg-gradient-to-br from-yellow-900/40 to-yellow-800/30 border border-yellow-500/30 rounded-lg p-2 market-status-card hover:border-yellow-400/50 hover:shadow-lg hover:shadow-yellow-500/20 transition-all duration-300 group">
+                <div className="absolute inset-0 bg-gradient-to-br from-yellow-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
                 <div className="relative">
-                  <div className="text-purple-300/80 market-status-label text-[10px] font-semibold uppercase tracking-wide">GBP/USD</div>
-                  <div className="font-mono font-bold text-sm market-status-content text-purple-100 group-hover:text-white transition-colors">{marketStatusData.GBP_USD.toFixed(4)}</div>
+                  <div className="text-yellow-300/80 market-status-label text-[10px] font-semibold uppercase tracking-wide">Gold</div>
+                  <div className="font-mono font-bold text-sm market-status-content text-yellow-100 group-hover:text-white transition-colors">${marketStatusData.GOLD.toFixed(2)}</div>
                 </div>
               </div>
             </div>

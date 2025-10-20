@@ -1,22 +1,62 @@
-// PricingService centralisé - Importe les fonctions de pricing depuis Index.tsx
+/**
+ * PricingService - Pont vers les modèles de pricing commodity
+ * 
+ * Ce service fait le lien entre l'ancien système FX (Index.tsx) et les nouveaux
+ * modèles de pricing commodity (Black-76)
+ */
+
+// Import des modèles de pricing commodity (Black-76)
 import {
-  erf as erfFromIndex,
-  CND as CNDFromIndex,
-  calculateFXForwardPrice as calculateFXForwardPriceFromIndex,
-  calculateGarmanKohlhagenPrice as calculateGarmanKohlhagenPriceFromIndex,
-  calculateVanillaOptionMonteCarlo as calculateVanillaOptionMonteCarloFromIndex,
-  calculateBarrierOptionPrice as calculateBarrierOptionPriceFromIndex,
-  calculateDigitalOptionPrice as calculateDigitalOptionPriceFromIndex,
-  calculateBarrierOptionClosedForm as calculateBarrierOptionClosedFormFromIndex,
-  calculateOptionPrice as calculateOptionPriceFromIndex,
-  calculateImpliedVolatility as calculateImpliedVolatilityFromIndex,
-  calculateSwapPrice as calculateSwapPriceFromIndex,
+  erf,
+  CND,
+  calculateBlack76Price as calculateBlack76PriceFromModels,
+  calculateCommodityForwardPrice as calculateCommodityForwardPriceFromModels,
+  calculateVanillaOptionMonteCarlo as calculateVanillaMonteCarloFromModels,
+  calculateBarrierOptionPrice as calculateBarrierPriceFromModels,
+  calculateDigitalOptionPrice as calculateDigitalPriceFromModels,
+  calculateImpliedVolatility as calculateImpliedVolFromModels,
+  calculateTimeToMaturity,
+  calculateVanillaGreeks as calculateGreeksFromModels
+} from './CommodityPricingModels';
+
+// Import temporaire depuis Index.tsx pour compatibilité
+import {
+  calculateStrategyPayoffAtPrice as calculateStrategyPayoffAtPriceFromIndex,
   calculatePricesFromPaths as calculatePricesFromPathsFromIndex,
-  calculateTimeToMaturity as calculateTimeToMaturityFromIndex,
-  calculateStrategyPayoffAtPrice as calculateStrategyPayoffAtPriceFromIndex
+  calculateSwapPrice as calculateSwapPriceFromIndex
 } from '@/pages/Index';
 
-// Export des fonctions de pricing
+// ===== COMMODITY PRICING FUNCTIONS (BLACK-76) =====
+
+/**
+ * Calcule le prix d'une option sur commodity avec Black-76
+ * 
+ * @param type - 'call' ou 'put'
+ * @param S - Prix spot de la commodity
+ * @param K - Strike price
+ * @param r - Taux sans risque
+ * @param b - Cost of carry (r + storage - convenience)
+ * @param t - Time to maturity
+ * @param sigma - Volatilité
+ */
+export function calculateBlack76Price(
+  type: string,
+  S: number,
+  K: number,
+  r: number,
+  b: number,
+  t: number,
+  sigma: number
+): number {
+  return calculateBlack76PriceFromModels(type, S, K, r, b, t, sigma);
+}
+
+/**
+ * Wrapper pour compatibilité FX → Commodity
+ * Convertit les paramètres FX (r_d, r_f) en commodity (r, b)
+ * 
+ * @deprecated Utiliser calculateBlack76Price avec cost of carry
+ */
 export function calculateGarmanKohlhagenPrice(
   type: string, 
   S: number, 
@@ -26,9 +66,15 @@ export function calculateGarmanKohlhagenPrice(
   t: number, 
   sigma: number
 ): number {
-  return calculateGarmanKohlhagenPriceFromIndex(type, S, K, r_d, r_f, t, sigma);
+  // Pour commodity: r = r_d, b = r_d - r_f
+  const r = r_d;
+  const b = r_d - r_f;
+  return calculateBlack76PriceFromModels(type, S, K, r, b, t, sigma);
 }
 
+/**
+ * Monte Carlo pour options vanilles sur commodities
+ */
 export function calculateVanillaOptionMonteCarlo(
   optionType: string,
   S: number,
@@ -39,9 +85,14 @@ export function calculateVanillaOptionMonteCarlo(
   sigma: number,
   numSimulations: number = 1000
 ): number {
-  return calculateVanillaOptionMonteCarloFromIndex(optionType, S, K, r_d, r_f, t, sigma, numSimulations);
+  const r = r_d;
+  const b = r_d - r_f;
+  return calculateVanillaMonteCarloFromModels(optionType, S, K, r, b, t, sigma, numSimulations);
 }
 
+/**
+ * Monte Carlo pour options à barrière sur commodities
+ */
 export function calculateBarrierOptionPrice(
   optionType: string,
   S: number,
@@ -53,9 +104,13 @@ export function calculateBarrierOptionPrice(
   secondBarrier?: number,
   numSimulations: number = 1000
 ): number {
-  return calculateBarrierOptionPriceFromIndex(optionType, S, K, r, t, sigma, barrier, secondBarrier, numSimulations);
+  const b = r; // Pour barrières simples, b = r
+  return calculateBarrierPriceFromModels(optionType, S, K, r, b, t, sigma, barrier, secondBarrier, numSimulations);
 }
 
+/**
+ * Monte Carlo pour options digitales sur commodities
+ */
 export function calculateDigitalOptionPrice(
   optionType: string,
   S: number,
@@ -68,9 +123,13 @@ export function calculateDigitalOptionPrice(
   numSimulations: number = 10000,
   rebate: number = 1
 ): number {
-  return calculateDigitalOptionPriceFromIndex(optionType, S, K, r, t, sigma, barrier, secondBarrier, numSimulations, rebate);
+  const b = r;
+  return calculateDigitalPriceFromModels(optionType, S, K, r, b, t, sigma, barrier, secondBarrier, numSimulations, rebate);
 }
 
+/**
+ * Closed-form pour options à barrière (utilise Monte Carlo pour commodities)
+ */
 export function calculateBarrierOptionClosedForm(
   optionType: string,
   S: number,
@@ -82,11 +141,34 @@ export function calculateBarrierOptionClosedForm(
   secondBarrier?: number,
   r_f: number = 0
 ): number {
-  return calculateBarrierOptionClosedFormFromIndex(optionType, S, K, r_d, t, sigma, barrier, secondBarrier, r_f);
+  const r = r_d;
+  const b = r_d - r_f;
+  // Pour commodities, on utilise Monte Carlo au lieu de closed-form
+  return calculateBarrierPriceFromModels(optionType, S, K, r, b, t, sigma, barrier, secondBarrier, 1000);
 }
 
+/**
+ * Calcule le prix forward d'une commodity
+ * F = S * e^(b*t) où b = r + storage - convenience
+ */
+export function calculateCommodityForwardPrice(
+  S: number,
+  r: number,
+  storage: number,
+  convenience: number,
+  t: number
+): number {
+  const b = r + storage - convenience;
+  return calculateCommodityForwardPriceFromModels(S, b, t);
+}
+
+/**
+ * Wrapper FX → Commodity pour compatibilité
+ * @deprecated Utiliser calculateCommodityForwardPrice
+ */
 export function calculateFXForwardPrice(S: number, r_d: number, r_f: number, t: number): number {
-  return calculateFXForwardPriceFromIndex(S, r_d, r_f, t);
+  const b = r_d - r_f;
+  return calculateCommodityForwardPriceFromModels(S, b, t);
 }
 
 export function calculateOptionPrice(
@@ -105,6 +187,9 @@ export function calculateOptionPrice(
   return calculateOptionPriceFromIndex(type, S, K, r_d, r_f, t, sigma, barrier, secondBarrier, rebate, numSimulations);
 }
 
+/**
+ * Calcule la volatilité implicite (Black-76)
+ */
 export function calculateImpliedVolatility(
   optionType: string,
   S: number,
@@ -116,7 +201,9 @@ export function calculateImpliedVolatility(
   tolerance: number = 0.0001,
   maxIterations: number = 100
 ): number {
-  return calculateImpliedVolatilityFromIndex(optionType, S, K, r_d, r_f, t, marketPrice, tolerance, maxIterations);
+  const r = r_d;
+  const b = r_d - r_f;
+  return calculateImpliedVolFromModels(optionType, S, K, r, b, t, marketPrice, tolerance, maxIterations);
 }
 
 export function calculateSwapPrice(
@@ -127,13 +214,8 @@ export function calculateSwapPrice(
   return calculateSwapPriceFromIndex(forwards, times, r);
 }
 
-export function erf(x: number): number {
-  return erfFromIndex(x);
-}
-
-export function CND(x: number): number {
-  return CNDFromIndex(x);
-}
+// Export des fonctions utilitaires
+export { erf, CND };
 
 export function calculatePricesFromPaths(
   optionType: string,
@@ -148,9 +230,8 @@ export function calculatePricesFromPaths(
   return calculatePricesFromPathsFromIndex(optionType, S, K, r, maturityIndex, paths, barrier, secondBarrier);
 }
 
-export function calculateTimeToMaturity(maturityDate: string, valuationDate: string): number {
-  return calculateTimeToMaturityFromIndex(maturityDate, valuationDate);
-}
+// Export depuis CommodityPricingModels
+export { calculateTimeToMaturity };
 
 export function calculateStrategyPayoffAtPrice(components: any[], price: number, spotPrice: number): number {
   return calculateStrategyPayoffAtPriceFromIndex(components, price, spotPrice);
@@ -167,61 +248,21 @@ export interface Greeks {
   rho: number;
 }
 
-// Calcul des grecques pour options vanilles (Garman-Kohlhagen)
+/**
+ * Calcul des grecques pour options vanilles (Black-76 pour commodities)
+ */
 export function calculateVanillaGreeks(
   type: 'call' | 'put',
   S: number,      // Spot price
   K: number,      // Strike price
-  r_d: number,    // Domestic rate
-  r_f: number,    // Foreign rate
+  r_d: number,    // Domestic rate (or risk-free for commodity)
+  r_f: number,    // Foreign rate (or 0 for commodity)
   t: number,      // Time to maturity
   sigma: number   // Volatility
 ): Greeks {
-  const sqrtT = Math.sqrt(t);
-  const d1 = (Math.log(S / K) + (r_d - r_f + 0.5 * sigma * sigma) * t) / (sigma * sqrtT);
-  const d2 = d1 - sigma * sqrtT;
-  
-  // Fonctions de distribution normale
-  const N = (x: number) => (1 + erf(x / Math.sqrt(2))) / 2;
-  const NPrime = (x: number) => Math.exp(-0.5 * x * x) / Math.sqrt(2 * Math.PI);
-  
-  const Nd1 = N(d1);
-  const Nd2 = N(d2);
-  const NPrimeD1 = NPrime(d1);
-  
-  let delta: number;
-  let gamma: number;
-  let theta: number;
-  let vega: number;
-  let rho: number;
-  
-  if (type === 'call') {
-    // Call Greeks
-    delta = Math.exp(-r_f * t) * Nd1;
-    gamma = Math.exp(-r_f * t) * NPrimeD1 / (S * sigma * sqrtT);
-    theta = -S * Math.exp(-r_f * t) * NPrimeD1 * sigma / (2 * sqrtT) 
-            - r_d * K * Math.exp(-r_d * t) * Nd2 
-            + r_f * S * Math.exp(-r_f * t) * Nd1;
-    vega = S * Math.exp(-r_f * t) * NPrimeD1 * sqrtT;
-    rho = K * t * Math.exp(-r_d * t) * Nd2;
-  } else {
-    // Put Greeks
-    delta = Math.exp(-r_f * t) * (Nd1 - 1);
-    gamma = Math.exp(-r_f * t) * NPrimeD1 / (S * sigma * sqrtT);
-    theta = -S * Math.exp(-r_f * t) * NPrimeD1 * sigma / (2 * sqrtT) 
-            + r_d * K * Math.exp(-r_d * t) * N(-d2) 
-            - r_f * S * Math.exp(-r_f * t) * N(-d1);
-    vega = S * Math.exp(-r_f * t) * NPrimeD1 * sqrtT;
-    rho = -K * t * Math.exp(-r_d * t) * N(-d2);
-  }
-  
-  return {
-    delta: delta,
-    gamma: gamma,
-    theta: theta,
-    vega: vega,
-    rho: rho
-  };
+  const r = r_d;
+  const b = r_d - r_f;
+  return calculateGreeksFromModels(type, S, K, r, b, t, sigma);
 }
 
 // Calcul des grecques pour options barrières (approximation analytique)
@@ -539,6 +580,7 @@ export function calculateUnderlyingPrice(
 
 // Classe PricingService pour la compatibilité
 export class PricingService {
+  static calculateBlack76Price = calculateBlack76Price;
   static calculateGarmanKohlhagenPrice = calculateGarmanKohlhagenPrice;
   static calculateVanillaOptionMonteCarlo = calculateVanillaOptionMonteCarlo;
   static calculateBarrierOptionPrice = calculateBarrierOptionPrice;

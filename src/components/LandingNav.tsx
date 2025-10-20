@@ -35,10 +35,10 @@ const LandingNav = () => {
           {/* Logo */}
           <div className="flex items-center space-x-3">
             <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-500 rounded-lg flex items-center justify-center">
-              <span className="text-white font-bold text-sm">FX</span>
+              <span className="text-white font-bold text-sm">CM</span>
             </div>
             <div>
-              <div className="text-white font-bold text-lg">FX hedging</div>
+              <div className="text-white font-bold text-lg">Commodity Risk</div>
               <div className="text-slate-400 text-xs">Risk Management Platform</div>
             </div>
           </div>

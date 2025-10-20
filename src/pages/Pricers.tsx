@@ -21,18 +21,18 @@ import {
   Hash
 } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
-import { CURRENCY_PAIRS } from '@/pages/Index';
+import { CURRENCY_PAIRS } from '@/pages/Index'; // Commodity data
 import PayoffChart from '@/components/PayoffChart';
 import { PricingService, Greeks } from '@/services/PricingService';
 
-// Réutiliser les types du Strategy Builder
-interface CurrencyPair {
+// Interface pour les commodities (adaptée du Strategy Builder)
+interface CurrencyPair { // Renamed to Commodity in a previous step, but still named CurrencyPair here for compatibility
   symbol: string;
   name: string;
-  base: string;
-  quote: string;
-  category: 'majors' | 'crosses' | 'others';
-  defaultSpotRate: number;
+  base: string;  // Unit (BBL, OZ, MT, etc.) - for display only
+  quote: string; // Currency (usually USD) - for display only
+  category: 'energy' | 'metals' | 'agriculture' | 'livestock' | 'majors' | 'crosses' | 'others'; // Commodity categories + legacy FX
+  defaultSpotRate: number; // Default spot price for this commodity
 }
 
 interface StrategyComponent {
@@ -89,9 +89,15 @@ const INSTRUMENT_TYPES = [
 const Pricers = () => {
   const { toast } = useToast();
   
+  // Helper functions for commodity pricing
+  const getRiskFreeRate = () => pricingInputs.interestRate / 100;
+  const getStorageCost = () => pricingInputs.storageCost / 100;
+  const getConvenienceYield = () => pricingInputs.convenienceYield / 100;
+  const calculateCostOfCarry = () => getRiskFreeRate() + getStorageCost() - getConvenienceYield();
+  
   // État principal
   const [selectedInstrument, setSelectedInstrument] = useState('call');
-  const [selectedCurrencyPair, setSelectedCurrencyPair] = useState('EUR/USD');
+  const [selectedCurrencyPair, setSelectedCurrencyPair] = useState('WTI');
   
   // ✅ AJOUT: Sélection du modèle de pricing pour les barrières
   const [barrierPricingModel, setBarrierPricingModel] = useState<'closed-form' | 'monte-carlo'>('closed-form');
@@ -99,36 +105,23 @@ const Pricers = () => {
   // ✅ AJOUT: Sélection du prix sous-jacent pour TOUTES les options
   const [underlyingPriceType, setUnderlyingPriceType] = useState<'forward' | 'spot'>('forward');
   
-  // Inputs de pricing (cohérents avec Strategy Builder)
+  // Inputs de pricing (adaptés pour commodities)
   const [pricingInputs, setPricingInputs] = useState({
     startDate: new Date().toISOString().split('T')[0],
     maturityDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 1 an par défaut
-    spotPrice: 1.1000,
-    domesticRate: 5.0, // En pourcentage
-    foreignRate: 3.0, // En pourcentage
+    spotPrice: 75.50, // WTI default price
+    interestRate: 5.0, // Risk-free rate (en pourcentage)
+    storageCost: 2.0, // Storage cost (en pourcentage)
+    convenienceYield: 1.0, // Convenience yield (en pourcentage)
     timeToMaturity: 1.0,
-    volatility: 15.0, // En pourcentage
+    volatility: 25.0, // Commodity volatility (en pourcentage)
     numSimulations: 1000 // ✅ 1000 comme Strategy Builder
   });
 
-  // Notional bidirectionnel (base et quote)
-  const [notionalBase, setNotionalBase] = useState(1000000);
-  const [notionalQuote, setNotionalQuote] = useState(1000000 * (pricingInputs.spotPrice || 1));
-  const [lastChanged, setLastChanged] = useState<'base' | 'quote'>('base');
+  // Volume principal (simplifié)
+  const [volume, setVolume] = useState(1000000);
 
-  // Correction de la synchronisation du notional pour éviter la boucle infinie
-  useEffect(() => {
-    if (lastChanged === 'base') {
-      setNotionalQuote(Number((notionalBase * (pricingInputs.spotPrice || 1)).toFixed(2)));
-    }
-    // eslint-disable-next-line
-  }, [notionalBase, pricingInputs.spotPrice]);
-  useEffect(() => {
-    if (lastChanged === 'quote') {
-      setNotionalBase(Number((notionalQuote / (pricingInputs.spotPrice || 1)).toFixed(2)));
-    }
-    // eslint-disable-next-line
-  }, [notionalQuote, pricingInputs.spotPrice]);
+  // Volume simplifié - pas de synchronisation nécessaire
 
   // Composant stratégie (comme dans Strategy Builder)
   const [strategyComponent, setStrategyComponent] = useState<StrategyComponent>({
@@ -220,12 +213,8 @@ const Pricers = () => {
       let underlyingLabel: string;
       
       if (underlyingPriceType === 'forward') {
-        underlyingPrice = PricingService.calculateFXForwardPrice(
-          pricingInputs.spotPrice,
-          pricingInputs.domesticRate / 100,
-          pricingInputs.foreignRate / 100,
-          pricingInputs.timeToMaturity
-        );
+        // Commodity forward: F = S * exp(b * t) where b = r + storage - convenience
+        underlyingPrice = pricingInputs.spotPrice * Math.exp(calculateCostOfCarry() * pricingInputs.timeToMaturity);
         underlyingLabel = 'Forward';
       } else {
         underlyingPrice = pricingInputs.spotPrice;
@@ -234,39 +223,31 @@ const Pricers = () => {
       
       if (strategyComponent.type === 'forward') {
         // Pour les forwards, utiliser directement la fonction forward
-        price = PricingService.calculateFXForwardPrice(
-          pricingInputs.spotPrice,
-          pricingInputs.domesticRate / 100,
-          pricingInputs.foreignRate / 100,
-          pricingInputs.timeToMaturity
-        ) - strike;
+        // Commodity forward: F = S * exp(b * t) where b = r + storage - convenience
+        const forward = pricingInputs.spotPrice * Math.exp(calculateCostOfCarry() * pricingInputs.timeToMaturity);
+        price = forward - strike;
         methodName = 'Forward Pricing';
       } else if (strategyComponent.type === 'swap') {
         // Pour les swaps, calculer le forward puis utiliser swap pricing
-        const forward = PricingService.calculateFXForwardPrice(
-          pricingInputs.spotPrice,
-          pricingInputs.domesticRate / 100,
-          pricingInputs.foreignRate / 100,
-          pricingInputs.timeToMaturity
-        );
+        const forward = pricingInputs.spotPrice * Math.exp(calculateCostOfCarry() * pricingInputs.timeToMaturity);
         price = PricingService.calculateSwapPrice(
           [forward],
           [pricingInputs.timeToMaturity],
-          pricingInputs.domesticRate / 100
+          getRiskFreeRate()
         );
         methodName = 'Swap Pricing';
       } else if (strategyComponent.type === 'call' || strategyComponent.type === 'put') {
-        // ✅ VANILLA OPTIONS - Garman-Kohlhagen (utilise prix sous-jacent choisi)
-        price = PricingService.calculateGarmanKohlhagenPrice(
+        // ✅ VANILLA OPTIONS - Black-76 for commodities (utilise prix sous-jacent choisi)
+        price = PricingService.calculateBlack76Price(
           strategyComponent.type,
           underlyingPrice, // ✅ Forward ou Spot selon le choix
           strike,
-          pricingInputs.domesticRate / 100,
-          pricingInputs.foreignRate / 100,
+          getRiskFreeRate(),
+          calculateCostOfCarry(),
           pricingInputs.timeToMaturity,
           strategyComponent.volatility / 100
         );
-        methodName = `Garman-Kohlhagen (${underlyingLabel})`;
+        methodName = `Black-76 (${underlyingLabel})`;
       } else if (strategyComponent.type.includes('knockout') || strategyComponent.type.includes('knockin')) {
         // ✅ BARRIER OPTIONS - UTILISE LE PRIX SOUS-JACENT CALCULÉ
         if (barrierPricingModel === 'closed-form') {
@@ -274,12 +255,12 @@ const Pricers = () => {
             strategyComponent.type,
             underlyingPrice, // ✅ Forward ou Spot selon le choix
             strike,
-            pricingInputs.domesticRate / 100,
+            getRiskFreeRate(),
             pricingInputs.timeToMaturity,
             strategyComponent.volatility / 100,
             barrier || 0,
             secondBarrier
-            // Note: pas de r_f selon Index.tsx
+            // Note: Black-76 uses risk-free rate only
           );
           methodName = `Barrier Closed-Form (${underlyingLabel})`;
         } else {
@@ -287,7 +268,7 @@ const Pricers = () => {
             strategyComponent.type,
             underlyingPrice, // ✅ Forward ou Spot selon le choix
             strike,
-            pricingInputs.domesticRate / 100,
+            getRiskFreeRate(),
             pricingInputs.timeToMaturity,
             strategyComponent.volatility / 100,
             barrier || 0,
@@ -302,7 +283,7 @@ const Pricers = () => {
           strategyComponent.type,
           underlyingPrice, // ✅ Forward ou Spot selon le choix
           strike,
-          pricingInputs.domesticRate / 100,
+          getRiskFreeRate(),
           pricingInputs.timeToMaturity,
           strategyComponent.volatility / 100,
           barrier,
@@ -316,22 +297,23 @@ const Pricers = () => {
       // Calculer les grecques si demandé
       let greeks: Greeks | undefined;
       if (showGreeks && strategyComponent.type !== 'forward' && strategyComponent.type !== 'swap') {
-        try {
-          greeks = PricingService.calculateGreeks(
-            strategyComponent.type,
-            underlyingPrice,
-            strike,
-            pricingInputs.domesticRate / 100,
-            pricingInputs.foreignRate / 100,
-            pricingInputs.timeToMaturity,
-            strategyComponent.volatility / 100,
-            barrier,
-            secondBarrier,
-            strategyComponent.rebate || 1
-          );
-        } catch (error) {
-          console.warn('Error calculating Greeks:', error);
-        }
+        // Greeks calculation temporarily disabled
+        // try {
+        //   greeks = PricingService.calculateGreeks(
+        //     strategyComponent.type,
+        //     underlyingPrice,
+        //     strike,
+        //     getRiskFreeRate(),
+        //     calculateCostOfCarry(),
+        //     pricingInputs.timeToMaturity,
+        //     strategyComponent.volatility / 100,
+        //     barrier,
+        //     secondBarrier,
+        //     strategyComponent.rebate || 1
+        //   );
+        // } catch (error) {
+        //   console.warn('Error calculating Greeks:', error);
+        // }
       }
       
       // Ajouter le résultat
@@ -381,14 +363,8 @@ const Pricers = () => {
   };
 
   // ✅ AJOUT: Fonctions de gestion des notionnels
-  const handleNotionalBaseChange = (value: number) => {
-    setLastChanged('base');
-    setNotionalBase(value);
-  };
-
-  const handleNotionalQuoteChange = (value: number) => {
-    setLastChanged('quote');
-    setNotionalQuote(value);
+  const handleVolumeChange = (value: number) => {
+    setVolume(value);
   };
 
   // Recalculer automatiquement le prix quand les paramètres changent
@@ -418,8 +394,7 @@ const Pricers = () => {
     pricingInputs.timeToMaturity,
     barrierPricingModel, // ✅ Recalculer quand le modèle change
     underlyingPriceType, // ✅ Recalculer quand le type de sous-jacent change
-    notionalBase,
-    notionalQuote, // ✅ Recalculer quand les notionnels changent
+    volume, // ✅ Recalculer quand le volume change
     showGreeks // ✅ Recalculer quand l'affichage des grecques change
   ]);
 
@@ -492,12 +467,11 @@ const Pricers = () => {
   const selectedPair = CURRENCY_PAIRS.find(p => p.symbol === selectedCurrencyPair);
 
   // Calculs complémentaires pour l'affichage des résultats
-  const notional = notionalBase;
+  // Volume principal pour les calculs
   const spot = pricingInputs.spotPrice;
   const base = selectedPair?.base || 'EUR';
   const quote = selectedPair?.quote || 'USD';
-  const premiumBase = pricingResults.length > 0 ? pricingResults[0].price * notional : 0;
-  const premiumQuote = premiumBase * spot;
+  const premium = pricingResults.length > 0 ? pricingResults[0].price * volume : 0;
   const strikeAbs = strategyComponent.strikeType === 'percent' ? spot * (strategyComponent.strike / 100) : strategyComponent.strike;
   const barrierAbs = strategyComponent.barrierType === 'percent' && strategyComponent.barrier ? spot * strategyComponent.barrier / 100 : (strategyComponent.barrier || undefined);
   const secondBarrierAbs = strategyComponent.barrierType === 'percent' && strategyComponent.secondBarrier ? spot * strategyComponent.secondBarrier / 100 : (strategyComponent.secondBarrier || undefined);
@@ -559,12 +533,8 @@ const Pricers = () => {
         let underlyingPrice: number;
         
         if (underlyingPriceType === 'forward') {
-          underlyingPrice = PricingService.calculateFXForwardPrice(
-            spot, // Utiliser le spot variable pour le forward
-            pricingInputs.domesticRate / 100,
-            pricingInputs.foreignRate / 100,
-            pricingInputs.timeToMaturity
-          );
+          // Commodity forward: F = S * exp(b * t) where b = r + storage - convenience
+          underlyingPrice = spot * Math.exp(calculateCostOfCarry() * pricingInputs.timeToMaturity);
         } else {
           underlyingPrice = spot; // Utiliser le spot variable
         }
@@ -573,50 +543,43 @@ const Pricers = () => {
         let greeks: Greeks | undefined;
         
         if (strategyComponent.type === 'forward') {
-          price = PricingService.calculateFXForwardPrice(
-            spot,
-            pricingInputs.domesticRate / 100,
-            pricingInputs.foreignRate / 100,
-            pricingInputs.timeToMaturity
-          ) - strike;
+          // Commodity forward: F = S * exp(b * t) where b = r + storage - convenience
+          const forward = spot * Math.exp(calculateCostOfCarry() * pricingInputs.timeToMaturity);
+          price = forward - strike;
         } else if (strategyComponent.type === 'swap') {
-          const forward = PricingService.calculateFXForwardPrice(
-            spot,
-            pricingInputs.domesticRate / 100,
-            pricingInputs.foreignRate / 100,
-            pricingInputs.timeToMaturity
-          );
+          const forward = spot * Math.exp(calculateCostOfCarry() * pricingInputs.timeToMaturity);
           price = PricingService.calculateSwapPrice(
             [forward],
             [pricingInputs.timeToMaturity],
-            pricingInputs.domesticRate / 100
+            getRiskFreeRate()
           );
         } else if (strategyComponent.type === 'call' || strategyComponent.type === 'put') {
-          // ✅ VANILLA OPTIONS
-          price = PricingService.calculateGarmanKohlhagenPrice(
+          // ✅ VANILLA OPTIONS - Black-76 for commodities
+          price = PricingService.calculateBlack76Price(
             strategyComponent.type,
             underlyingPrice,
             strike,
-            pricingInputs.domesticRate / 100,
-            pricingInputs.foreignRate / 100,
+            getRiskFreeRate(),
+            calculateCostOfCarry(),
             pricingInputs.timeToMaturity,
             strategyComponent.volatility / 100
           );
           
           // Calculer les grecques
           if (showGreeks) {
-            greeks = PricingService.calculateGreeks(
-              strategyComponent.type,
-              underlyingPrice,
-              strike,
-              pricingInputs.domesticRate / 100,
-              pricingInputs.foreignRate / 100,
-              pricingInputs.timeToMaturity,
-              strategyComponent.volatility / 100,
-              barrier,
-              secondBarrier,
-              strategyComponent.rebate || 1
-            );
+            // Greeks calculation temporarily disabled
+            // greeks = PricingService.calculateGreeks(
+            //   strategyComponent.type,
+            //   underlyingPrice,
+            //   strike,
+            //   getRiskFreeRate(),
+            //   calculateCostOfCarry(),
+            //   pricingInputs.timeToMaturity,
+            //   strategyComponent.volatility / 100,
+            //   barrier,
+            //   secondBarrier,
+            //   strategyComponent.rebate || 1
+            // );
           }
         } else if (strategyComponent.type.includes('knockout') || strategyComponent.type.includes('knockin')) {
           // ✅ BARRIER OPTIONS
@@ -625,7 +588,7 @@ const Pricers = () => {
               strategyComponent.type,
               underlyingPrice,
               strike,
-              pricingInputs.domesticRate / 100,
+              getRiskFreeRate(),
               pricingInputs.timeToMaturity,
               strategyComponent.volatility / 100,
               barrier || 0,
@@ -636,7 +599,7 @@ const Pricers = () => {
               strategyComponent.type,
               underlyingPrice,
               strike,
-              pricingInputs.domesticRate / 100,
+              getRiskFreeRate(),
               pricingInputs.timeToMaturity,
               strategyComponent.volatility / 100,
               barrier || 0,
@@ -647,22 +610,23 @@ const Pricers = () => {
           
           // Calculer les grecques pour les barrières
           if (showGreeks) {
-            try {
-              greeks = PricingService.calculateGreeks(
-                strategyComponent.type,
-                underlyingPrice,
-                strike,
-                pricingInputs.domesticRate / 100,
-                pricingInputs.foreignRate / 100,
-                pricingInputs.timeToMaturity,
-                strategyComponent.volatility / 100,
-                barrier,
-                secondBarrier,
-                strategyComponent.rebate || 1
-              );
-            } catch (error) {
-              console.warn('Error calculating Greeks for barrier option at spot', spot, error);
-            }
+            // Greeks calculation temporarily disabled
+            // try {
+            //   greeks = PricingService.calculateGreeks(
+            //     strategyComponent.type,
+            //     underlyingPrice,
+            //     strike,
+            //     getRiskFreeRate(),
+            //     calculateCostOfCarry(),
+            //     pricingInputs.timeToMaturity,
+            //     strategyComponent.volatility / 100,
+            //     barrier,
+            //     secondBarrier,
+            //     strategyComponent.rebate || 1
+            //   );
+            // } catch (error) {
+            //   console.warn('Error calculating Greeks for barrier option at spot', spot, error);
+            // }
           }
         } else {
           // ✅ DIGITAL OPTIONS
@@ -670,7 +634,7 @@ const Pricers = () => {
             strategyComponent.type,
             underlyingPrice,
             strike,
-            pricingInputs.domesticRate / 100,
+            getRiskFreeRate(),
             pricingInputs.timeToMaturity,
             strategyComponent.volatility / 100,
             barrier,
@@ -712,19 +676,19 @@ const Pricers = () => {
 
   return (
     <Layout 
-      title="Pricers"
+      title="Commodity Pricers"
       breadcrumbs={[
         { label: "Dashboard", href: "/" },
-        { label: "Pricers" }
+        { label: "Commodity Pricers" }
       ]}
     >
       <div className="space-y-8">
         {/* En-tête moderne */}
         <div className="flex items-center justify-between">
           <div className="space-y-2">
-            <h1 className="text-4xl font-bold tracking-tight">FX Pricers</h1>
+            <h1 className="text-4xl font-bold tracking-tight">Commodity Pricers</h1>
             <p className="text-lg text-muted-foreground">
-              Advanced pricing engine for options, swaps and forwards
+              Advanced commodity pricing engine for options, swaps and forwards
             </p>
           </div>
           <Button 
@@ -833,7 +797,7 @@ const Pricers = () => {
                     </Select>
                     <div className="text-xs text-muted-foreground">
                       {underlyingPriceType === 'forward' 
-                        ? `Forward = ${pricingInputs.spotPrice} × exp((${pricingInputs.domesticRate}% - ${pricingInputs.foreignRate}%) × ${pricingInputs.timeToMaturity.toFixed(2)}) ≈ ${(pricingInputs.spotPrice * Math.exp((pricingInputs.domesticRate - pricingInputs.foreignRate)/100 * pricingInputs.timeToMaturity)).toFixed(4)}`
+                        ? `Forward = ${pricingInputs.spotPrice} × exp((${pricingInputs.interestRate}% + ${pricingInputs.storageCost}% - ${pricingInputs.convenienceYield}%) × ${pricingInputs.timeToMaturity.toFixed(2)}) ≈ ${(pricingInputs.spotPrice * Math.exp(calculateCostOfCarry() * pricingInputs.timeToMaturity)).toFixed(4)}`
                         : `Spot = ${pricingInputs.spotPrice} (current market price)`
                       }
                     </div>
@@ -864,7 +828,7 @@ const Pricers = () => {
 
                 {/* Paire de devises */}
                 <div className="space-y-2">
-                  <Label>Currency Pair</Label>
+                  <Label>Commodity</Label>
                   <Select value={selectedCurrencyPair} onValueChange={setSelectedCurrencyPair}>
                     <SelectTrigger>
                       <SelectValue />
@@ -995,39 +959,23 @@ const Pricers = () => {
                 <div className="space-y-3">
                   <Label className="text-sm font-medium">Notionnels</Label>
                   
-                  {/* Notionnel devise de base */}
+                  {/* Volume principal */}
                   <div className="space-y-2">
                     <Label className="text-xs text-muted-foreground">
-                      Notional {selectedPair?.base || 'EUR'}
+                      Volume
                     </Label>
                     <Input
                       type="number"
                       step="1000"
-                      value={notionalBase}
-                      onChange={(e) => handleNotionalBaseChange(parseFloat(e.target.value) || 0)}
+                      value={volume}
+                      onChange={(e) => handleVolumeChange(parseFloat(e.target.value) || 0)}
                       className="text-right"
                     />
                   </div>
                   
-                  {/* Notionnel devise de contrepartie */}
-                  <div className="space-y-2">
-                    <Label className="text-xs text-muted-foreground">
-                      Notional {selectedPair?.quote || 'USD'}
-                    </Label>
-                    <Input
-                      type="number"
-                      step="1000"
-                      value={notionalQuote}
-                      onChange={(e) => handleNotionalQuoteChange(parseFloat(e.target.value) || 0)}
-                      className="text-right"
-                    />
-                  </div>
-                  
-                  {/* Indicateur de synchronisation */}
+                  {/* Indicateur de prix */}
                   <div className="text-xs text-muted-foreground text-center">
-                    📊 Rate: {pricingInputs.spotPrice} {selectedPair?.quote || 'USD'}/{selectedPair?.base || 'EUR'}
-                    <br />
-                    🔄 Last modified: {lastChanged === 'base' ? selectedPair?.base || 'EUR' : selectedPair?.quote || 'USD'}
+                    📊 Spot Price: {pricingInputs.spotPrice} {selectedPair?.quote || 'USD'}
                   </div>
                 </div>
 
@@ -1042,31 +990,45 @@ const Pricers = () => {
                   />
                 </div>
 
-                {/* Taux domestique */}
+                {/* Risk-free Rate */}
                 <div className="space-y-2">
                   <Label>
-                    {selectedPair?.quote || 'USD'} Rate (%)
-                    <span className="ml-1 text-xs text-muted-foreground" title="Interest rate of the quote currency. Used as domestic rate in FX formula.">?</span>
+                    Risk-free Rate (%)
+                    <span className="ml-1 text-xs text-muted-foreground" title="Risk-free interest rate for commodity pricing">?</span>
                   </Label>
                   <Input
                     type="number"
                     step="0.01"
-                    value={pricingInputs.domesticRate}
-                    onChange={(e) => updatePricingInput('domesticRate', parseFloat(e.target.value))}
+                    value={pricingInputs.interestRate}
+                    onChange={(e) => updatePricingInput('interestRate', parseFloat(e.target.value))}
                   />
                 </div>
 
-                {/* Taux étranger */}
+                {/* Storage Cost */}
                 <div className="space-y-2">
                   <Label>
-                    {selectedPair?.base || 'EUR'} Rate (%)
-                    <span className="ml-1 text-xs text-muted-foreground" title="Interest rate of the base currency. Used as foreign rate in FX formula.">?</span>
+                    Storage Cost (%)
+                    <span className="ml-1 text-xs text-muted-foreground" title="Storage cost for holding the commodity">?</span>
                   </Label>
                   <Input
                     type="number"
                     step="0.01"
-                    value={pricingInputs.foreignRate}
-                    onChange={(e) => updatePricingInput('foreignRate', parseFloat(e.target.value))}
+                    value={pricingInputs.storageCost}
+                    onChange={(e) => updatePricingInput('storageCost', parseFloat(e.target.value))}
+                  />
+                </div>
+
+                {/* Convenience Yield */}
+                <div className="space-y-2">
+                  <Label>
+                    Convenience Yield (%)
+                    <span className="ml-1 text-xs text-muted-foreground" title="Convenience yield from holding the commodity">?</span>
+                  </Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    value={pricingInputs.convenienceYield}
+                    onChange={(e) => updatePricingInput('convenienceYield', parseFloat(e.target.value))}
                   />
                 </div>
 
@@ -1309,12 +1271,8 @@ const Pricers = () => {
               <CardContent className="pt-2">
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-6 text-sm">
                   <div className="p-4 bg-muted/30 rounded-lg">
-                    <span className="font-semibold text-sm text-muted-foreground">Notional {base}</span><br/>
-                    <span className="text-lg font-semibold">{notional.toLocaleString()} {base}</span>
-                  </div>
-                  <div className="p-4 bg-muted/30 rounded-lg">
-                    <span className="font-semibold text-sm text-muted-foreground">Notional {quote}</span><br/>
-                    <span className="text-lg font-semibold">{notionalQuote.toLocaleString(undefined, {maximumFractionDigits:2})} {quote}</span>
+                    <span className="font-semibold text-sm text-muted-foreground">Volume</span><br/>
+                    <span className="text-lg font-semibold">{volume.toLocaleString()}</span>
                   </div>
                   <div className="p-4 bg-muted/30 rounded-lg">
                     <span className="font-semibold text-sm text-muted-foreground">Spot Price</span><br/>
@@ -1325,7 +1283,7 @@ const Pricers = () => {
                       <span className="font-semibold text-sm text-muted-foreground">Underlying Price</span><br/>
                       <span className="text-lg font-semibold">
                         {underlyingPriceType === 'forward' 
-                          ? `${(spot * Math.exp((pricingInputs.domesticRate - pricingInputs.foreignRate)/100 * pricingInputs.timeToMaturity)).toFixed(4)} (Forward)`
+                          ? `${(spot * Math.exp(calculateCostOfCarry() * pricingInputs.timeToMaturity)).toFixed(4)} (Forward)`
                           : `${spot} (Spot)`
                         }
                       </span>
@@ -1354,12 +1312,16 @@ const Pricers = () => {
                     </>
                   )}
                   <div className="p-4 bg-muted/30 rounded-lg">
-                    <span className="font-semibold text-sm text-muted-foreground">{quote} Rate</span><br/>
-                    <span className="text-lg font-semibold">{pricingInputs.domesticRate}%</span>
+                    <span className="font-semibold text-sm text-muted-foreground">Risk-free Rate</span><br/>
+                    <span className="text-lg font-semibold">{pricingInputs.interestRate}%</span>
                   </div>
                   <div className="p-4 bg-muted/30 rounded-lg">
-                    <span className="font-semibold text-sm text-muted-foreground">{base} Rate</span><br/>
-                    <span className="text-lg font-semibold">{pricingInputs.foreignRate}%</span>
+                    <span className="font-semibold text-sm text-muted-foreground">Storage Cost</span><br/>
+                    <span className="text-lg font-semibold">{pricingInputs.storageCost}%</span>
+                  </div>
+                  <div className="p-4 bg-muted/30 rounded-lg">
+                    <span className="font-semibold text-sm text-muted-foreground">Convenience Yield</span><br/>
+                    <span className="text-lg font-semibold">{pricingInputs.convenienceYield}%</span>
                   </div>
                   <div className="p-4 bg-muted/30 rounded-lg">
                     <span className="font-semibold text-sm text-muted-foreground">Volatility</span><br/>
@@ -1384,19 +1346,15 @@ const Pricers = () => {
                 <CardContent className="pt-2">
                   <div className="flex flex-col gap-3 text-lg">
                     <div className="flex justify-between items-center p-4 bg-muted/50 rounded-lg">
-                      <span className="font-semibold">Premium ({base}):</span>
-                      <span className="font-mono text-xl">{premiumBase.toLocaleString(undefined, {maximumFractionDigits:2})} {base}</span>
-                    </div>
-                    <div className="flex justify-between items-center p-4 bg-muted/50 rounded-lg">
-                      <span className="font-semibold">Premium ({quote}):</span>
-                      <span className="font-mono text-xl">{premiumQuote.toLocaleString(undefined, {maximumFractionDigits:2})} {quote}</span>
+                      <span className="font-semibold">Premium:</span>
+                      <span className="font-mono text-xl">{premium.toLocaleString(undefined, {maximumFractionDigits:2})}</span>
                     </div>
                   </div>
                 </CardContent>
               </Card>
             )}
 
-            {/* Affichage du graphique Payoff/FX Hedging/Price/Greeks */}
+            {/* Affichage du graphique Payoff/Commodity Hedging/Price/Greeks */}
             <Card className="border-0 shadow-lg">
               <PayoffChart
                 data={payoffData}

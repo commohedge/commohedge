@@ -8,13 +8,13 @@ export interface SavedScenario {
     startDate: string;
     monthsToHedge: number;
     interestRate: number;
-    domesticRate?: number;
-    foreignRate?: number;
+    storageCost?: number;
+    convenienceYield?: number;
     totalVolume: number;
     baseVolume?: number;
     quoteVolume?: number;
     spotPrice: number;
-    currencyPair?: any; // CurrencyPair interface
+    commodity?: any; // Commodity interface
     useCustomPeriods?: boolean;
     customPeriods?: any[];
   };

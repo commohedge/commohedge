@@ -252,11 +252,11 @@ const ScenariosPdfExport = ({ scenarios, selectedScenarios, setSelectedScenarios
           
           pdf.setFontSize(10);
           pdf.setFont('helvetica', 'bold');
-          pdf.text('FX Hedging Profile', contentPadding, yOffset);
+          pdf.text('Commodity Hedging Profile', contentPadding, yOffset);
           yOffset += 4;
         }
         
-        // Graphique FX Hedging Profile (au lieu du Payoff Diagram)
+        // Graphique Commodity Hedging Profile (au lieu du Payoff Diagram)
         const fxHedgingElement = document.getElementById(`fx-hedging-chart-${scenario.id}`);
         if (fxHedgingElement) {
           const renderOptions = {

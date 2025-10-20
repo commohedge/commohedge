@@ -30,8 +30,8 @@ interface PayoffChartProps {
   priceData?: Array<{ spot: number; price: number; delta: number; gamma: number; theta: number; vega: number; rho: number }>; // ✅ Données de prix et grecques
 }
 
-// Generate FX hedging payoff data based on strategy
-const generateFXHedgingData = (strategy: any[], spot: number, includePremium: boolean = false, realPremium?: number) => {
+// Generate commodity hedging payoff data based on strategy
+const generateCommodityHedgingData = (strategy: any[], spot: number, includePremium: boolean = false, realPremium?: number) => {
   const data = [];
   const minSpot = spot * 0.7;  // -30% du spot
   const maxSpot = spot * 1.3;  // +30% du spot
@@ -330,7 +330,7 @@ const generateFXHedgingData = (strategy: any[], spot: number, includePremium: bo
   return data;
 };
 
-// Custom tooltip component for FX hedging
+// Custom tooltip component for commodity hedging
 const CustomTooltip = ({ 
   active, 
   payload, 
@@ -386,8 +386,8 @@ const PayoffChart: React.FC<PayoffChartProps> = ({
   const { theme } = useThemeContext();
   const isBloombergTheme = theme === 'bloomberg';
   
-  const fxHedgingData = useMemo(() => {
-    return generateFXHedgingData(strategy, spot, showPremium, realPremium); // ✅ Pass real premium
+  const commodityHedgingData = useMemo(() => {
+    return generateCommodityHedgingData(strategy, spot, showPremium, realPremium); // ✅ Pass real premium
   }, [strategy, spot, showPremium, realPremium]); // ✅ Add realPremium to dependencies
   
   // Get strategy type for display
@@ -482,7 +482,7 @@ const PayoffChart: React.FC<PayoffChartProps> = ({
         <CardHeader className="pb-2 border-b">
           <div className="flex items-center justify-between">
             <CardTitle className="text-xl font-semibold text-orange-500">
-              {activeTab === "payoff" ? "PAYOFF CHART" : "FX HEDGING PROFILE"}
+              {activeTab === "payoff" ? "PAYOFF CHART" : "COMMODITY HEDGING PROFILE"}
             </CardTitle>
             <Tabs 
               value={activeTab} 
@@ -491,7 +491,7 @@ const PayoffChart: React.FC<PayoffChartProps> = ({
             >
               <TabsList className="bg-secondary">
                 <TabsTrigger value="payoff" className="text-sm">Payoff</TabsTrigger>
-                <TabsTrigger value="hedging" className="text-sm">FX Hedging</TabsTrigger>
+                <TabsTrigger value="hedging" className="text-sm">Commodity Hedging</TabsTrigger>
               </TabsList>
             </Tabs>
           </div>
@@ -510,7 +510,7 @@ const PayoffChart: React.FC<PayoffChartProps> = ({
           ) : (
             <ResponsiveContainer width="100%" height={400}>
               <LineChart 
-                data={fxHedgingData}
+                data={commodityHedgingData}
                 margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
                 style={{ backgroundColor: '#101418', borderRadius: '4px' }}
               >
@@ -601,7 +601,7 @@ const PayoffChart: React.FC<PayoffChartProps> = ({
       <CardHeader className="pb-2 border-b">
         <div className="flex items-center justify-between">
           <CardTitle className="text-xl font-semibold">
-            {activeTab === "payoff" ? "Payoff Chart" : "FX Hedging Profile"}
+            {activeTab === "payoff" ? "Payoff Chart" : "Commodity Hedging Profile"}
           </CardTitle>
           <div className="flex items-center gap-4">
             {showPremiumToggle && (
@@ -622,7 +622,7 @@ const PayoffChart: React.FC<PayoffChartProps> = ({
             >
               <TabsList>
                 <TabsTrigger value="payoff">Payoff</TabsTrigger>
-                <TabsTrigger value="hedging">FX Hedging</TabsTrigger>
+                <TabsTrigger value="hedging">Commodity Hedging</TabsTrigger>
                 <TabsTrigger value="delta">Delta</TabsTrigger>
                 <TabsTrigger value="gamma">Gamma</TabsTrigger>
                 <TabsTrigger value="theta">Theta</TabsTrigger>
@@ -670,7 +670,7 @@ const PayoffChart: React.FC<PayoffChartProps> = ({
 
         {activeTab === "hedging" && (
           <ResponsiveContainer width="100%" height={400}>
-            <LineChart data={fxHedgingData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+            <LineChart data={commodityHedgingData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis 
                 dataKey="spot" 

@@ -453,7 +453,7 @@ const Reports = () => {
   };
 
   // Fonction pour générer les données du profil de couverture FX
-  const generateFXHedgingData = (strategy: any[], spot: number, includePremium: boolean = false) => {
+  const generateCommodityHedgingData = (strategy: any[], spot: number, includePremium: boolean = false) => {
     const data = [];
     const minSpot = spot * 0.7;  // -30% du spot
     const maxSpot = spot * 1.3;  // +30% du spot
@@ -987,16 +987,16 @@ const Reports = () => {
             yOffset += 10;
           }
 
-          // Graphique FX Hedging Profile
+          // Graphique Commodity Hedging Profile
           checkPageBreak(80);
           pdf.setFont('helvetica', 'bold');
           pdf.setFontSize(12);
-          pdf.text('FX Hedging Profile', contentPadding, yOffset);
+          pdf.text('Commodity Hedging Profile', contentPadding, yOffset);
           yOffset += 6;
 
           try {
             // Générer les données de hedging
-            const hedgingData = generateFXHedgingData(report.strategy, report.params.spotPrice, false);
+            const hedgingData = generateCommodityHedgingData(report.strategy, report.params.spotPrice, false);
             
             // Créer un graphique simple avec Canvas
             const canvas = document.createElement('canvas');
@@ -1018,7 +1018,7 @@ const Reports = () => {
               ctx.fillStyle = '#1f2937';
               ctx.font = 'bold 16px Arial';
               ctx.textAlign = 'center';
-              ctx.fillText('FX Hedging Profile', canvas.width / 2, 30);
+              ctx.fillText('Commodity Hedging Profile', canvas.width / 2, 30);
               ctx.font = '12px Arial';
               ctx.fillStyle = '#6b7280';
               ctx.fillText('Hedged vs Unhedged Rates Across Market Scenarios', canvas.width / 2, 50);
@@ -1176,11 +1176,11 @@ const Reports = () => {
             yOffset += imgHeight + 10;
 
           } catch (error) {
-            console.warn('Could not generate FX Hedging chart:', error);
+            console.warn('Could not generate Commodity Hedging chart:', error);
             pdf.setFont('helvetica', 'italic');
             pdf.setFontSize(10);
             pdf.setTextColor(100, 100, 100);
-            pdf.text('FX Hedging Chart could not be generated', contentPadding, yOffset);
+            pdf.text('Commodity Hedging Chart could not be generated', contentPadding, yOffset);
             yOffset += 10;
           }
 
@@ -1881,13 +1881,13 @@ const Reports = () => {
                           </div>
 
                           <div className="h-80" id={`fx-hedging-chart-${scenario.id}`}>
-                            <h3 className="font-semibold mb-2">FX Hedging Profile</h3>
+                            <h3 className="font-semibold mb-2">Commodity Hedging Profile</h3>
                             <div className="text-sm text-muted-foreground mb-2">
                               Hedged vs Unhedged {scenario.params.currencyPair?.symbol || 'FX'} rates across market scenarios
                             </div>
                             <ResponsiveContainer width="100%" height="100%">
                               <LineChart 
-                                data={generateFXHedgingData(scenario.strategy, scenario.params.spotPrice, false)}
+                                data={generateCommodityHedgingData(scenario.strategy, scenario.params.spotPrice, false)}
                                 margin={{ top: 20, right: 30, left: 20, bottom: 20 }}
                               >
                                 <CartesianGrid strokeDasharray="3 3" opacity={0.3} />

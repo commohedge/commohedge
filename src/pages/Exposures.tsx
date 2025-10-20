@@ -10,7 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { useFinancialData } from "@/hooks/useFinancialData";
+import { useCommodityData } from "@/hooks/useCommodityData";
 import { toast } from "@/hooks/use-toast";
 import { 
   Plus, 
@@ -37,9 +37,9 @@ import {
 import { Slider } from "@/components/ui/slider";
 
 interface ExposureFormData {
-  currency: string;
+  commodity: string;
   amount: number;
-  type: "receivable" | "payable";
+  type: "long" | "short";
   description: string;
   subsidiary: string;
   hedgeRatio: number;
@@ -65,9 +65,9 @@ const Exposures = () => {
   const [showNewMaturityAlert, setShowNewMaturityAlert] = useState(false);
   
   const [newExposure, setNewExposure] = useState<ExposureFormData>({
-    currency: "",
+    commodity: "",
     amount: 0,
-    type: "receivable",
+    type: "long",
     description: "",
     subsidiary: "",
     hedgeRatio: 0,
@@ -86,7 +86,7 @@ const Exposures = () => {
     isLoading,
     autoGenerateExposures,
     syncWithHedgingInstruments
-  } = useFinancialData();
+  } = useCommodityData();
 
   // ✅ NOUVEAU : Gestionnaires d'événements pour les nouvelles détections
   useEffect(() => {
@@ -1135,10 +1135,10 @@ const Exposures = () => {
                                 </TableCell>
                                 <TableCell>
                                   <Badge 
-                                    variant={exposure.type === 'receivable' ? 'default' : 'secondary'}
-                                    className={exposure.type === 'receivable' ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' : 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'}
+                                    variant={exposure.type === 'Receivable' ? 'default' : 'secondary'}
+                                    className={exposure.type === 'Receivable' ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' : 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'}
                                   >
-                                    {exposure.type === 'receivable' ? 'Receivable' : 'Payable'}
+                                    {exposure.type === 'Receivable' ? 'Receivable' : 'Payable'}
                                   </Badge>
                                 </TableCell>
                                 <TableCell className="font-mono">

@@ -14,13 +14,13 @@ interface AppSettings {
   ui: Record<string, unknown>;
   notifications: Record<string, unknown>;
   data: Record<string, unknown>;
-  fxExposures: Record<string, unknown>;
+  commodityExposures: Record<string, unknown>;
   hedgingInstruments: Record<string, unknown>;
 }
 
 const defaultSettings: AppSettings = {
   company: {
-    name: "FX hedging - Risk Management Platform",
+    name: "Commodity Risk Manager - Risk Management Platform",
     currency: "USD",
     timezone: "Europe/Paris",
     fiscalYearStart: "01-01"
@@ -30,11 +30,11 @@ const defaultSettings: AppSettings = {
   ui: {},
   notifications: {},
   data: {},
-  fxExposures: {},
+  commodityExposures: {},
   hedgingInstruments: {}
 };
 
-const DEFAULT_LOGO = "/fx-hedging-logo.png";
+const DEFAULT_LOGO = "/ocp-logo.png";
 
 // --- LOGO CACHE (singleton, module scope) ---
 let logoCache: string | null = null;
@@ -74,7 +74,7 @@ export function useCompanySettings() {
   const [companyName, setCompanyName] = useState<string>(() => {
     // Utilise le cache si déjà chargé
     if (companyNameCache) return companyNameCache;
-    const savedSettings = localStorage.getItem('fxRiskManagerSettings');
+    const savedSettings = localStorage.getItem('commodityRiskManagerSettings');
     if (savedSettings) {
       try {
         const parsed = JSON.parse(savedSettings);
@@ -93,7 +93,7 @@ export function useCompanySettings() {
   // Load settings from localStorage (une seule fois)
   useEffect(() => {
     const loadSettings = () => {
-      const savedSettings = localStorage.getItem('fxRiskManagerSettings');
+      const savedSettings = localStorage.getItem('commodityRiskManagerSettings');
       if (savedSettings) {
         try {
           const parsed = JSON.parse(savedSettings);

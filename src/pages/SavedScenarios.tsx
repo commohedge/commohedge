@@ -17,8 +17,8 @@ interface YearlyResult {
   volume: number;
 }
 
-// Ajouter la fonction generateFXHedgingData depuis PayoffChart.tsx
-const generateFXHedgingData = (strategy: any[], spot: number, includePremium: boolean = false) => {
+// Ajouter la fonction generateCommodityHedgingData depuis PayoffChart.tsx
+const generateCommodityHedgingData = (strategy: any[], spot: number, includePremium: boolean = false) => {
   const data = [];
   const minSpot = spot * 0.7;  // -30% du spot
   const maxSpot = spot * 1.3;  // +30% du spot
@@ -162,7 +162,7 @@ const generateFXHedgingData = (strategy: any[], spot: number, includePremium: bo
   return data;
 };
 
-// Custom tooltip for FX hedging profile
+// Custom tooltip for commodity hedging profile
 const CustomFXTooltip = ({ 
   active, 
   payload, 
@@ -430,13 +430,13 @@ const SavedScenarios = () => {
                   </div>
 
                   <div className="h-80" id={`fx-hedging-chart-${scenario.id}`}>
-                    <h3 className="font-semibold mb-2">FX Hedging Profile</h3>
+                    <h3 className="font-semibold mb-2">Commodity Hedging Profile</h3>
                     <div className="text-sm text-muted-foreground mb-2">
                       Hedged vs Unhedged {scenario.params.currencyPair?.symbol || 'FX'} rates across market scenarios
                     </div>
                     <ResponsiveContainer width="100%" height="100%">
                       <LineChart 
-                        data={generateFXHedgingData(scenario.strategy, scenario.params.spotPrice, false)}
+                        data={generateCommodityHedgingData(scenario.strategy, scenario.params.spotPrice, false)}
                         margin={{ top: 20, right: 30, left: 20, bottom: 20 }}
                       >
                         <CartesianGrid strokeDasharray="3 3" opacity={0.3} />

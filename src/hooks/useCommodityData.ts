@@ -1,33 +1,33 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import FinancialDataService, { 
-  MarketData, 
-  ExposureData, 
-  HedgingInstrument, 
-  RiskMetrics, 
-  CurrencyExposure 
-} from '../services/FinancialDataService';
+import CommodityDataService, { 
+  CommodityMarketData, 
+  CommodityExposureData, 
+  CommodityHedgingInstrument, 
+  CommodityRiskMetrics, 
+  AggregatedCommodityExposure 
+} from '../services/CommodityDataService';
 import StrategyImportService from '../services/StrategyImportService';
 
-interface UseFinancialDataReturn {
+interface UseCommodityDataReturn {
   // Data
-  marketData: MarketData;
-  exposures: ExposureData[];
-  instruments: HedgingInstrument[];
-  riskMetrics: RiskMetrics;
-  currencyExposures: CurrencyExposure[];
+  marketData: CommodityMarketData;
+  exposures: CommodityExposureData[];
+  instruments: CommodityHedgingInstrument[];
+  riskMetrics: CommodityRiskMetrics;
+  commodityExposures: AggregatedCommodityExposure[];
   
   // Actions
-  addExposure: (exposure: Omit<ExposureData, 'id'>) => void;
-  updateExposure: (id: string, updates: Partial<Omit<ExposureData, 'id'>>) => boolean;
+  addExposure: (exposure: Omit<CommodityExposureData, 'id'>) => void;
+  updateExposure: (id: string, updates: Partial<Omit<CommodityExposureData, 'id'>>) => boolean;
   deleteExposure: (id: string) => boolean;
-  addInstrument: (instrument: Omit<HedgingInstrument, 'id' | 'mtm'>) => void;
-  updateInstrument: (id: string, updates: Partial<Omit<HedgingInstrument, 'id'>>) => boolean;
+  addInstrument: (instrument: Omit<CommodityHedgingInstrument, 'id' | 'mtm'>) => void;
+  updateInstrument: (id: string, updates: Partial<Omit<CommodityHedgingInstrument, 'id'>>) => boolean;
   deleteInstrument: (id: string) => boolean;
   updateMarketData: () => void;
-  calculateForwardRate: (currencyPair: string, tenor: string) => number;
+  calculateForwardPrice: (commodity: string, tenor: string) => number;
   calculateOptionPrice: (
     optionType: 'call' | 'put',
-    currencyPair: string,
+    commodity: string,
     strike: number,
     timeToMaturity: number,
     volatility?: number
@@ -35,10 +35,10 @@ interface UseFinancialDataReturn {
   generateStressScenarios: () => Array<{
     name: string;
     description: string;
-    shocks: { [currencyPair: string]: number };
+    shocks: { [commodity: string]: number };
     impact: number;
   }>;
-  calculateVarContributions: () => { [currency: string]: number };
+  calculateVarContributions: () => { [commodity: string]: number };
   syncWithHedgingInstruments: () => void;
   autoGenerateExposures: () => void;
   
@@ -49,28 +49,28 @@ interface UseFinancialDataReturn {
   setLiveMode: (enabled: boolean) => void;
 }
 
-export const useFinancialData = (): UseFinancialDataReturn => {
-  const serviceRef = useRef<FinancialDataService>(new FinancialDataService());
+export const useCommodityData = (): UseCommodityDataReturn => {
+  const serviceRef = useRef<CommodityDataService>(new CommodityDataService());
   const strategyImportServiceRef = useRef<StrategyImportService>(StrategyImportService.getInstance());
   const [isLoading, setIsLoading] = useState(false);
   const [lastUpdate, setLastUpdate] = useState(new Date());
   const [isLiveMode, setIsLiveMode] = useState(false);
   
   // State for reactive data
-  const [marketData, setMarketData] = useState<MarketData>(() => 
+  const [marketData, setMarketData] = useState<CommodityMarketData>(() => 
     serviceRef.current.getMarketData()
   );
-  const [exposures, setExposures] = useState<ExposureData[]>(() => 
+  const [exposures, setExposures] = useState<CommodityExposureData[]>(() => 
     serviceRef.current.getExposures()
   );
-  const [instruments, setInstruments] = useState<HedgingInstrument[]>(() => 
+  const [instruments, setInstruments] = useState<CommodityHedgingInstrument[]>(() => 
     serviceRef.current.getInstruments()
   );
-  const [riskMetrics, setRiskMetrics] = useState<RiskMetrics>(() => 
+  const [riskMetrics, setRiskMetrics] = useState<CommodityRiskMetrics>(() => 
     serviceRef.current.calculateRiskMetrics()
   );
-  const [currencyExposures, setCurrencyExposures] = useState<CurrencyExposure[]>(() => 
-    serviceRef.current.getCurrencyExposures()
+  const [commodityExposures, setCommodityExposures] = useState<AggregatedCommodityExposure[]>(() => 
+    serviceRef.current.getCommodityExposures()
   );
 
   // Load data from localStorage and sync with other parts of the application
@@ -78,7 +78,7 @@ export const useFinancialData = (): UseFinancialDataReturn => {
     const loadDataFromStorage = () => {
       try {
         // Load exposures from localStorage
-        const savedExposures = localStorage.getItem('fxExposures');
+        const savedExposures = localStorage.getItem('commodityExposures');
         if (savedExposures) {
           const exposuresData = JSON.parse(savedExposures);
           exposuresData.forEach((exposure: any) => {
@@ -111,7 +111,7 @@ export const useFinancialData = (): UseFinancialDataReturn => {
     };
 
     const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === 'hedgingInstruments' || e.key === 'fxExposures') {
+      if (e.key === 'hedgingInstruments' || e.key === 'commodityExposures') {
         loadDataFromStorage();
       }
     };
@@ -131,7 +131,7 @@ export const useFinancialData = (): UseFinancialDataReturn => {
     const saveExposuresToStorage = () => {
       try {
         const exposuresData = serviceRef.current.getExposures();
-        localStorage.setItem('fxExposures', JSON.stringify(exposuresData));
+        localStorage.setItem('commodityExposures', JSON.stringify(exposuresData));
       } catch (error) {
         console.error('Error saving exposures to storage:', error);
       }
@@ -157,26 +157,25 @@ export const useFinancialData = (): UseFinancialDataReturn => {
       // Get hedging instruments from StrategyImportService
       const hedgingInstruments = strategyImportServiceRef.current.getHedgingInstruments();
       
-      // Clear existing instruments in FinancialDataService (keep exposures)
+      // Clear existing instruments in CommodityDataService (keep exposures)
       serviceRef.current.clearInstruments();
       
-      // Convert and add hedging instruments to FinancialDataService
+      // Convert and add hedging instruments to CommodityDataService
       hedgingInstruments.forEach(hedgingInstrument => {
-        // Convert StrategyImportService HedgingInstrument to FinancialDataService HedgingInstrument
-        const financialInstrument: Omit<HedgingInstrument, 'id' | 'mtm'> = {
+        // Convert StrategyImportService HedgingInstrument to CommodityDataService HedgingInstrument
+        const commodityInstrument: Omit<CommodityHedgingInstrument, 'id' | 'mtm'> = {
           type: mapInstrumentType(hedgingInstrument.type),
-          currencyPair: hedgingInstrument.currency,
+          commodity: hedgingInstrument.currency, // Mapper currency → commodity
           notional: hedgingInstrument.notional,
           strike: hedgingInstrument.strike,
           premium: hedgingInstrument.premium,
           maturity: new Date(hedgingInstrument.maturity),
           counterparty: hedgingInstrument.counterparty || 'Strategy Import',
           hedgeAccounting: hedgingInstrument.hedge_accounting || false,
-          // ✅ CORRECTION : Utiliser la vraie quantité de couverture si disponible
           effectivenessRatio: hedgingInstrument.hedgeQuantity || hedgingInstrument.effectiveness_ratio || 95
         };
         
-        serviceRef.current.addInstrument(financialInstrument);
+        serviceRef.current.addInstrument(commodityInstrument);
       });
     } catch (error) {
       console.error('Error syncing with hedging instruments:', error);
@@ -189,86 +188,77 @@ export const useFinancialData = (): UseFinancialDataReturn => {
       const currentExposures = serviceRef.current.getExposures();
       const currentInstruments = serviceRef.current.getInstruments();
       
-      // ✅ AMÉLIORATION : Détecter les nouvelles devises et échéances même s'il y a déjà des expositions
       if (currentInstruments.length > 0) {
-        console.log('Analyzing hedging instruments for new currencies and maturities...');
+        console.log('Analyzing hedging instruments for new commodities and maturities...');
         
-        // ✅ NOUVEAU : Accéder aux instruments originaux pour obtenir les vraies quantités
         const originalInstruments = strategyImportServiceRef.current.getHedgingInstruments();
         
-        // ✅ NOUVEAU : Analyser les devises et échéances existantes
-        const existingCurrencies = new Set(currentExposures.map(exp => exp.currency));
+        const existingCommodities = new Set(currentExposures.map(exp => exp.commodity));
         const existingMaturities = new Set(currentExposures.map(exp => exp.maturity.toISOString().split('T')[0]));
         
-        // ✅ NOUVEAU : Détecter les nouvelles devises et échéances
-        const newCurrencies = new Set<string>();
+        const newCommodities = new Set<string>();
         const newMaturities = new Set<string>();
-        const newCurrencyMaturityPairs = new Set<string>();
+        const newCommodityMaturityPairs = new Set<string>();
         
-        // Group instruments by currency to create consolidated exposures
-        const currencyGroups: { [currency: string]: { 
-          financialInstruments: HedgingInstrument[], 
+        // Group instruments by commodity
+        const commodityGroups: { [commodity: string]: { 
+          commodityInstruments: CommodityHedgingInstrument[], 
           originalInstruments: any[],
           maturities: Set<string>
         } } = {};
         
-        currentInstruments.forEach((instrument, index) => {
-          const currency = extractBaseCurrency(instrument.currencyPair);
+        currentInstruments.forEach((instrument) => {
+          const commodity = instrument.commodity;
           const maturityStr = instrument.maturity.toISOString().split('T')[0];
           
-          if (!currencyGroups[currency]) {
-            currencyGroups[currency] = { 
-              financialInstruments: [], 
+          if (!commodityGroups[commodity]) {
+            commodityGroups[commodity] = { 
+              commodityInstruments: [], 
               originalInstruments: [],
               maturities: new Set()
             };
           }
-          currencyGroups[currency].financialInstruments.push(instrument);
-          currencyGroups[currency].maturities.add(maturityStr);
+          commodityGroups[commodity].commodityInstruments.push(instrument);
+          commodityGroups[commodity].maturities.add(maturityStr);
           
-          // ✅ NOUVEAU : Détecter les nouvelles devises
-          if (!existingCurrencies.has(currency)) {
-            newCurrencies.add(currency);
+          if (!existingCommodities.has(commodity)) {
+            newCommodities.add(commodity);
           }
           
-          // ✅ NOUVEAU : Détecter les nouvelles échéances
           if (!existingMaturities.has(maturityStr)) {
             newMaturities.add(maturityStr);
           }
           
-          // ✅ NOUVEAU : Détecter les nouvelles combinaisons devise-échéance
-          const currencyMaturityPair = `${currency}-${maturityStr}`;
+          const commodityMaturityPair = `${commodity}-${maturityStr}`;
           const existingPair = currentExposures.find(exp => 
-            exp.currency === currency && 
+            exp.commodity === commodity && 
             exp.maturity.toISOString().split('T')[0] === maturityStr
           );
           if (!existingPair) {
-            newCurrencyMaturityPairs.add(currencyMaturityPair);
+            newCommodityMaturityPairs.add(commodityMaturityPair);
           }
           
-          // Trouver l'instrument original correspondant
           const originalInstrument = originalInstruments.find(orig => 
-            orig.currency === instrument.currencyPair && 
+            orig.currency === instrument.commodity && 
             Math.abs(orig.notional - instrument.notional) < 0.01
           );
           if (originalInstrument) {
-            currencyGroups[currency].originalInstruments.push(originalInstrument);
+            commodityGroups[commodity].originalInstruments.push(originalInstrument);
           }
         });
         
-        // ✅ NOUVEAU : Créer des expositions pour les nouvelles combinaisons devise-échéance
         let expositionsCreated = 0;
         let expositionsUpdated = 0;
-        let newCurrenciesDetected = Array.from(newCurrencies);
+        let newCommoditiesDetected = Array.from(newCommodities);
         let newMaturitiesDetected = Array.from(newMaturities);
         
-        // Créer des expositions groupées par devise et échéance
-        Object.entries(currencyGroups).forEach(([currency, instrumentGroup]) => {
-          const instruments = instrumentGroup.financialInstruments;
+        // Create exposures grouped by commodity and maturity
+        Object.entries(commodityGroups).forEach(([commodity, instrumentGroup]) => {
+          const instruments = instrumentGroup.commodityInstruments;
           const originalInstruments = instrumentGroup.originalInstruments;
           
-          // Grouper par échéance au sein de chaque devise
-          const maturityGroups: { [maturity: string]: HedgingInstrument[] } = {};
+          // Group by maturity within each commodity
+          const maturityGroups: { [maturity: string]: CommodityHedgingInstrument[] } = {};
           instruments.forEach(instrument => {
             const maturityStr = instrument.maturity.toISOString().split('T')[0];
             if (!maturityGroups[maturityStr]) {
@@ -277,119 +267,99 @@ export const useFinancialData = (): UseFinancialDataReturn => {
             maturityGroups[maturityStr].push(instrument);
           });
           
-          // Créer une exposition pour chaque combinaison devise-échéance qui n'existe pas
+          // Create an exposure for each commodity-maturity combination that doesn't exist
           Object.entries(maturityGroups).forEach(([maturityStr, maturityInstruments]) => {
-            const currencyMaturityPair = `${currency}-${maturityStr}`;
-            
-            // Vérifier si cette combinaison existe déjà
             const existingExposure = currentExposures.find(exp => 
-              exp.currency === currency && 
+              exp.commodity === commodity && 
               exp.maturity.toISOString().split('T')[0] === maturityStr
             );
             
-            // ✅ CORRECTION : Traiter les expositions existantes ET nouvelles
             const totalNotional = maturityInstruments.reduce((sum, inst) => sum + inst.notional, 0);
             const maturityDate = new Date(maturityStr);
             
-            // ✅ CORRECTION : Calculer le hedge ratio basé sur les vraies quantités des instruments originaux
-            let maxHedgeQuantity = 95; // Default fallback
+            let maxHedgeQuantity = 95;
             
             if (originalInstruments.length > 0) {
-              // ✅ CORRECTION : Prendre le maximum des quantités absolues des instruments originaux SANS plafonnement
               const maturityOriginalInstruments = originalInstruments.filter(orig => {
                 const origMaturity = new Date(orig.maturity).toISOString().split('T')[0];
                 return origMaturity === maturityStr;
               });
               
               if (maturityOriginalInstruments.length > 0) {
-                // Utiliser les instruments de cette échéance spécifique
                 maxHedgeQuantity = Math.max(...maturityOriginalInstruments.map(inst => {
                   const quantity = inst.hedgeQuantity !== undefined ? 
                     inst.hedgeQuantity : 
                     (inst.quantity !== undefined ? Math.abs(inst.quantity) : 95);
-                  return quantity; // ✅ SUPPRESSION du plafonnement Math.min(100, quantity)
+                  return quantity;
                 }));
               } else {
-                // Fallback: utiliser tous les instruments originaux
                 maxHedgeQuantity = Math.max(...originalInstruments.map(inst => {
                   const quantity = inst.hedgeQuantity !== undefined ? 
                     inst.hedgeQuantity : 
                     (inst.quantity !== undefined ? Math.abs(inst.quantity) : 95);
-                  return quantity; // ✅ SUPPRESSION du plafonnement Math.min(100, quantity)
+                  return quantity;
                 }));
               }
             }
             
-            // ✅ CORRECTION : Calculer l'exposition sous-jacente réelle, pas la somme des instruments de couverture
             let underlyingExposureVolume = 0;
             
             if (originalInstruments.length > 0) {
-              // Chercher le volume d'exposition original depuis les données de stratégie
               const maturityOriginalInstruments = originalInstruments.filter(orig => {
                 const origMaturity = new Date(orig.maturity).toISOString().split('T')[0];
                 return origMaturity === maturityStr;
               });
               
               if (maturityOriginalInstruments.length > 0) {
-                // ✅ CORRECTION : Prendre le volume d'exposition brut (rawVolume ou exposureVolume) 
-                // du premier instrument car ils représentent tous la même exposition sous-jacente
                 const firstInstrument = maturityOriginalInstruments[0];
                 underlyingExposureVolume = firstInstrument.rawVolume !== undefined ? firstInstrument.rawVolume : 
                                          firstInstrument.exposureVolume !== undefined ? firstInstrument.exposureVolume : 
                                          firstInstrument.baseVolume !== undefined ? firstInstrument.baseVolume :
-                                         totalNotional; // Fallback sur totalNotional si pas d'info d'exposition
+                                         totalNotional;
                 
-                console.log(`[FX EXPOSURE] ${currency}-${maturityStr}: Using underlying exposure volume ${underlyingExposureVolume} instead of sum of hedging instruments ${totalNotional}`);
+                console.log(`[COMMODITY EXPOSURE] ${commodity}-${maturityStr}: Using underlying exposure volume ${underlyingExposureVolume} instead of sum of hedging instruments ${totalNotional}`);
               } else {
-                // Pas d'instruments originaux pour cette maturité, utiliser totalNotional comme fallback
                 underlyingExposureVolume = totalNotional;
               }
             } else {
-              // Pas d'instruments originaux, utiliser totalNotional
               underlyingExposureVolume = totalNotional;
             }
             
-            // Determine if this should be a receivable or payable based on instrument types
-            // Prefer explicit volumeType coming from Strategy Builder export when present
-            let exposureType: 'receivable' | 'payable';
+            // Determine if this should be long or short position
+            let positionType: 'long' | 'short';
             const explicitTypes = originalInstruments
               .filter(orig => new Date(orig.maturity).toISOString().split('T')[0] === maturityStr)
               .map(orig => orig.volumeType)
               .filter((t): t is 'receivable' | 'payable' => t === 'receivable' || t === 'payable');
             if (explicitTypes.length > 0) {
-              // If mixed, default to payable only if all are payable; otherwise receivable
+              // Map receivable → long, payable → short
               const allPayable = explicitTypes.every(t => t === 'payable');
-              const allReceivable = explicitTypes.every(t => t === 'receivable');
-              exposureType = allPayable ? 'payable' : 'receivable';
+              positionType = allPayable ? 'short' : 'long';
             } else {
-              // Fall back to a global volumeType if present on any original instrument
               const globalType = originalInstruments
                 .map(orig => orig.volumeType)
                 .find((t): t is 'receivable' | 'payable' => t === 'receivable' || t === 'payable');
               if (globalType) {
-                exposureType = globalType;
+                positionType = globalType === 'payable' ? 'short' : 'long';
               } else {
-                const hasReceivableInstruments = maturityInstruments.some(inst => 
+                const hasLongInstruments = maturityInstruments.some(inst => 
                   inst.type === 'vanilla-call' || inst.type === 'forward' || inst.type === 'collar'
                 );
-                exposureType = hasReceivableInstruments ? 'receivable' : 'payable';
+                positionType = hasLongInstruments ? 'long' : 'short';
               }
             }
             
-            // ✅ CORRECTION : Utiliser la somme des notional des instruments de couverture
             const totalHedgingNotional = maturityInstruments.reduce((sum, inst) => sum + Math.abs(inst.notional), 0);
-            const exposureAmount = exposureType === 'receivable' ? totalHedgingNotional : -totalHedgingNotional;
+            const exposureAmount = positionType === 'long' ? totalHedgingNotional : -totalHedgingNotional;
             
-            // ✅ CORRECTION : Le montant couvert = somme des notional des instruments
             const hedgedAmount = totalHedgingNotional;
-            const finalHedgedAmount = exposureType === 'receivable' ? hedgedAmount : -hedgedAmount;
+            const finalHedgedAmount = positionType === 'long' ? hedgedAmount : -hedgedAmount;
             
             if (!existingExposure) {
-              // ✅ CRÉER UNE NOUVELLE EXPOSITION
-              const autoExposure: Omit<ExposureData, 'id'> = {
-                currency: currency,
+              const autoExposure: Omit<CommodityExposureData, 'id'> = {
+                commodity: commodity,
                 amount: exposureAmount,
-                type: exposureType,
+                type: positionType,
                 maturity: maturityDate,
                 description: `Auto-generated from ${maturityInstruments.length} hedging instrument(s) - Maturity: ${maturityStr} - Total Notional: ${totalHedgingNotional.toLocaleString()}`,
                 subsidiary: 'Auto-Generated',
@@ -399,12 +369,11 @@ export const useFinancialData = (): UseFinancialDataReturn => {
               
               serviceRef.current.addExposure(autoExposure);
               expositionsCreated++;
-              console.log(`Created auto-exposure for ${currency} (${maturityStr}): ${exposureAmount}`);
+              console.log(`Created auto-exposure for ${commodity} (${maturityStr}): ${exposureAmount}`);
             } else {
-              // ✅ METTRE À JOUR L'EXPOSITION EXISTANTE
               const updatedExposure = {
                 amount: exposureAmount,
-                type: exposureType,
+                type: positionType,
                 description: `Auto-updated from ${maturityInstruments.length} hedging instrument(s) - Maturity: ${maturityStr} - Total Notional: ${totalHedgingNotional.toLocaleString()}`,
                 hedgeRatio: maxHedgeQuantity,
                 hedgedAmount: finalHedgedAmount
@@ -412,30 +381,28 @@ export const useFinancialData = (): UseFinancialDataReturn => {
               
               const updateSuccess = serviceRef.current.updateExposure(existingExposure.id, updatedExposure);
               if (updateSuccess) {
-                expositionsUpdated++; // ✅ COMPTEUR SÉPARÉ pour les mises à jour
-                console.log(`Updated existing exposure for ${currency} (${maturityStr}): ${exposureAmount} - Hedge Ratio: ${maxHedgeQuantity}%`);
+                expositionsUpdated++;
+                console.log(`Updated existing exposure for ${commodity} (${maturityStr}): ${exposureAmount} - Hedge Ratio: ${maxHedgeQuantity}%`);
               }
             }
           });
         });
         
-        // ✅ NOUVEAU : Dispatch des événements pour notifier des nouvelles détections
         if (expositionsCreated > 0 || expositionsUpdated > 0) {
           window.dispatchEvent(new CustomEvent('exposuresAutoGenerated', {
             detail: { 
               count: expositionsCreated,
               updated: expositionsUpdated,
-              newCurrencies: newCurrenciesDetected,
+              newCommodities: newCommoditiesDetected,
               newMaturities: newMaturitiesDetected,
-              newCurrencyMaturityPairs: Array.from(newCurrencyMaturityPairs)
+              newCommodityMaturityPairs: Array.from(newCommodityMaturityPairs)
             }
           }));
         }
         
-        // ✅ NOUVEAU : Dispatch des événements spécifiques pour les nouvelles devises et échéances
-        if (newCurrenciesDetected.length > 0) {
-          window.dispatchEvent(new CustomEvent('newCurrenciesDetected', {
-            detail: { currencies: newCurrenciesDetected }
+        if (newCommoditiesDetected.length > 0) {
+          window.dispatchEvent(new CustomEvent('newCommoditiesDetected', {
+            detail: { commodities: newCommoditiesDetected }
           }));
         }
         
@@ -445,25 +412,12 @@ export const useFinancialData = (): UseFinancialDataReturn => {
           }));
         }
         
-        console.log(`Auto-sync completed: ${expositionsCreated} exposures created, ${expositionsUpdated} exposures updated, ${newCurrenciesDetected.length} new currencies, ${newMaturitiesDetected.length} new maturities`);
+        console.log(`Auto-sync completed: ${expositionsCreated} exposures created, ${expositionsUpdated} exposures updated, ${newCommoditiesDetected.length} new commodities, ${newMaturitiesDetected.length} new maturities`);
       }
     } catch (error) {
       console.error('Error auto-generating exposures:', error);
     }
   }, []);
-
-  // Helper function to extract base currency from currency pair
-  const extractBaseCurrency = (currencyPair: string): string => {
-    // Handle common currency pair formats
-    if (currencyPair.includes('/')) {
-      return currencyPair.split('/')[0];
-    }
-    if (currencyPair.length === 6) {
-      return currencyPair.substring(0, 3);
-    }
-    // Fallback for other formats
-    return currencyPair.substring(0, 3);
-  };
 
   // Helper function to map instrument types
   const mapInstrumentType = (type: string): 'forward' | 'vanilla-call' | 'vanilla-put' | 'collar' | 'swap' | 'barrier' => {
@@ -494,11 +448,11 @@ export const useFinancialData = (): UseFinancialDataReturn => {
     setExposures(serviceRef.current.getExposures());
     setInstruments(serviceRef.current.getInstruments());
     setRiskMetrics(serviceRef.current.calculateRiskMetrics());
-    setCurrencyExposures(serviceRef.current.getCurrencyExposures());
+    setCommodityExposures(serviceRef.current.getCommodityExposures());
     setLastUpdate(new Date());
   }, []);
 
-  const addExposure = useCallback((exposure: Omit<ExposureData, 'id'>) => {
+  const addExposure = useCallback((exposure: Omit<CommodityExposureData, 'id'>) => {
     setIsLoading(true);
     try {
       serviceRef.current.addExposure(exposure);
@@ -508,7 +462,7 @@ export const useFinancialData = (): UseFinancialDataReturn => {
     }
   }, [refreshAllData]);
 
-  const updateExposure = useCallback((id: string, updates: Partial<Omit<ExposureData, 'id'>>) => {
+  const updateExposure = useCallback((id: string, updates: Partial<Omit<CommodityExposureData, 'id'>>) => {
     setIsLoading(true);
     try {
       const result = serviceRef.current.updateExposure(id, updates);
@@ -534,7 +488,7 @@ export const useFinancialData = (): UseFinancialDataReturn => {
     }
   }, [refreshAllData]);
 
-  const addInstrument = useCallback((instrument: Omit<HedgingInstrument, 'id' | 'mtm'>) => {
+  const addInstrument = useCallback((instrument: Omit<CommodityHedgingInstrument, 'id' | 'mtm'>) => {
     setIsLoading(true);
     try {
       serviceRef.current.addInstrument(instrument);
@@ -544,7 +498,7 @@ export const useFinancialData = (): UseFinancialDataReturn => {
     }
   }, [refreshAllData]);
 
-  const updateInstrument = useCallback((id: string, updates: Partial<Omit<HedgingInstrument, 'id'>>) => {
+  const updateInstrument = useCallback((id: string, updates: Partial<Omit<CommodityHedgingInstrument, 'id'>>) => {
     setIsLoading(true);
     try {
       const result = serviceRef.current.updateInstrument(id, updates);
@@ -575,18 +529,18 @@ export const useFinancialData = (): UseFinancialDataReturn => {
     refreshAllData();
   }, [refreshAllData]);
 
-  const calculateForwardRate = useCallback((currencyPair: string, tenor: string) => {
-    return serviceRef.current.calculateForwardRate(currencyPair, tenor);
+  const calculateForwardPrice = useCallback((commodity: string, tenor: string) => {
+    return serviceRef.current.calculateForwardPrice(commodity, tenor);
   }, []);
 
   const calculateOptionPrice = useCallback((
     optionType: 'call' | 'put',
-    currencyPair: string,
+    commodity: string,
     strike: number,
     timeToMaturity: number,
     volatility?: number
   ) => {
-    return serviceRef.current.calculateOptionPrice(optionType, currencyPair, strike, timeToMaturity, volatility);
+    return serviceRef.current.calculateOptionPrice(optionType, commodity, strike, timeToMaturity, volatility);
   }, []);
 
   const generateStressScenarios = useCallback(() => {
@@ -596,7 +550,6 @@ export const useFinancialData = (): UseFinancialDataReturn => {
   const setLiveMode = useCallback((enabled: boolean) => {
     setIsLiveMode(enabled);
     if (enabled) {
-      // Immediate update when enabling live mode
       updateMarketData();
     }
   }, [updateMarketData]);
@@ -607,7 +560,7 @@ export const useFinancialData = (): UseFinancialDataReturn => {
     exposures,
     instruments,
     riskMetrics,
-    currencyExposures,
+    commodityExposures,
     
     // Actions
     addExposure,
@@ -617,7 +570,7 @@ export const useFinancialData = (): UseFinancialDataReturn => {
     updateInstrument,
     deleteInstrument,
     updateMarketData,
-    calculateForwardRate,
+    calculateForwardPrice,
     calculateOptionPrice,
     generateStressScenarios,
     calculateVarContributions: () => serviceRef.current.calculateVarContributions(),
@@ -630,4 +583,5 @@ export const useFinancialData = (): UseFinancialDataReturn => {
     isLiveMode,
     setLiveMode
   };
-}; 
+};
+

@@ -24,7 +24,7 @@ import Index from "./pages/Index";
 import StrategyBuilder from "./pages/StrategyBuilder";
 import Pricers from "./pages/Pricers";
 import Reports from "./pages/Reports";
-import ForexMarket from "./pages/ForexMarket";
+import CommodityMarket from "./pages/CommodityMarket";
 import UserManagement from "./pages/UserManagement";
 import Settings from "./pages/Settings";
 import DatabaseSync from "./pages/DatabaseSync";
@@ -75,7 +75,7 @@ const App = () => {
             <Route path="/supabase-login" element={<SupabaseLogin />} />
             <Route path="/auth/callback" element={<AuthCallback />} />
             
-            {/* FX Risk Management Routes */}
+            {/* Commodity Risk Management Routes */}
             <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
             <Route path="/exposures" element={<ProtectedRoute><Exposures /></ProtectedRoute>} />
             <Route path="/hedging" element={<ProtectedRoute><HedgingInstruments /></ProtectedRoute>} />
@@ -86,7 +86,7 @@ const App = () => {
             <Route path="/pricers" element={<ProtectedRoute><Pricers /></ProtectedRoute>} />
             <Route path="/positions" element={<ProtectedRoute><PositionMonitor /></ProtectedRoute>} />
             <Route path="/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
-            <Route path="/forex-market" element={<ProtectedRoute><ForexMarket /></ProtectedRoute>} />
+            <Route path="/commodity-market" element={<ProtectedRoute><CommodityMarket /></ProtectedRoute>} />
             <Route path="/options-market-data" element={<ProtectedRoute><OptionsMarketData /></ProtectedRoute>} />
             <Route path="/users" element={<ProtectedRoute><UserManagement /></ProtectedRoute>} />
             <Route path="/database-sync" element={<ProtectedRoute><DatabaseSync /></ProtectedRoute>} />

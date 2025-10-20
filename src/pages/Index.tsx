@@ -1,21 +1,20 @@
 /**
- * FX Options Strategy Simulator & Risk Matrix
+ * Commodity Options Strategy Simulator & Risk Matrix
  * 
- * This simulator has been adapted specifically for foreign exchange (FX) options trading.
- * Key FX-specific features:
- * - Garman-Kohlhagen pricing model for currency options
- * - Black-Scholes fallback option
- * - Dual interest rate support (domestic & foreign rates)
- * - FX forward pricing using interest rate differential
- * - Currency pair management (majors, crosses, others)
- * - FX-specific Monte Carlo simulations with proper drift calculation
- * - Barrier options adapted for FX trading
- * - Comprehensive risk matrix analysis for FX strategies
+ * This simulator has been adapted specifically for commodity options trading.
+ * Key commodity-specific features:
+ * - Black-76 pricing model for commodity options
+ * - Cost of carry support (storage costs & convenience yields)
+ * - Commodity forward pricing using cost of carry
+ * - Commodity management (Energy, Metals, Agriculture, Livestock)
+ * - Commodity-specific Monte Carlo simulations with proper drift calculation
+ * - Barrier options adapted for commodity trading
+ * - Comprehensive risk matrix analysis for commodity strategies
  * 
  * Calculation Models:
- * - FX Forward: S * exp((r_d - r_f) * t)
- * - FX Options: Garman-Kohlhagen model with domestic/foreign rates
- * - Monte Carlo Drift: (r_d - r_f - 0.5 * σ²) for FX price dynamics
+ * - Commodity Forward: S * exp(b * t) where b = r + storage - convenience
+ * - Commodity Options: Black-76 model with cost of carry
+ * - Monte Carlo Drift: (b - 0.5 * σ²) for commodity price dynamics
  */
 
 // ===========================
@@ -43,30 +42,49 @@ export const erf = (x: number): number => {
 // Fonction de distribution normale cumulative
 export const CND = (x: number): number => (1 + erf(x / Math.sqrt(2))) / 2;
 
-// FX Forward Pricing Model
-export const calculateFXForwardPrice = (S: number, r_d: number, r_f: number, t: number): number => {
-  return S * Math.exp((r_d - r_f) * t);
+// Commodity Forward Pricing Model (using cost of carry)
+export const calculateCommodityForwardPrice = (S: number, r: number, storage: number, convenience: number, t: number): number => {
+  const b = r + storage - convenience;
+  return S * Math.exp(b * t);
 };
 
-// Garman-Kohlhagen FX Option Pricing Model
-export const calculateGarmanKohlhagenPrice = (type: string, S: number, K: number, r_d: number, r_f: number, t: number, sigma: number): number => {
-  const d1 = (Math.log(S / K) + (r_d - r_f + (sigma * sigma) / 2) * t) / (sigma * Math.sqrt(t));
+// Legacy: Use calculateCommodityForwardPrice instead
+// For backwards compatibility, this wraps the commodity forward pricing
+export const calculateFXForwardPrice = (S: number, r_d: number, r_f: number, t: number): number => {
+  const b = r_d - r_f; // Cost of carry for FX
+  return S * Math.exp(b * t);
+};
+
+// Black-76 Commodity Option Pricing Model
+export const calculateBlack76Price = (type: string, S: number, K: number, r: number, b: number, t: number, sigma: number): number => {
+  const F = S * Math.exp(b * t);
+  const d1 = (Math.log(F / K) + (sigma * sigma / 2) * t) / (sigma * Math.sqrt(t));
   const d2 = d1 - sigma * Math.sqrt(t);
   
+  const discountFactor = Math.exp(-r * t);
+  
   if (type === 'call') {
-    return S * Math.exp(-r_f * t) * CND(d1) - K * Math.exp(-r_d * t) * CND(d2);
+    return discountFactor * (F * CND(d1) - K * CND(d2));
   } else {
-    return K * Math.exp(-r_d * t) * CND(-d2) - S * Math.exp(-r_f * t) * CND(-d1);
+    return discountFactor * (K * CND(-d2) - F * CND(-d1));
   }
 };
 
-// Vanilla option Monte Carlo pricing
+// Legacy: Use calculateBlack76Price for commodity options
+// For backwards compatibility, this wraps Black-76 with FX-style parameters
+export const calculateGarmanKohlhagenPrice = (type: string, S: number, K: number, r_d: number, r_f: number, t: number, sigma: number): number => {
+  const r = r_d; // Risk-free rate
+  const b = r_d - r_f; // Cost of carry (interest rate differential)
+  return calculateBlack76Price(type, S, K, r, b, t, sigma);
+};
+
+// Vanilla option Monte Carlo pricing for commodities
 export const calculateVanillaOptionMonteCarlo = (
   optionType: string,
   S: number,      // Current price
   K: number,      // Strike price
-  r_d: number,    // Domestic risk-free rate
-  r_f: number,    // Foreign risk-free rate 
+  r: number,      // Risk-free rate
+  b: number,      // Cost of carry (r + storage - convenience)
   t: number,      // Time to maturity in years
   sigma: number,  // Volatility
   numSimulations: number = 1000 // Number of simulations
@@ -79,9 +97,9 @@ export const calculateVanillaOptionMonteCarlo = (
     const u2 = Math.random();
     const z = Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
     
-    // Simulate final FX price using geometric Brownian motion
+    // Simulate final commodity price using geometric Brownian motion with cost of carry
     const finalPrice = S * Math.exp(
-      (r_d - r_f - 0.5 * sigma * sigma) * t + 
+      (b - 0.5 * sigma * sigma) * t + 
       sigma * Math.sqrt(t) * z
     );
     
@@ -98,7 +116,7 @@ export const calculateVanillaOptionMonteCarlo = (
   
   // Calculate average payoff and discount to present value
   const averagePayoff = payoffSum / numSimulations;
-  const optionPrice = averagePayoff * Math.exp(-r_d * t);
+  const optionPrice = averagePayoff * Math.exp(-r * t);
   
   return Math.max(0, optionPrice);
 };
@@ -880,35 +898,37 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { useToast } from "@/hooks/use-toast";
 import ZeroCostStrategies from '@/components/ZeroCostStrategies';
 import ZeroCostTab from '@/components/ZeroCostTab';
-import ForexDashboard from '@/components/ForexDashboard';
 import { PricingService } from '@/services/PricingService';
 
 // Currency Pair interface
 interface CurrencyPair {
   symbol: string;
   name: string;
-  base: string;
-  quote: string;
-  category: 'majors' | 'crosses' | 'others';
-  defaultSpotRate: number; // Default spot rate for this currency pair
+  base: string;  // Unit (BBL, OZ, MT, etc.) - for display only
+  quote: string; // Currency (usually USD) - for display only
+  category: 'energy' | 'metals' | 'agriculture' | 'livestock' | 'majors' | 'crosses' | 'others'; // Commodity categories + legacy FX
+  defaultSpotRate: number; // Default spot price for this commodity
 }
 
 interface FXStrategyParams {
   startDate: string;           // Hedging Start Date (renamed from startDate)
   strategyStartDate: string;   // Strategy Start Date (new field)
   monthsToHedge: number;
-  domesticRate: number;
-  foreignRate: number;
-  totalVolume: number; // Keep for backward compatibility
-  baseVolume: number;   // Volume in base currency
-  quoteVolume: number;  // Volume in quote currency
+  // Commodity parameters
+  interestRate: number;        // Risk-free rate (r)
+  storageCost: number;         // Storage cost per year
+  convenienceYield: number;    // Convenience yield per year
+  // Legacy FX parameters for backward compatibility
+  domesticRate?: number;
+  foreignRate?: number;
+  totalVolume: number; // Main volume for calculations
+  baseVolume?: number; // Backward compatibility
+  quoteVolume?: number; // Backward compatibility
   spotPrice: number;
   currencyPair: CurrencyPair;
   useCustomPeriods: boolean;
   customPeriods: CustomPeriod[];
-  volumeType: 'receivable' | 'payable'; // Type de volume: receivable ou payable
-  // Legacy field for backward compatibility
-  interestRate?: number;
+  volumeType: 'long' | 'short' | 'receivable' | 'payable'; // Type de position: long/short (commodity) ou receivable/payable (legacy FX)
 }
 
 export interface StressTestScenario {
@@ -987,13 +1007,13 @@ interface SavedScenario {
     domesticRate?: number;
     foreignRate?: number;
     totalVolume: number;
-    baseVolume?: number;
-    quoteVolume?: number;
+    baseVolume?: number; // Backward compatibility
+    quoteVolume?: number; // Backward compatibility
     spotPrice: number;
     currencyPair?: CurrencyPair;
     useCustomPeriods?: boolean;
     customPeriods?: CustomPeriod[];
-    volumeType?: 'receivable' | 'payable'; // Type de volume
+    volumeType?: 'long' | 'short' | 'receivable' | 'payable'; // Type de position
   };
   strategy: StrategyComponent[];
   results: Result[];
@@ -1037,6 +1057,40 @@ interface PriceRange {
   max: number;
   probability: number;
 }
+
+// ============================================================================
+// COMMODITY PRICING HELPERS
+// ============================================================================
+
+/**
+ * Calculate Cost of Carry for commodities
+ * b = r + storage_cost - convenience_yield
+ */
+const calculateCostOfCarry = (params: FXStrategyParams): number => {
+  const r = params.interestRate / 100;
+  const storage = (params.storageCost || 0) / 100;
+  const convenience = (params.convenienceYield || 0) / 100;
+  return r + storage - convenience;
+};
+
+/**
+ * Get risk-free rate from params (commodity)
+ */
+const getRiskFreeRate = (params: FXStrategyParams): number => {
+  return params.interestRate / 100;
+};
+
+/**
+ * Legacy compatibility: calculate cost of carry from FX params
+ * b = r_d - r_f
+ */
+const calculateCostOfCarryLegacy = (params: FXStrategyParams): number => {
+  if (params.domesticRate !== undefined && params.foreignRate !== undefined) {
+    return (params.domesticRate - params.foreignRate) / 100;
+  }
+  // Fallback to commodity params
+  return calculateCostOfCarry(params);
+};
 
 interface RiskMatrixResult {
   strategy: StrategyComponent[];
@@ -1102,25 +1156,36 @@ const DEFAULT_SCENARIOS = {
 
 // Currency Pairs Database with current market rates (approximate)
 export const CURRENCY_PAIRS: CurrencyPair[] = [
-  // Major Pairs
-  { symbol: "EUR/USD", name: "Euro/US Dollar", base: "EUR", quote: "USD", category: "majors", defaultSpotRate: 1.0850 },
-  { symbol: "GBP/USD", name: "British Pound/US Dollar", base: "GBP", quote: "USD", category: "majors", defaultSpotRate: 1.2650 },
-  { symbol: "USD/JPY", name: "US Dollar/Japanese Yen", base: "USD", quote: "JPY", category: "majors", defaultSpotRate: 149.50 },
-  { symbol: "USD/CHF", name: "US Dollar/Swiss Franc", base: "USD", quote: "CHF", category: "majors", defaultSpotRate: 0.8850 },
-  { symbol: "AUD/USD", name: "Australian Dollar/US Dollar", base: "AUD", quote: "USD", category: "majors", defaultSpotRate: 0.6580 },
-  { symbol: "USD/CAD", name: "US Dollar/Canadian Dollar", base: "USD", quote: "CAD", category: "majors", defaultSpotRate: 1.3650 },
-  { symbol: "NZD/USD", name: "New Zealand Dollar/US Dollar", base: "NZD", quote: "USD", category: "majors", defaultSpotRate: 0.6020 },
+  // ENERGY COMMODITIES
+  { symbol: "WTI", name: "WTI Crude Oil", base: "BBL", quote: "USD", category: "energy", defaultSpotRate: 75.50 },
+  { symbol: "BRENT", name: "Brent Crude Oil", base: "BBL", quote: "USD", category: "energy", defaultSpotRate: 79.80 },
+  { symbol: "NATGAS", name: "Natural Gas", base: "MMBTU", quote: "USD", category: "energy", defaultSpotRate: 2.85 },
+  { symbol: "HEATING", name: "Heating Oil", base: "GAL", quote: "USD", category: "energy", defaultSpotRate: 2.45 },
+  { symbol: "RBOB", name: "Gasoline RBOB", base: "GAL", quote: "USD", category: "energy", defaultSpotRate: 2.15 },
   
-  // Cross Rates (Non-USD pairs)
-  { symbol: "EUR/GBP", name: "Euro/British Pound", base: "EUR", quote: "GBP", category: "crosses", defaultSpotRate: 0.8580 },
-  { symbol: "EUR/JPY", name: "Euro/Japanese Yen", base: "EUR", quote: "JPY", category: "crosses", defaultSpotRate: 162.25 },
-  { symbol: "GBP/JPY", name: "British Pound/Japanese Yen", base: "GBP", quote: "JPY", category: "crosses", defaultSpotRate: 189.15 },
-  { symbol: "EUR/CHF", name: "Euro/Swiss Franc", base: "EUR", quote: "CHF", category: "crosses", defaultSpotRate: 0.9605 },
-  { symbol: "EUR/AUD", name: "Euro/Australian Dollar", base: "EUR", quote: "AUD", category: "crosses", defaultSpotRate: 1.6485 },
-  { symbol: "GBP/CHF", name: "British Pound/Swiss Franc", base: "GBP", quote: "CHF", category: "crosses", defaultSpotRate: 1.1195 },
-  { symbol: "AUD/JPY", name: "Australian Dollar/Japanese Yen", base: "AUD", quote: "JPY", category: "crosses", defaultSpotRate: 98.40 },
-  { symbol: "CAD/JPY", name: "Canadian Dollar/Japanese Yen", base: "CAD", quote: "JPY", category: "crosses", defaultSpotRate: 109.52 },
-  { symbol: "CHF/JPY", name: "Swiss Franc/Japanese Yen", base: "CHF", quote: "JPY", category: "crosses", defaultSpotRate: 169.01 },
+  // PRECIOUS METALS
+  { symbol: "GOLD", name: "Gold", base: "OZ", quote: "USD", category: "metals", defaultSpotRate: 2050.00 },
+  { symbol: "SILVER", name: "Silver", base: "OZ", quote: "USD", category: "metals", defaultSpotRate: 24.50 },
+  { symbol: "PLATINUM", name: "Platinum", base: "OZ", quote: "USD", category: "metals", defaultSpotRate: 950.00 },
+  { symbol: "PALLADIUM", name: "Palladium", base: "OZ", quote: "USD", category: "metals", defaultSpotRate: 1050.00 },
+  
+  // BASE METALS
+  { symbol: "COPPER", name: "Copper", base: "LB", quote: "USD", category: "metals", defaultSpotRate: 3.85 },
+  { symbol: "ALUMINUM", name: "Aluminum", base: "MT", quote: "USD", category: "metals", defaultSpotRate: 2350.00 },
+  { symbol: "ZINC", name: "Zinc", base: "MT", quote: "USD", category: "metals", defaultSpotRate: 2580.00 },
+  { symbol: "NICKEL", name: "Nickel", base: "MT", quote: "USD", category: "metals", defaultSpotRate: 17500.00 },
+  
+  // AGRICULTURE
+  { symbol: "CORN", name: "Corn", base: "BU", quote: "USD", category: "agriculture", defaultSpotRate: 4.75 },
+  { symbol: "WHEAT", name: "Wheat", base: "BU", quote: "USD", category: "agriculture", defaultSpotRate: 5.85 },
+  { symbol: "SOYBEAN", name: "Soybeans", base: "BU", quote: "USD", category: "agriculture", defaultSpotRate: 13.50 },
+  { symbol: "COFFEE", name: "Coffee", base: "LB", quote: "USD", category: "agriculture", defaultSpotRate: 1.85 },
+  { symbol: "SUGAR", name: "Sugar", base: "LB", quote: "USD", category: "agriculture", defaultSpotRate: 0.24 },
+  { symbol: "COTTON", name: "Cotton", base: "LB", quote: "USD", category: "agriculture", defaultSpotRate: 0.82 },
+  
+  // LIVESTOCK
+  { symbol: "CATTLE", name: "Live Cattle", base: "LB", quote: "USD", category: "livestock", defaultSpotRate: 1.75 },
+  { symbol: "HOGS", name: "Lean Hogs", base: "LB", quote: "USD", category: "livestock", defaultSpotRate: 0.85 },
 ];
 
 // State pour les paires de devises personnalisées
@@ -1164,26 +1229,21 @@ const Index = () => {
       interestRate: 2.0, // Domestic rate for backward compatibility
       domesticRate: 1.0, // EUR rate
       foreignRate: 0.5, // USD rate
-      totalVolume: 10000000,
-      baseVolume: 10000000, // Default base volume
-      quoteVolume: 10000000 * CURRENCY_PAIRS[0].defaultSpotRate, // Calculated quote volume
-      spotPrice: CURRENCY_PAIRS[0].defaultSpotRate, // Default to EUR/USD spot rate
-      currencyPair: CURRENCY_PAIRS[0], // Default to EUR/USD
+      totalVolume: 10000000, // Main volume for calculations
+      spotPrice: CURRENCY_PAIRS[0].defaultSpotRate, // Default to WTI spot price
+      currencyPair: CURRENCY_PAIRS[0], // Default to WTI
       useCustomPeriods: false,
       customPeriods: [],
-      volumeType: 'receivable' // Default to receivable
+      volumeType: 'long' // Default to long position (commodity)
     };
     
     try {
       const savedState = localStorage.getItem('calculatorState');
     if (savedState) {
       const savedParams = JSON.parse(savedState).params;
-      // Ensure backward compatibility - calculate missing volumes if needed
-      if (!savedParams.baseVolume) {
-        savedParams.baseVolume = savedParams.totalVolume || 10000000;
-      }
-      if (!savedParams.quoteVolume) {
-        savedParams.quoteVolume = (savedParams.totalVolume || 10000000) * (savedParams.spotPrice || 1.0850);
+      // Ensure backward compatibility - use totalVolume as main volume
+      if (!savedParams.totalVolume) {
+        savedParams.totalVolume = 10000000;
       }
       // Ensure backward compatibility - add strategyStartDate if missing
       if (!savedParams.strategyStartDate) {
@@ -1191,7 +1251,7 @@ const Index = () => {
       }
       // Ensure backward compatibility - add volumeType if missing
       if (!savedParams.volumeType) {
-        savedParams.volumeType = 'receivable'; // Default to receivable
+        savedParams.volumeType = 'long'; // Default to long
       }
       return savedParams;
       }
@@ -1625,7 +1685,7 @@ const Index = () => {
   const [riskMatrixResults, setRiskMatrixResults] = useState<RiskMatrixResult[]>([]);
 
   // Forex-specific states
-  const [optionPricingModel, setOptionPricingModel] = useState<'black-scholes' | 'garman-kohlhagen' | 'monte-carlo'>('garman-kohlhagen');
+  const [optionPricingModel, setOptionPricingModel] = useState<'black-76' | 'black-scholes' | 'garman-kohlhagen' | 'monte-carlo'>('black-76');
   const [barrierPricingModel, setBarrierPricingModel] = useState<'monte-carlo' | 'closed-form'>('closed-form');
 
   // Ajouter cet état
@@ -1640,8 +1700,8 @@ const Index = () => {
   // Ajouter un état pour l'onglet actif des résultats
   const [activeResultsTab, setActiveResultsTab] = useState('detailed');
 
-  // Ajouter une fonction pour gérer les changements de volume
-  const handleVolumeChange = (monthKey: string, newVolume: number) => {
+  // Ajouter une fonction pour gérer les changements de volume personnalisé
+  const handleCustomVolumeChange = (monthKey: string, newVolume: number) => {
     // Mettre à jour l'état des volumes personnalisés
     setCustomVolumes(prev => ({
       ...prev,
@@ -1698,14 +1758,14 @@ const Index = () => {
           
           // Calculate price with proper volatility
           if (option.type === 'forward') {
-            option.price = (result.forward - strike) * Math.exp(-params.domesticRate/100 * result.timeToMaturity);
+            option.price = (result.forward - strike) * Math.exp(-getRiskFreeRate(params) * result.timeToMaturity);
           } else if (option.type === 'call' || option.type === 'put') {
             option.price = calculateGarmanKohlhagenPrice(
               option.type,
               result.forward,
               strike,
-              params.domesticRate/100,
-              params.foreignRate/100,
+              getRiskFreeRate(params),
+              calculateCostOfCarry(params),
               result.timeToMaturity,
               volatilityToUse
             );
@@ -1726,7 +1786,7 @@ const Index = () => {
               if (barrierPricingModel === 'closed-form') {
                 const underlyingResult = PricingService.calculateUnderlyingPrice(
                   params.spotPrice,
-                  params.domesticRate/100,
+                  getRiskFreeRate(params),
                   params.foreignRate/100,
                   result.timeToMaturity
                 );
@@ -1734,7 +1794,7 @@ const Index = () => {
                   option.type,
                   underlyingResult.price,
                   strike,
-                  params.domesticRate/100,
+                  getRiskFreeRate(params),
                   result.timeToMaturity,
                   volatilityToUse,
                   barrier,
@@ -1743,7 +1803,7 @@ const Index = () => {
               } else {
                 const underlyingResult = PricingService.calculateUnderlyingPrice(
                   params.spotPrice,
-                  params.domesticRate/100,
+                  getRiskFreeRate(params),
                   params.foreignRate/100,
                   result.timeToMaturity
                 );
@@ -1751,7 +1811,7 @@ const Index = () => {
                   option.type,
                   underlyingResult.price,
                   strike,
-                  params.domesticRate/100,
+                  getRiskFreeRate(params),
                   result.timeToMaturity,
                   volatilityToUse,
                   barrier,
@@ -1783,7 +1843,7 @@ const Index = () => {
                 
               const underlyingResult = PricingService.calculateUnderlyingPrice(
                 params.spotPrice,
-                params.domesticRate/100,
+                getRiskFreeRate(params),
                 params.foreignRate/100,
                 result.timeToMaturity
               );
@@ -1791,7 +1851,7 @@ const Index = () => {
                 option.type,
                 underlyingResult.price,
                 strike,
-                params.domesticRate / 100,
+                getRiskFreeRate(params),
                 result.timeToMaturity,
                 volatilityToUse,
                 barrier,
@@ -2105,7 +2165,9 @@ const Index = () => {
     let price = 0;
     if (optionPricingModel === 'garman-kohlhagen') {
       // Use Garman-Kohlhagen for FX options
-      price = calculateGarmanKohlhagenPrice(type, S, K, params.domesticRate / 100, params.foreignRate / 100, t, effectiveSigma);
+      const r = getRiskFreeRate(params);
+      const b = calculateCostOfCarry(params);
+      price = calculateBlack76Price(type, S, K, r, b, t, effectiveSigma);
     } else if (optionPricingModel === 'monte-carlo') {
       // Use Monte Carlo for vanilla options
       price = calculateVanillaOptionMonteCarlo(
@@ -2383,8 +2445,8 @@ const Index = () => {
               option.type,
               spotPrice,
               strike,
-              params.domesticRate/100,
-              params.foreignRate/100,
+              getRiskFreeRate(params),
+              calculateCostOfCarry(params),
               1, // 1 year for payoff diagrams
               option.volatility/100
             );
@@ -2418,7 +2480,7 @@ const Index = () => {
           option.type,
           spotPrice,
           strike,
-          params.domesticRate/100,
+          getRiskFreeRate(params),
             numSteps,
             paths,
             barrier,
@@ -2754,7 +2816,7 @@ const Index = () => {
             barrierOption.type,
             params.spotPrice,
             strike,
-            params.domesticRate/100,
+            getRiskFreeRate(params),
             maturityIndex,
             [path],
             barrier,
@@ -2950,7 +3012,7 @@ const Index = () => {
             );
             }),
             timeToMaturities,
-        params.domesticRate/100
+        getRiskFreeRate(params)
         );
 
       // Séparer les swaps, forwards et options
@@ -2984,18 +3046,21 @@ const Index = () => {
                 const balanceWithType = balanceWithOption.type.includes('put') ? 'put' : 'call';
                 const currentType = option.type.includes('put') ? 'put' : 'call';
                 
-                // Get the domestic and foreign interest rates
-                const r_d = params.domesticRate / 100;
-                const r_f = params.foreignRate / 100;
+                // Get the risk-free rate and cost of carry for commodities
+                // (Keep variable names for minimal code changes)
+                const r_d = getRiskFreeRate(params);
+                const r_f = 0; // Not used in Black-76
                 
                 // Calculate the premium of the balancing option for this specific time to maturity
                 // This is important - we use the specific time to maturity for this period
-                const balanceWithPrice = calculateGarmanKohlhagenPrice(
+                const r = getRiskFreeRate(params);
+                const b = calculateCostOfCarry(params);
+                const balanceWithPrice = calculateBlack76Price(
                   balanceWithType,
                   forward,
                   balanceWithStrike,
-                  r_d,
-                  r_f,
+                  r,
+                  b,
                   t, // Use this period's time to maturity
                   balanceWithVol
                 );
@@ -3009,12 +3074,12 @@ const Index = () => {
                 // Use bisection method to find equilibrium strike
                 for (let iter = 0; iter < 50; iter++) {
                   mid = (low + high) / 2;
-                  price = calculateGarmanKohlhagenPrice(
+                  price = calculateBlack76Price(
                     currentType,
                     forward,
                     mid,
-                    r_d,
-                    r_f,
+                    r,
+                    b,
                     t, // Use this period's time to maturity
                     currentVol
                   );
@@ -3138,7 +3203,7 @@ const Index = () => {
           // Le prix représente la valeur théorique de l'option, indépendamment de son état knocked out
           if (option.type === 'forward') {
             // For forwards, the value is simply the difference between forward rate and strike
-            price = (forward - strike) * Math.exp(-params.domesticRate/100 * t);
+            price = (forward - strike) * Math.exp(-getRiskFreeRate(params) * t);
           } else if (option.type === 'call' || option.type === 'put') {
             // Utiliser la volatilité implicite spécifique à l'option si disponible
             const iv = getImpliedVolatility(monthKey, optionKey);
@@ -3146,52 +3211,49 @@ const Index = () => {
               ? iv / 100
               : option.volatility / 100;
           // For standard options, use appropriate pricing model
-          if (optionPricingModel === 'garman-kohlhagen') {
-            const underlyingResult = PricingService.calculateUnderlyingPrice(
-              params.spotPrice,
-              params.domesticRate/100,
-              params.foreignRate/100,
-              t
-            );
-            price = calculateGarmanKohlhagenPrice(
+          if (optionPricingModel === 'black-76' || optionPricingModel === 'garman-kohlhagen') {
+            const r = getRiskFreeRate(params);
+            const b = calculateCostOfCarry(params);
+            price = calculateBlack76Price(
               option.type,
-              underlyingResult.price,
+              params.spotPrice,
               strike,
-              params.domesticRate/100,
-              params.foreignRate/100,
+              r,
+              b,
               t,
               effectiveSigma
             );
           } else if (optionPricingModel === 'monte-carlo') {
-            // Use Monte Carlo for vanilla options
-            const underlyingResult = PricingService.calculateUnderlyingPrice(
-              params.spotPrice,
-              params.domesticRate/100,
-              params.foreignRate/100,
-              t
-            );
+            // Use Monte Carlo for vanilla options with cost of carry
+            const r = getRiskFreeRate(params);
+            const b = calculateCostOfCarry(params);
             price = calculateVanillaOptionMonteCarlo(
               option.type,
-              underlyingResult.price,
+              params.spotPrice,
               strike,
-              params.domesticRate / 100,
-              params.foreignRate / 100,
+              r,
+              b,
               t,
               effectiveSigma,
               1000 // Number of simulations for vanilla options
             );
           } else {
-            // Black-Scholes fallback
-            const d1 = (Math.log(forward/strike) + (params.domesticRate/100 + effectiveSigma**2/2)*t) / (effectiveSigma*Math.sqrt(t));
+            // Black-76 fallback
+            const r = getRiskFreeRate(params);
+            const b = calculateCostOfCarry(params);
+            const F = params.spotPrice * Math.exp(b * t);
+            const d1 = (Math.log(F/strike) + (effectiveSigma**2/2)*t) / (effectiveSigma*Math.sqrt(t));
             const d2 = d1 - effectiveSigma*Math.sqrt(t);
             
             const Nd1 = (1 + erf(d1/Math.sqrt(2)))/2;
             const Nd2 = (1 + erf(d2/Math.sqrt(2)))/2;
             
+            const discountFactor = Math.exp(-r * t);
+            
             if (option.type === 'call') {
-              price = forward*Nd1 - strike*Math.exp(-params.domesticRate/100*t)*Nd2;
+              price = discountFactor * (F*Nd1 - strike*Nd2);
             } else { // put
-              price = strike*Math.exp(-params.domesticRate/100*t)*(1-Nd2) - forward*(1-Nd1);
+              price = discountFactor * (strike*(1-Nd2) - F*(1-Nd1));
             }
           }
         } else if (option.type.includes('knockout') || option.type.includes('knockin')) {
@@ -3216,15 +3278,15 @@ const Index = () => {
           if (barrierPricingModel === 'closed-form') {
             const underlyingResult = PricingService.calculateUnderlyingPrice(
               params.spotPrice,
-              params.domesticRate/100,
-              params.foreignRate/100,
+              getRiskFreeRate(params),
+              calculateCostOfCarry(params),
               t
             );
             price = calculateBarrierOptionClosedForm(
               option.type,
               underlyingResult.price,
               strike,
-              params.domesticRate/100,
+              getRiskFreeRate(params),
               t,
               effectiveSigma,
               barrier,
@@ -3240,8 +3302,8 @@ const Index = () => {
             
             const underlyingResult = PricingService.calculateUnderlyingPrice(
               params.spotPrice,
-              params.domesticRate/100,
-              params.foreignRate/100,
+              getRiskFreeRate(params),
+              calculateCostOfCarry(params),
               t
             );
             
@@ -3270,7 +3332,7 @@ const Index = () => {
                 option.type,
                 forward,
                     strike,
-                params.domesticRate/100,
+                getRiskFreeRate(params),
               numSteps,
               localPaths,
             barrier,
@@ -3298,7 +3360,7 @@ const Index = () => {
           // Calculer le prix digital
           const underlyingResult = PricingService.calculateUnderlyingPrice(
             params.spotPrice,
-            params.domesticRate/100,
+            getRiskFreeRate(params),
             params.foreignRate/100,
             t
           );
@@ -3338,7 +3400,7 @@ const Index = () => {
           label: `Swap Price ${swapIndex + 1}`
         })),
         ...forwards.map((forwardItem, forwardIndex) => {
-          const forwardValue = (forward - forwardItem.strike) * Math.exp(-params.domesticRate/100 * t);
+          const forwardValue = (forward - forwardItem.strike) * Math.exp(-getRiskFreeRate(params) * t);
           return {
             type: 'forward',
             price: forwardValue,
@@ -3589,7 +3651,7 @@ const Index = () => {
         const timeInYears = i / 12;
       
       // Calcul du forward price standard basé sur le taux d'intérêt
-      const baseForward = calculateFXForwardPrice(params.spotPrice, params.domesticRate/100, params.foreignRate/100, timeInYears);
+      const baseForward = calculateCommodityForwardPrice(params.spotPrice, getRiskFreeRate(params), params.storageCost/100, params.convenienceYield/100, timeInYears);
       
       // Pour Contango et Backwardation standard, appliquer la base mensuelle aux forwards
       if (scenario.forwardBasis !== undefined) {
@@ -3676,29 +3738,16 @@ const Index = () => {
     setParams(prev => ({
       ...prev,
       spotPrice: newPrice,
-      // Update quote volume when spot price changes
-      quoteVolume: prev.baseVolume * newPrice
+      // Volume remains the same when spot price changes
     }));
     setInitialSpotPrice(newPrice); // Mettre à jour le prix spot initial uniquement lors des modifications manuelles
   };
 
-  // Handle base volume change - update quote volume automatically
-  const handleBaseVolumeChange = (newBaseVolume: number) => {
+  // Handle volume change - simplified to use only totalVolume
+  const handleVolumeChange = (newVolume: number) => {
     setParams(prev => ({
       ...prev,
-      baseVolume: newBaseVolume,
-      quoteVolume: newBaseVolume * prev.spotPrice,
-      totalVolume: newBaseVolume // Keep totalVolume in sync for backward compatibility
-    }));
-  };
-
-  // Handle quote volume change - update base volume automatically
-  const handleQuoteVolumeChange = (newQuoteVolume: number) => {
-    setParams(prev => ({
-      ...prev,
-      quoteVolume: newQuoteVolume,
-      baseVolume: newQuoteVolume / prev.spotPrice,
-      totalVolume: newQuoteVolume / prev.spotPrice // Keep totalVolume in sync for backward compatibility
+      totalVolume: newVolume
     }));
   };
 
@@ -3912,13 +3961,13 @@ const Index = () => {
         startDate: params.startDate,           // Hedging Start Date
         strategyStartDate: params.strategyStartDate,   // Strategy Start Date
         monthsToHedge: params.monthsToHedge,
-        baseVolume: params.baseVolume,
-        quoteVolume: params.quoteVolume,
+        baseVolume: params.totalVolume, // Backward compatibility
+        quoteVolume: params.totalVolume * params.spotPrice, // Backward compatibility
         domesticRate: params.domesticRate,
         foreignRate: params.foreignRate,
+        volumeType: params.volumeType,
         useCustomPeriods: params.useCustomPeriods,
         customPeriods: params.customPeriods,
-        volumeType: params.volumeType, // ✅ Transmettre le type de volume
       }, enrichedDetailedResults); // Passer TOUS les résultats enrichis
 
       // Dispatch custom event to notify HedgingInstruments page
@@ -4031,8 +4080,6 @@ const Index = () => {
       domesticRate: 1.0,
       foreignRate: 0.5,
       totalVolume: 1000000,
-      baseVolume: 1000000,
-      quoteVolume: 1000000 * CURRENCY_PAIRS[0].defaultSpotRate,
       spotPrice: CURRENCY_PAIRS[0].defaultSpotRate,
       currencyPair: CURRENCY_PAIRS[0],
       useCustomPeriods: false,
@@ -4151,17 +4198,17 @@ const Index = () => {
       params: {
         startDate: new Date().toISOString().split('T')[0],
         monthsToHedge: 12,
-        interestRate: 2.0,
-        domesticRate: 1.0,
-        foreignRate: 0.5,
+        interestRate: 5.0,
+        storageCost: 2.0,
+        convenienceYield: 1.0,
         totalVolume: 1000000,
-        baseVolume: 1000000,
-        quoteVolume: 1000000 * CURRENCY_PAIRS[0].defaultSpotRate,
+        baseVolume: 1000000, // Backward compatibility
+        quoteVolume: 1000000 * CURRENCY_PAIRS[0].defaultSpotRate, // Backward compatibility
         spotPrice: CURRENCY_PAIRS[0].defaultSpotRate,
-        currencyPair: CURRENCY_PAIRS[0],
+        commodity: CURRENCY_PAIRS[0], // Will be replaced by actual commodity data
         useCustomPeriods: false,
         customPeriods: [],
-        volumeType: 'receivable'
+        volumeType: 'long'
       },
       strategy: [],
       results: null,
@@ -4252,9 +4299,8 @@ const Index = () => {
             <p>Strategy Start Date: ${params.strategyStartDate}</p>
             <p>Hedging Start Date: ${params.startDate}</p>
             <p>Spot Price: ${params.spotPrice}</p>
-                            <p>Base Volume ({params.currencyPair?.base || 'BASE'}): {params.baseVolume.toLocaleString()}</p>
-                <p>Quote Volume ({params.currencyPair?.quote || 'QUOTE'}): {Math.round(params.quoteVolume).toLocaleString()}</p>
-                <p>Volume Type: {params.volumeType === 'receivable' ? 'Receivable' : 'Payable'}</p>
+                            <p>Volume: {params.totalVolume.toLocaleString()}</p>
+                <p>Position Type: {params.volumeType === 'long' || params.volumeType === 'receivable' ? 'Long' : 'Short'}</p>
                 <p>Current Rate: {params.spotPrice.toFixed(4)}</p>
           </div>
           <div class="stress-parameters">
@@ -4914,7 +4960,7 @@ const Index = () => {
           comp.type, 
           params.spotPrice, 
           strike, 
-          params.domesticRate/100, 
+          getRiskFreeRate(params), 
           1, // 1 year as approximation
           comp.volatility/100
         );
@@ -5273,9 +5319,8 @@ const Index = () => {
     doc.text(`Hedging Start Date: ${params.startDate}`, 15, 50);
     doc.text(`Months to Hedge: ${params.monthsToHedge}`, 15, 55);
     doc.text(`Domestic Rate: ${params.domesticRate}% | Foreign Rate: ${params.foreignRate}%`, 15, 60);
-    doc.text(`Base Volume (${params.currencyPair?.base || 'BASE'}): ${params.baseVolume.toLocaleString()}`, 15, 65);
-    doc.text(`Quote Volume (${params.currencyPair?.quote || 'QUOTE'}): ${Math.round(params.quoteVolume).toLocaleString()}`, 15, 75);
-    doc.text(`Volume Type: ${params.volumeType === 'receivable' ? 'Receivable' : 'Payable'}`, 15, 85);
+    doc.text(`Volume: ${params.totalVolume.toLocaleString()}`, 15, 65);
+    doc.text(`Position Type: ${params.volumeType === 'long' || params.volumeType === 'receivable' ? 'Long' : 'Short'}`, 15, 85);
     doc.text(`Current Spot Rate: ${params.spotPrice.toFixed(4)}`, 15, 95);
     
     // Strategy
@@ -5638,7 +5683,7 @@ const Index = () => {
             barrierOption.type,
             params.spotPrice,
             strike,
-            params.domesticRate/100,
+            getRiskFreeRate(params),
             maturityIndex,
             [path],
             barrier,
@@ -5703,7 +5748,7 @@ const Index = () => {
     // Create a new custom period with default values
     const newPeriod: CustomPeriod = {
       maturityDate: startDate.toISOString().split('T')[0],
-      volume: Math.round(params.baseVolume / (params.customPeriods.length + 1))
+      volume: Math.round(params.totalVolume / (params.customPeriods.length + 1))
     };
     
     // Update the params with the new period
@@ -5751,7 +5796,7 @@ const Index = () => {
         customPeriods: [
           {
             maturityDate: startDate.toISOString().split('T')[0],
-            volume: params.baseVolume
+            volume: params.totalVolume
           }
         ]
       });
@@ -6143,7 +6188,7 @@ const Index = () => {
           // Calculer la volatilité implicite à partir du prix personnalisé
           const underlyingResult = PricingService.calculateUnderlyingPrice(
             params.spotPrice,
-            params.domesticRate/100,
+            getRiskFreeRate(params),
             params.foreignRate/100,
             monthResult.timeToMaturity
           );
@@ -6181,7 +6226,7 @@ const Index = () => {
                   const testSigma = 0.01 + (i / steps) * 0.99; // Test de volatilité entre 1% et 100%
                   const underlyingResult = PricingService.calculateUnderlyingPrice(
                     params.spotPrice,
-                    params.domesticRate/100,
+                    getRiskFreeRate(params),
                     params.foreignRate/100,
                     monthResult.timeToMaturity
                   );
@@ -6189,7 +6234,7 @@ const Index = () => {
                     option.type,
                     underlyingResult.price,
                     option.strike,
-                    params.domesticRate / 100,
+                    getRiskFreeRate(params),
                     monthResult.timeToMaturity,
                     testSigma
                   );
@@ -6268,7 +6313,7 @@ const pricingFunctions = {
         if (option.type === 'call' || option.type === 'put') {
           const underlyingResult = PricingService.calculateUnderlyingPrice(
             params.spotPrice,
-            params.domesticRate/100,
+            getRiskFreeRate(params),
             params.foreignRate/100,
             monthResult.timeToMaturity
           );
@@ -6414,19 +6459,19 @@ const pricingFunctions = {
           <TabsTrigger value="stress" className="py-2.5">Stress Testing</TabsTrigger>
           <TabsTrigger value="backtest" className="py-2.5">Historical Backtest</TabsTrigger>
           <TabsTrigger value="riskmatrix" className="py-2.5">Risk Matrix Generator</TabsTrigger>
-          <TabsTrigger value="zerocost" className="py-2.5">Zero-Cost FX Strategies</TabsTrigger>
-          <TabsTrigger value="forexdashboard" className="py-2.5">Forex Market</TabsTrigger>
+          <TabsTrigger value="zerocost" className="py-2.5">Zero-Cost Commodity Strategies</TabsTrigger>
+          <TabsTrigger value="forexdashboard" className="py-2.5">Commodity Market</TabsTrigger>
         </TabsList>
         
         <TabsContent value="parameters">
           <Card className="shadow-md">
             <CardHeader className="pb-2 border-b">
-              <CardTitle className="text-xl font-bold text-primary">FX Options Strategy Parameters</CardTitle>
+              <CardTitle className="text-xl font-bold text-primary">Commodity Options Strategy Parameters</CardTitle>
             </CardHeader>
             <CardContent className="pt-4">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="compact-form-group">
-                  <label className="compact-label">Currency Pair</label>
+                  <label className="compact-label">Commodity</label>
                   <div className="relative">
                   <Select 
                     value={params.currencyPair?.symbol || 'EUR/USD'} 
@@ -6446,40 +6491,52 @@ const pricingFunctions = {
                     }}
                   >
                     <SelectTrigger className="compact-input">
-                      <SelectValue placeholder="Select currency pair" />
+                      <SelectValue placeholder="Select commodity" />
                     </SelectTrigger>
                     <SelectContent>
-                      <div className="p-2 text-xs font-medium text-muted-foreground border-b">Major Pairs</div>
-                      {CURRENCY_PAIRS.filter(pair => pair.category === 'majors').map(pair => (
+                      <div className="p-2 text-xs font-medium text-muted-foreground border-b">⚡ Energy</div>
+                      {CURRENCY_PAIRS.filter(pair => pair.category === 'energy').map(pair => (
                         <SelectItem key={pair.symbol} value={pair.symbol}>
                           <div className="flex flex-col">
                             <div className="flex justify-between items-center w-full">
                               <span>{pair.symbol}</span>
-                              <span className="text-xs text-muted-foreground font-mono">{pair.defaultSpotRate}</span>
+                              <span className="text-xs text-muted-foreground font-mono">${pair.defaultSpotRate}/{pair.base}</span>
                             </div>
                             <span className="text-xs text-muted-foreground">{pair.name}</span>
                           </div>
                         </SelectItem>
                       ))}
-                      <div className="p-2 text-xs font-medium text-muted-foreground border-b border-t">Cross Rates</div>
-                      {CURRENCY_PAIRS.filter(pair => pair.category === 'crosses').map(pair => (
+                      <div className="p-2 text-xs font-medium text-muted-foreground border-b border-t">🔩 Metals</div>
+                      {CURRENCY_PAIRS.filter(pair => pair.category === 'metals').map(pair => (
                         <SelectItem key={pair.symbol} value={pair.symbol}>
                           <div className="flex flex-col">
                             <div className="flex justify-between items-center w-full">
                               <span>{pair.symbol}</span>
-                              <span className="text-xs text-muted-foreground font-mono">{pair.defaultSpotRate}</span>
+                              <span className="text-xs text-muted-foreground font-mono">${pair.defaultSpotRate}/{pair.base}</span>
                             </div>
                             <span className="text-xs text-muted-foreground">{pair.name}</span>
                           </div>
                         </SelectItem>
                       ))}
-                      <div className="p-2 text-xs font-medium text-muted-foreground border-b border-t">Other Currencies</div>
-                      {CURRENCY_PAIRS.filter(pair => pair.category === 'others').map(pair => (
+                      <div className="p-2 text-xs font-medium text-muted-foreground border-b border-t">🌾 Agriculture</div>
+                      {CURRENCY_PAIRS.filter(pair => pair.category === 'agriculture').map(pair => (
                         <SelectItem key={pair.symbol} value={pair.symbol}>
                           <div className="flex flex-col">
                             <div className="flex justify-between items-center w-full">
                               <span>{pair.symbol}</span>
-                              <span className="text-xs text-muted-foreground font-mono">{pair.defaultSpotRate}</span>
+                              <span className="text-xs text-muted-foreground font-mono">${pair.defaultSpotRate}/{pair.base}</span>
+                            </div>
+                            <span className="text-xs text-muted-foreground">{pair.name}</span>
+                          </div>
+                        </SelectItem>
+                      ))}
+                      <div className="p-2 text-xs font-medium text-muted-foreground border-b border-t">🐄 Livestock</div>
+                      {CURRENCY_PAIRS.filter(pair => pair.category === 'livestock').map(pair => (
+                        <SelectItem key={pair.symbol} value={pair.symbol}>
+                          <div className="flex flex-col">
+                            <div className="flex justify-between items-center w-full">
+                              <span>{pair.symbol}</span>
+                              <span className="text-xs text-muted-foreground font-mono">${pair.defaultSpotRate}/{pair.base}</span>
                             </div>
                             <span className="text-xs text-muted-foreground">{pair.name}</span>
                           </div>
@@ -6488,7 +6545,7 @@ const pricingFunctions = {
                         
                         {customCurrencyPairs.length > 0 && (
                           <>
-                            <div className="p-2 text-xs font-medium text-muted-foreground border-b border-t">Custom Pairs</div>
+                            <div className="p-2 text-xs font-medium text-muted-foreground border-b border-t">✨ Custom Commodities</div>
                             {customCurrencyPairs.map(pair => (
                               <SelectItem key={pair.symbol} value={pair.symbol}>
                                 <div className="flex flex-col">
@@ -6507,14 +6564,14 @@ const pricingFunctions = {
                           <Dialog>
                             <DialogTrigger asChild>
                               <Button variant="outline" size="sm" className="w-full">
-                                <PlusCircle className="h-3 w-3 mr-1" /> Add Custom Currency Pair
+                                <PlusCircle className="h-3 w-3 mr-1" /> Add Custom Commodity
                               </Button>
                             </DialogTrigger>
                             <DialogContent>
                               <DialogHeader>
-                                <DialogTitle>Add Custom Currency Pair</DialogTitle>
+                                <DialogTitle>Add Custom Commodity</DialogTitle>
                                 <DialogDescription>
-                                  Enter the details of your custom currency pair.
+                                  Enter the details of your custom commodity.
                                 </DialogDescription>
                               </DialogHeader>
                               
@@ -6541,7 +6598,7 @@ const pricingFunctions = {
                                 if (allPairs.some(pair => pair.symbol === symbol)) {
                                   toast({
                                     title: "Pair Already Exists",
-                                    description: `Currency pair ${symbol} already exists.`,
+                                    description: `Commodity ${symbol} already exists.`,
                                   });
                                   return;
                                 }
@@ -6559,7 +6616,7 @@ const pricingFunctions = {
                                 
                                 toast({
                                   title: "Success",
-                                  description: `Currency pair ${symbol} added successfully.`,
+                                  description: `Commodity ${symbol} added successfully.`,
                                 });
                                 
                                 // Reset form and close dialog
@@ -6577,27 +6634,27 @@ const pricingFunctions = {
                                 <div className="grid gap-4 py-4">
                                   <div className="grid grid-cols-4 items-center gap-4">
                                     <Label htmlFor="symbol" className="text-right">Symbol</Label>
-                                    <Input id="symbol" name="symbol" placeholder="EUR/USD" className="col-span-3" />
+                                    <Input id="symbol" name="symbol" placeholder="WTI, GOLD, CORN" className="col-span-3" />
                                   </div>
                                   <div className="grid grid-cols-4 items-center gap-4">
                                     <Label htmlFor="name" className="text-right">Name</Label>
-                                    <Input id="name" name="name" placeholder="Euro/US Dollar" className="col-span-3" />
+                                    <Input id="name" name="name" placeholder="WTI Crude Oil" className="col-span-3" />
                                   </div>
                                   <div className="grid grid-cols-4 items-center gap-4">
-                                    <Label htmlFor="base" className="text-right">Base Currency</Label>
-                                    <Input id="base" name="base" placeholder="EUR" className="col-span-3" />
+                                    <Label htmlFor="base" className="text-right">Unit</Label>
+                                    <Input id="base" name="base" placeholder="BBL, OZ, MT" className="col-span-3" />
                                   </div>
                                   <div className="grid grid-cols-4 items-center gap-4">
-                                    <Label htmlFor="quote" className="text-right">Quote Currency</Label>
+                                    <Label htmlFor="quote" className="text-right">Currency</Label>
                                     <Input id="quote" name="quote" placeholder="USD" className="col-span-3" />
                                   </div>
                                   <div className="grid grid-cols-4 items-center gap-4">
-                                    <Label htmlFor="defaultSpotRate" className="text-right">Default Spot Rate</Label>
-                                    <Input id="defaultSpotRate" name="defaultSpotRate" placeholder="1.0850" type="number" step="0.0001" className="col-span-3" />
+                                    <Label htmlFor="defaultSpotRate" className="text-right">Default Spot Price</Label>
+                                    <Input id="defaultSpotRate" name="defaultSpotRate" placeholder="75.50" type="number" step="0.01" className="col-span-3" />
                                   </div>
                                 </div>
                                 <DialogFooter>
-                                  <Button type="submit">Add Currency Pair</Button>
+                                  <Button type="submit">Add Commodity</Button>
                                 </DialogFooter>
                               </form>
                             </DialogContent>
@@ -6626,11 +6683,11 @@ const pricingFunctions = {
                           }
                           
                           toast({
-                            title: "Currency Pair Removed",
-                            description: `Currency pair ${params.currencyPair?.symbol} has been removed.`,
+                            title: "Commodity Removed",
+                            description: `Commodity ${params.currencyPair?.symbol} has been removed.`,
                           });
                         }}
-                        title="Remove custom currency pair"
+                        title="Remove custom commodity"
                       >
                         <Trash className="h-3 w-3" />
                       </Button>
@@ -6675,39 +6732,58 @@ const pricingFunctions = {
                 </div>
                 </div>
                 <div className="compact-form-group">
-                  <label className="compact-label">Domestic Rate (%) - {params.currencyPair?.quote || 'USD'}</label>
+                  <label className="compact-label">Risk-free Rate (r) %</label>
                   <div className="flex items-center gap-2">
                     <Slider 
-                      value={[params.domesticRate]} 
+                      value={[params.interestRate]} 
                       min={0} 
-                      max={10} 
+                      max={15} 
                       step={0.1}
-                      onValueChange={(value) => setParams({...params, domesticRate: value[0]})}
+                      onValueChange={(value) => setParams({...params, interestRate: value[0]})}
                       className="flex-1"
                     />
                     <Input
                       type="number"
-                      value={params.domesticRate}
-                      onChange={(e) => setParams({...params, domesticRate: Number(e.target.value)})}
+                      value={params.interestRate}
+                      onChange={(e) => setParams({...params, interestRate: Number(e.target.value)})}
                       className="compact-input w-16 text-center"
                     />
                   </div>
                 </div>
                 <div className="compact-form-group">
-                  <label className="compact-label">Foreign Rate (%) - {params.currencyPair?.base || 'EUR'}</label>
+                  <label className="compact-label">Storage Cost (%) - Annual</label>
                   <div className="flex items-center gap-2">
                     <Slider 
-                      value={[params.foreignRate]} 
+                      value={[params.storageCost]} 
                       min={0} 
-                      max={10} 
+                      max={20} 
                       step={0.1}
-                      onValueChange={(value) => setParams({...params, foreignRate: value[0]})}
+                      onValueChange={(value) => setParams({...params, storageCost: value[0]})}
                       className="flex-1"
                     />
                     <Input
                       type="number"
-                      value={params.foreignRate}
-                      onChange={(e) => setParams({...params, foreignRate: Number(e.target.value)})}
+                      value={params.storageCost}
+                      onChange={(e) => setParams({...params, storageCost: Number(e.target.value)})}
+                      className="compact-input w-16 text-center"
+                    />
+                  </div>
+                </div>
+                <div className="compact-form-group">
+                  <label className="compact-label">Convenience Yield (%) - Annual</label>
+                  <div className="flex items-center gap-2">
+                    <Slider 
+                      value={[params.convenienceYield]} 
+                      min={0} 
+                      max={15} 
+                      step={0.1}
+                      onValueChange={(value) => setParams({...params, convenienceYield: value[0]})}
+                      className="flex-1"
+                    />
+                    <Input
+                      type="number"
+                      value={params.convenienceYield}
+                      onChange={(e) => setParams({...params, convenienceYield: Number(e.target.value)})}
                       className="compact-input w-16 text-center"
                     />
                   </div>
@@ -6715,42 +6791,29 @@ const pricingFunctions = {
                 {/* Volume & Spot Rate - Compact Grid Layout */}
                 <div className="bg-muted/20 p-3 rounded-lg space-y-3">
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                    {/* Base Volume */}
+                    {/* Commodity Volume */}
                     <div className="space-y-1">
                       <label className="text-xs font-medium text-muted-foreground">
-                        {params.currencyPair?.base || 'Base'} Volume
+                        Commodity Volume (Units)
                     </label>
                   <Input
                     type="number"
-                      value={params.baseVolume}
-                      onChange={(e) => handleBaseVolumeChange(Number(e.target.value))}
+                      value={params.totalVolume}
+                      onChange={(e) => handleVolumeChange(Number(e.target.value))}
                         className="h-8 text-xs"
-                      placeholder="Volume in base currency"
+                      placeholder="Volume"
                     />
                   </div>
                     
-                    {/* Quote Volume */}
-                    <div className="space-y-1">
-                      <label className="text-xs font-medium text-muted-foreground">
-                        {params.currencyPair?.quote || 'Quote'} Volume
-                    </label>
-                    <Input
-                      type="number"
-                      value={Math.round(params.quoteVolume)}
-                      onChange={(e) => handleQuoteVolumeChange(Number(e.target.value))}
-                        className="h-8 text-xs"
-                      placeholder="Volume in quote currency"
-                    />
-                  </div>
 
-                    {/* Volume Type */}
+                    {/* Position Type */}
                     <div className="space-y-1">
                       <label className="text-xs font-medium text-muted-foreground">
-                        Volume Type
+                        Position Type
                       </label>
                       <Select
                         value={params.volumeType}
-                        onValueChange={(value: 'receivable' | 'payable') => 
+                        onValueChange={(value: 'long' | 'short') => 
                           setParams(prev => ({ ...prev, volumeType: value }))
                         }
                       >
@@ -6758,38 +6821,43 @@ const pricingFunctions = {
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="receivable">
+                          <SelectItem value="long">
                             <div className="flex items-center gap-2">
                               <span className="text-green-600">📈</span>
-                              <span>Receivable</span>
+                              <span>Long Position</span>
                             </div>
                           </SelectItem>
-                          <SelectItem value="payable">
+                          <SelectItem value="short">
                             <div className="flex items-center gap-2">
                               <span className="text-red-600">📉</span>
-                              <span>Payable</span>
+                              <span>Short Position</span>
                             </div>
                           </SelectItem>
                         </SelectContent>
                       </Select>
                       {/* Help text */}
                       <div className="text-xs text-muted-foreground">
-                        {params.volumeType === 'receivable' ? (
+                        {params.volumeType === 'long' || params.volumeType === 'receivable' ? (
                           <span className="text-green-600">
-                            💰 You will receive {params.currencyPair?.base || 'Base'} currency
+                            📈 Long position: You own or will buy the commodity
                           </span>
                         ) : (
                           <span className="text-red-600">
-                            💸 You will pay {params.currencyPair?.base || 'Base'} currency
+                            📉 Short position: You need to deliver or sell the commodity
                           </span>
                         )}
                       </div>
                     </div>
                     
-                    {/* Spot Rate */}
+                    {/* Spot Price */}
                     <div className="space-y-2">
                       <label className="text-sm font-medium text-foreground">
-                        Spot Rate ({params.currencyPair?.symbol || 'EUR/USD'})
+                        Spot Price
+                        {params.currencyPair?.symbol && (
+                          <span className="ml-2 text-xs text-muted-foreground font-mono">
+                            {params.currencyPair.symbol} (${params.spotPrice}/{params.currencyPair.base})
+                          </span>
+                        )}
                       </label>
                       <div className="flex items-center gap-2">
                         <Input
@@ -6821,7 +6889,7 @@ const pricingFunctions = {
                   {/* Auto-sync Status */}
                   <div className="text-xs text-muted-foreground flex items-center gap-1 justify-center bg-primary/5 p-2 rounded border border-primary/10">
                     <span>💱</span>
-                    <span>Volumes auto-sync at current spot rate: <span className="font-mono font-medium">{params.spotPrice.toFixed(4)}</span></span>
+                    <span>Current spot price: <span className="font-mono font-medium">${params.spotPrice.toFixed(2)}</span></span>
                   </div>
                 </div>
               </div>
@@ -6897,11 +6965,11 @@ const pricingFunctions = {
                           Total Volume: {params.customPeriods.reduce((sum, p) => sum + p.volume, 0).toLocaleString()}
                         </div>
                         
-                        {Math.abs(params.customPeriods.reduce((sum, p) => sum + p.volume, 0) - params.baseVolume) > 0.01 && (
+                        {Math.abs(params.customPeriods.reduce((sum, p) => sum + p.volume, 0) - params.totalVolume) > 0.01 && (
                           <div className="mt-2 text-xs text-amber-600 flex items-center gap-1">
                             <AlertTriangle size={12} />
                             <span>The sum of custom periods volumes ({params.customPeriods.reduce((sum, p) => sum + p.volume, 0).toLocaleString()}) 
-                            differs from the base volume ({params.baseVolume.toLocaleString()}).</span>
+                            differs from the total volume ({params.totalVolume.toLocaleString()}).</span>
                           </div>
                         )}
                       </div>
@@ -6967,19 +7035,20 @@ const pricingFunctions = {
                       <label className="text-xs text-muted-foreground">Model Selection</label>
                   <Select 
                     value={optionPricingModel} 
-                    onValueChange={(value: string) => setOptionPricingModel(value as 'black-scholes' | 'garman-kohlhagen' | 'monte-carlo')}
+                    onValueChange={(value: string) => setOptionPricingModel(value as 'black-76' | 'black-scholes' | 'garman-kohlhagen' | 'monte-carlo')}
                   >
                         <SelectTrigger className="h-8 text-xs">
                       <SelectValue placeholder="Select pricing model" />
                     </SelectTrigger>
                     <SelectContent>
+                      <SelectItem value="black-76">Black-76 (Commodity Options) ⭐</SelectItem>
                       <SelectItem value="black-scholes">Black-Scholes</SelectItem>
-                      <SelectItem value="garman-kohlhagen">Garman-Kohlhagen (FX)</SelectItem>
-                      <SelectItem value="monte-carlo">Monte Carlo (Vanilla Options)</SelectItem>
+                      <SelectItem value="garman-kohlhagen">Garman-Kohlhagen (Legacy FX)</SelectItem>
+                      <SelectItem value="monte-carlo">Monte Carlo Simulation</SelectItem>
                     </SelectContent>
                   </Select>
-                      <p className="text-xs text-muted-foreground">
-                        Garman-Kohlhagen model is recommended for FX options
+                      <p className="text-xs text-muted-foreground text-green-600">
+                        ✅ Black-76 model is recommended for commodity options with cost of carry
                   </p>
                     </div>
                 </div>
@@ -8010,44 +8079,6 @@ const pricingFunctions = {
             monthsToHedge={params.monthsToHedge}
           />
         </TabsContent>
-
-        <TabsContent value="forexdashboard">
-          <ForexDashboard 
-            onRateSelected={(pair, rate) => {
-              // Mettre à jour le spot price
-              setParams(prev => ({
-                ...prev,
-                spotPrice: rate
-              }));
-              
-              // Trouver la paire de devises correspondante
-              const currencyPair = CURRENCY_PAIRS.find(cp => cp.symbol === pair);
-              if (currencyPair) {
-                // Mettre à jour la paire de devises sélectionnée
-                setParams(prev => ({
-                  ...prev,
-                  currencyPair: currencyPair
-                }));
-              }
-
-              // Mettre à jour initialSpotPrice qui est utilisé pour calculer les forward rates
-              setInitialSpotPrice(rate);
-              
-              // Réinitialiser les forward rates manuels pour qu'ils soient recalculés
-              setManualForwards({});
-
-              // Recalculer tous les résultats qui dépendent du spot price
-              calculateResults();
-              
-              // Afficher une notification
-              toast({
-                title: "Rate Updated",
-                description: `Spot rate updated to ${rate} for ${pair}`,
-              });
-            }}
-            currentPair={params.currencyPair?.symbol || "EUR/USD"}
-          />
-        </TabsContent>
       </Tabs>
 
       {displayResults && (
@@ -8305,7 +8336,7 @@ const pricingFunctions = {
                               const date = new Date(row.date);
                               const monthKey = `${date.getFullYear()}-${date.getMonth() + 1}`;
                               const newValue = e.target.value === '' ? 0 : Number(e.target.value);
-                              handleVolumeChange(monthKey, newValue);
+                              handleCustomVolumeChange(monthKey, newValue);
                             }}
                             onBlur={() => recalculateResults()}
                                   className="compact-input w-32 text-right"
@@ -8789,9 +8820,5 @@ const pricingFunctions = {
     </div>
   );
 };
-
-
-
-
 
 export default Index;

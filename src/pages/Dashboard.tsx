@@ -4,9 +4,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import { useFinancialData } from "@/hooks/useFinancialData";
+import { useCommodityData } from "@/hooks/useCommodityData";
 import { useTheme } from "@/hooks/useTheme";
-import ExchangeRateService from "@/services/ExchangeRateService";
+import CommodityDataService from "@/services/CommodityDataService";
 import { 
   TrendingUp, 
   TrendingDown, 
@@ -28,48 +28,39 @@ const Dashboard = () => {
   const { theme } = useTheme();
   const { 
     riskMetrics, 
-    currencyExposures, 
+    commodityExposures, 
     marketData, 
     isLiveMode, 
     setLiveMode, 
     lastUpdate,
     updateMarketData,
     generateStressScenarios
-  } = useFinancialData();
+  } = useCommodityData();
 
-  // State for market overview data - Only real data from API
+  // Initialize commodity market data
   const [marketOverviewData, setMarketOverviewData] = useState<{
-    EUR_USD: { rate: number; change: number };
-    GBP_USD: { rate: number; change: number };
-    USD_JPY: { rate: number; change: number };
-    USD_CHF: { rate: number; change: number };
-    USD_CAD: { rate: number; change: number };
-    AUD_USD: { rate: number; change: number };
-    NZD_USD: { rate: number; change: number };
-    USD_CNY: { rate: number; change: number };
-    USD_INR: { rate: number; change: number };
-    USD_BRL: { rate: number; change: number };
-    USD_MXN: { rate: number; change: number };
-    USD_TRY: { rate: number; change: number };
-  } | null>(null);
+    WTI: { rate: number; change: number };
+    BRENT: { rate: number; change: number };
+    GOLD: { rate: number; change: number };
+    SILVER: { rate: number; change: number };
+    COPPER: { rate: number; change: number };
+    NATGAS: { rate: number; change: number };
+    CORN: { rate: number; change: number };
+    WHEAT: { rate: number; change: number };
+    SOYBEAN: { rate: number; change: number };
+  }>({
+    WTI: { rate: 75.50, change: 1.2 },
+    BRENT: { rate: 79.80, change: 0.8 },
+    GOLD: { rate: 1980.50, change: -0.5 },
+    SILVER: { rate: 24.30, change: 2.1 },
+    COPPER: { rate: 3.85, change: 0.3 },
+    NATGAS: { rate: 2.45, change: -1.5 },
+    CORN: { rate: 4.85, change: 0.7 },
+    WHEAT: { rate: 5.20, change: -0.2 },
+    SOYBEAN: { rate: 12.80, change: 1.1 }
+  });
 
-  // State to track previous rates for change calculation
-  const [previousRates, setPreviousRates] = useState<{
-    EUR_USD: number;
-    GBP_USD: number;
-    USD_JPY: number;
-    USD_CHF: number;
-    USD_CAD: number;
-    AUD_USD: number;
-    NZD_USD: number;
-    USD_CNY: number;
-    USD_INR: number;
-    USD_BRL: number;
-    USD_MXN: number;
-    USD_TRY: number;
-  } | null>(null);
-
-  const exchangeRateService = ExchangeRateService.getInstance();
+  const commodityDataService = new CommodityDataService();
 
 
   // Function to get theme-adaptive text colors using CSS classes
