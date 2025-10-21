@@ -1,132 +1,124 @@
 import { useState, useMemo } from 'react';
 import { WorldBankCommodity } from '@/services/worldBankApi';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Skeleton } from '@/components/ui/skeleton';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { TrendingUp, TrendingDown, Minus, Calendar, BarChart3 } from 'lucide-react';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Calendar, Download, Search, TrendingUp, TrendingDown, BarChart3 } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 interface WorldBankHistoricalDataProps {
   commodities: WorldBankCommodity[];
-  loading: boolean;
+  loading?: boolean;
 }
 
-type SortField = 'date' | 'value' | 'change';
-type SortDirection = 'asc' | 'desc';
-
-export default function WorldBankHistoricalData({ commodities, loading }: WorldBankHistoricalDataProps) {
+export default function WorldBankHistoricalData({ commodities, loading = false }: WorldBankHistoricalDataProps) {
   const [selectedCommodity, setSelectedCommodity] = useState<string>('');
-  const [sortField, setSortField] = useState<SortField>('date');
-  const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
-  const [showChange, setShowChange] = useState(true);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [dateRange, setDateRange] = useState<'all' | '1year' | '5years' | '10years'>('all');
 
-  // Obtenir la commodité sélectionnée
-  const selectedCommodityData = useMemo(() => {
-    if (!selectedCommodity) return null;
-    return commodities.find(c => c.id === selectedCommodity);
-  }, [selectedCommodity, commodities]);
+  const selectedCommodityData = commodities.find(c => c.id === selectedCommodity);
 
-  // Calculer les données historiques avec changements
-  const historicalData = useMemo(() => {
+  // Parse date string properly
+  const parseDate = (dateStr: string) => {
+    if (dateStr.includes('M')) {
+      const year = dateStr.substring(0, 4);
+      const month = dateStr.substring(5, 7);
+      return new Date(`${year}-${month}-01`);
+    }
+    return new Date(dateStr);
+  };
+
+  // Filter data based on date range
+  const filteredHistoricalData = useMemo(() => {
     if (!selectedCommodityData) return [];
 
-    const data = selectedCommodityData.data.map((point, index) => {
-      const previousPoint = index > 0 ? selectedCommodityData.data[index - 1] : null;
-      const change = previousPoint ? point.value - previousPoint.value : 0;
-      const changePercent = previousPoint && previousPoint.value !== 0 
-        ? (change / previousPoint.value) * 100 
-        : 0;
+    let data = selectedCommodityData.data;
+    const now = new Date();
 
-      return {
-        ...point,
-        change,
-        changePercent,
-        isFirst: index === 0
-      };
-    });
-
-    return data;
-  }, [selectedCommodityData]);
-
-  // Trier les données
-  const sortedData = useMemo(() => {
-    return [...historicalData].sort((a, b) => {
-      let aValue: any = a[sortField];
-      let bValue: any = b[sortField];
-
-      if (sortField === 'date') {
-        aValue = new Date(aValue);
-        bValue = new Date(bValue);
-      }
-
-      if (sortDirection === 'asc') {
-        return aValue > bValue ? 1 : -1;
-      } else {
-        return aValue < bValue ? 1 : -1;
-      }
-    });
-  }, [historicalData, sortField, sortDirection]);
-
-  const handleSort = (field: SortField) => {
-    if (sortField === field) {
-      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
-    } else {
-      setSortField(field);
-      setSortDirection('asc');
+    switch (dateRange) {
+      case '1year':
+        const oneYearAgo = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate());
+        data = data.filter(item => parseDate(item.date) >= oneYearAgo);
+        break;
+      case '5years':
+        const fiveYearsAgo = new Date(now.getFullYear() - 5, now.getMonth(), now.getDate());
+        data = data.filter(item => parseDate(item.date) >= fiveYearsAgo);
+        break;
+      case '10years':
+        const tenYearsAgo = new Date(now.getFullYear() - 10, now.getMonth(), now.getDate());
+        data = data.filter(item => parseDate(item.date) >= tenYearsAgo);
+        break;
+      default:
+        break;
     }
-  };
 
-  const formatValue = (value: number) => {
-    return value.toFixed(2);
-  };
+    // Filter by search term if provided
+    if (searchTerm) {
+      const searchLower = searchTerm.toLowerCase();
+      data = data.filter(item => 
+        item.date.toLowerCase().includes(searchLower) ||
+        item.value.toString().includes(searchLower)
+      );
+    }
 
-  const formatChange = (change: number, changePercent: number, isFirst: boolean) => {
-    if (isFirst) return 'N/A';
+    // Sort by date (most recent first)
+    return data.sort((a, b) => parseDate(b.date).getTime() - parseDate(a.date).getTime());
+  }, [selectedCommodityData, dateRange, searchTerm]);
+
+  // Calculate statistics
+  const statistics = useMemo(() => {
+    if (!filteredHistoricalData.length) return null;
+
+    const values = filteredHistoricalData.map(d => d.value);
+    const min = Math.min(...values);
+    const max = Math.max(...values);
+    const avg = values.reduce((sum, val) => sum + val, 0) / values.length;
     
-    const isPositive = change > 0;
-    const isNegative = change < 0;
-    
-    return (
-      <div className={`flex items-center gap-1 ${isPositive ? 'text-green-600' : isNegative ? 'text-red-600' : 'text-gray-600'}`}>
-        {isPositive ? <TrendingUp size={14} /> : isNegative ? <TrendingDown size={14} /> : <Minus size={14} />}
-        <span>
-          {change > 0 ? '+' : ''}{change.toFixed(2)} ({changePercent > 0 ? '+' : ''}{changePercent.toFixed(2)}%)
-        </span>
-      </div>
-    );
+    const firstValue = filteredHistoricalData[filteredHistoricalData.length - 1]?.value;
+    const lastValue = filteredHistoricalData[0]?.value;
+    const totalChange = firstValue && lastValue ? ((lastValue - firstValue) / firstValue) * 100 : 0;
+
+    return { min, max, avg, totalChange, count: filteredHistoricalData.length };
+  }, [filteredHistoricalData]);
+
+  const exportToCSV = () => {
+    if (!selectedCommodityData || !filteredHistoricalData.length) return;
+
+    const headers = ['Date', 'Value', 'Unit'];
+    const csvContent = [
+      headers.join(','),
+      ...filteredHistoricalData.map(row => [
+        row.date,
+        row.value,
+        selectedCommodityData.unit
+      ].join(','))
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `${selectedCommodityData.name}_historical_data.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
-
-  // Calculer les statistiques
-  const stats = useMemo(() => {
-    if (historicalData.length === 0) return null;
-
-    const values = historicalData.map(d => d.value);
-    const changes = historicalData.filter(d => !d.isFirst).map(d => d.change);
-    
-    return {
-      totalDataPoints: historicalData.length,
-      minValue: Math.min(...values),
-      maxValue: Math.max(...values),
-      avgValue: values.reduce((sum, val) => sum + val, 0) / values.length,
-      totalChange: values[values.length - 1] - values[0],
-      avgChange: changes.length > 0 ? changes.reduce((sum, val) => sum + val, 0) / changes.length : 0,
-      positiveChanges: changes.filter(c => c > 0).length,
-      negativeChanges: changes.filter(c => c < 0).length
-    };
-  }, [historicalData]);
 
   if (loading) {
     return (
-      <Card>
+      <Card className="h-full">
         <CardHeader>
-          <CardTitle>Historical Data Analysis</CardTitle>
-          <CardDescription>Loading historical data...</CardDescription>
+          <Skeleton className="h-6 w-48" />
+          <Skeleton className="h-4 w-32" />
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
-            <Skeleton className="h-10 w-[200px]" />
-            <Skeleton className="h-[300px] w-full" />
+            <Skeleton className="h-10 w-full" />
+            <Skeleton className="h-[400px] w-full" />
           </div>
         </CardContent>
       </Card>
@@ -135,14 +127,17 @@ export default function WorldBankHistoricalData({ commodities, loading }: WorldB
 
   if (commodities.length === 0) {
     return (
-      <Card>
+      <Card className="h-full">
         <CardHeader>
-          <CardTitle>Historical Data Analysis</CardTitle>
-          <CardDescription>No commodity data available</CardDescription>
+          <CardTitle className="flex items-center gap-2">
+            <BarChart3 className="h-5 w-5" />
+            Historical Data
+          </CardTitle>
+          <CardDescription>View historical price data for selected commodities</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="text-center py-8 text-muted-foreground">
-            No commodities found. Please import World Bank Pink Sheet data.
+            No commodities data available
           </div>
         </CardContent>
       </Card>
@@ -150,154 +145,241 @@ export default function WorldBankHistoricalData({ commodities, loading }: WorldB
   }
 
   return (
-    <Card>
+    <Card className="h-full">
       <CardHeader>
-        <CardTitle>Historical Data Analysis</CardTitle>
+        <CardTitle className="flex items-center gap-2">
+          <BarChart3 className="h-5 w-5" />
+          Historical Data
+        </CardTitle>
         <CardDescription>
-          Detailed historical data and trends for selected commodities
+          View and analyze historical price data for selected commodities
         </CardDescription>
       </CardHeader>
-      <CardContent className="space-y-4">
-        {/* Commodity Selection */}
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2">
-            <label className="text-sm font-medium">Commodity:</label>
+      
+      <CardContent className="space-y-6">
+        {/* Controls */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          {/* Commodity Selector */}
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Select Commodity</label>
             <Select value={selectedCommodity} onValueChange={setSelectedCommodity}>
-              <SelectTrigger className="w-[250px]">
-                <SelectValue placeholder="Select commodity" />
+              <SelectTrigger>
+                <SelectValue placeholder="Choose a commodity" />
               </SelectTrigger>
               <SelectContent>
                 {commodities.map((commodity) => (
                   <SelectItem key={commodity.id} value={commodity.id}>
-                    {commodity.name}
+                    <div className="flex items-center gap-2">
+                      <span>{commodity.name}</span>
+                      <span className="text-xs text-muted-foreground">({commodity.symbol})</span>
+                    </div>
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
 
-          <Button
-            variant={showChange ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => setShowChange(!showChange)}
-          >
-            <BarChart3 size={16} className="mr-1" />
-            {showChange ? 'Hide Changes' : 'Show Changes'}
-          </Button>
+          {/* Date Range Filter */}
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Date Range</label>
+            <Select value={dateRange} onValueChange={(value: any) => setDateRange(value)}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Time</SelectItem>
+                <SelectItem value="1year">Last Year</SelectItem>
+                <SelectItem value="5years">Last 5 Years</SelectItem>
+                <SelectItem value="10years">Last 10 Years</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Search */}
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Search</label>
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search by date or value..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-10"
+              />
+            </div>
+          </div>
+
+          {/* Export Button */}
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Export</label>
+            <Button
+              onClick={exportToCSV}
+              disabled={!selectedCommodityData || !filteredHistoricalData.length}
+              className="w-full"
+              variant="outline"
+            >
+              <Download className="h-4 w-4 mr-2" />
+              Export CSV
+            </Button>
+          </div>
         </div>
 
+        {/* Statistics */}
+        {selectedCommodityData && statistics && (
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+            <Card>
+              <CardContent className="p-4">
+                <div className="text-2xl font-bold text-green-600">
+                  {statistics.min.toLocaleString()}
+                </div>
+                <p className="text-xs text-muted-foreground">Minimum</p>
+              </CardContent>
+            </Card>
+            
+            <Card>
+              <CardContent className="p-4">
+                <div className="text-2xl font-bold text-red-600">
+                  {statistics.max.toLocaleString()}
+                </div>
+                <p className="text-xs text-muted-foreground">Maximum</p>
+              </CardContent>
+            </Card>
+            
+            <Card>
+              <CardContent className="p-4">
+                <div className="text-2xl font-bold text-blue-600">
+                  {statistics.avg.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                </div>
+                <p className="text-xs text-muted-foreground">Average</p>
+              </CardContent>
+            </Card>
+            
+            <Card>
+              <CardContent className="p-4">
+                <div className={cn(
+                  "text-2xl font-bold flex items-center gap-1",
+                  statistics.totalChange >= 0 ? "text-green-600" : "text-red-600"
+                )}>
+                  {statistics.totalChange >= 0 ? (
+                    <TrendingUp className="h-4 w-4" />
+                  ) : (
+                    <TrendingDown className="h-4 w-4" />
+                  )}
+                  {statistics.totalChange >= 0 ? '+' : ''}{statistics.totalChange.toFixed(2)}%
+                </div>
+                <p className="text-xs text-muted-foreground">Total Change</p>
+              </CardContent>
+            </Card>
+            
+            <Card>
+              <CardContent className="p-4">
+                <div className="text-2xl font-bold text-gray-600">
+                  {statistics.count.toLocaleString()}
+                </div>
+                <p className="text-xs text-muted-foreground">Data Points</p>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
+        {/* Data Table */}
         {selectedCommodityData ? (
           <div className="space-y-4">
-            {/* Statistics Cards */}
-            {stats && (
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div className="text-center p-3 bg-muted/50 rounded-lg">
-                  <div className="text-2xl font-bold text-blue-600">
-                    {stats.totalDataPoints}
-                  </div>
-                  <div className="text-sm text-muted-foreground">Data Points</div>
-                </div>
-                
-                <div className="text-center p-3 bg-muted/50 rounded-lg">
-                  <div className="text-2xl font-bold text-green-600">
-                    {stats.maxValue.toFixed(2)}
-                  </div>
-                  <div className="text-sm text-muted-foreground">Max Value</div>
-                </div>
-                
-                <div className="text-center p-3 bg-muted/50 rounded-lg">
-                  <div className="text-2xl font-bold text-red-600">
-                    {stats.minValue.toFixed(2)}
-                  </div>
-                  <div className="text-sm text-muted-foreground">Min Value</div>
-                </div>
-                
-                <div className="text-center p-3 bg-muted/50 rounded-lg">
-                  <div className="text-2xl font-bold text-purple-600">
-                    {stats.avgValue.toFixed(2)}
-                  </div>
-                  <div className="text-sm text-muted-foreground">Average</div>
-                </div>
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-semibold">
+                {selectedCommodityData.name} - Historical Prices
+              </h3>
+              <div className="text-sm text-muted-foreground">
+                {filteredHistoricalData.length} records
               </div>
-            )}
-
-            {/* Historical Data Table */}
-            <div className="rounded-md border">
+            </div>
+            
+            <div className="border rounded-lg">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead 
-                      className="cursor-pointer hover:bg-muted/50"
-                      onClick={() => handleSort('date')}
-                    >
-                      <div className="flex items-center gap-1">
-                        <Calendar size={14} />
+                    <TableHead className="w-32">
+                      <div className="flex items-center gap-2">
+                        <Calendar className="h-4 w-4" />
                         Date
-                        {sortField === 'date' && (
-                          <span>{sortDirection === 'asc' ? '↑' : '↓'}</span>
-                        )}
                       </div>
                     </TableHead>
-                    <TableHead 
-                      className="cursor-pointer hover:bg-muted/50"
-                      onClick={() => handleSort('value')}
-                    >
-                      Value ({selectedCommodityData.unit})
-                      {sortField === 'value' && (
-                        <span className="ml-1">{sortDirection === 'asc' ? '↑' : '↓'}</span>
-                      )}
+                    <TableHead className="text-right">
+                      Price ({selectedCommodityData.unit})
                     </TableHead>
-                    {showChange && (
-                      <TableHead 
-                        className="cursor-pointer hover:bg-muted/50"
-                        onClick={() => handleSort('change')}
-                      >
-                        Change
-                        {sortField === 'change' && (
-                          <span className="ml-1">{sortDirection === 'asc' ? '↑' : '↓'}</span>
-                        )}
-                      </TableHead>
-                    )}
+                    <TableHead className="text-right">Change</TableHead>
+                    <TableHead className="text-right">Change %</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {sortedData.map((point, index) => (
-                    <TableRow key={index}>
-                      <TableCell className="font-mono text-sm">
-                        {point.date}
+                  {filteredHistoricalData.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
+                        No data found for the selected filters
                       </TableCell>
-                      <TableCell className="font-mono">
-                        {formatValue(point.value)}
-                      </TableCell>
-                      {showChange && (
-                        <TableCell>
-                          {formatChange(point.change, point.changePercent, point.isFirst)}
-                        </TableCell>
-                      )}
                     </TableRow>
-                  ))}
+                  ) : (
+                    filteredHistoricalData.map((row, index) => {
+                      const prevRow = filteredHistoricalData[index + 1];
+                      const change = prevRow ? row.value - prevRow.value : 0;
+                      const changePercent = prevRow ? ((change / prevRow.value) * 100) : 0;
+                      
+                      return (
+                        <TableRow key={`${row.date}-${row.value}`}>
+                          <TableCell className="font-mono">
+                            {parseDate(row.date).toLocaleDateString('en-US', {
+                              year: 'numeric',
+                              month: 'short',
+                              day: 'numeric'
+                            })}
+                          </TableCell>
+                          <TableCell className="text-right font-mono">
+                            {row.value.toLocaleString(undefined, {
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 4
+                            })}
+                          </TableCell>
+                          <TableCell className={cn(
+                            "text-right font-mono",
+                            change > 0 ? "text-green-600" : change < 0 ? "text-red-600" : "text-gray-600"
+                          )}>
+                            {prevRow ? (
+                              <>
+                                {change > 0 ? '+' : ''}{change.toLocaleString(undefined, {
+                                  minimumFractionDigits: 2,
+                                  maximumFractionDigits: 4
+                                })}
+                              </>
+                            ) : '-'}
+                          </TableCell>
+                          <TableCell className={cn(
+                            "text-right font-mono",
+                            changePercent > 0 ? "text-green-600" : changePercent < 0 ? "text-red-600" : "text-gray-600"
+                          )}>
+                            {prevRow ? (
+                              <div className="flex items-center justify-end gap-1">
+                                {changePercent > 0 ? (
+                                  <TrendingUp className="h-3 w-3" />
+                                ) : changePercent < 0 ? (
+                                  <TrendingDown className="h-3 w-3" />
+                                ) : null}
+                                {changePercent > 0 ? '+' : ''}{changePercent.toFixed(2)}%
+                              </div>
+                            ) : '-'}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })
+                  )}
                 </TableBody>
               </Table>
             </div>
-
-            {/* Summary */}
-            {stats && (
-              <div className="text-sm text-muted-foreground">
-                <p>
-                  Showing {historicalData.length} data points from {historicalData[0]?.date} to {historicalData[historicalData.length - 1]?.date}
-                </p>
-                <p>
-                  Total change: {stats.totalChange > 0 ? '+' : ''}{stats.totalChange.toFixed(2)} ({stats.totalChange > 0 ? '+' : ''}{((stats.totalChange / stats.minValue) * 100).toFixed(2)}%)
-                </p>
-                <p>
-                  Positive periods: {stats.positiveChanges} | Negative periods: {stats.negativeChanges}
-                </p>
-              </div>
-            )}
           </div>
         ) : (
-          <div className="text-center py-8 text-muted-foreground">
-            Please select a commodity to view its historical data
+          <div className="text-center py-12 text-muted-foreground">
+            <BarChart3 className="h-12 w-12 mx-auto mb-4 opacity-50" />
+            <p className="text-lg font-medium">Select a commodity to view historical data</p>
+            <p className="text-sm">Choose from {commodities.length} available commodities</p>
           </div>
         )}
       </CardContent>

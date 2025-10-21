@@ -1,20 +1,69 @@
 import { useState } from 'react';
 import { WorldBankCommodity } from '@/services/worldBankApi';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Skeleton } from '@/components/ui/skeleton';
-import { TrendingUp, TrendingDown, Minus } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
+import { TrendingUp, TrendingDown, Minus, Search, SortAsc, SortDesc } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 interface WorldBankTableProps {
   commodities: WorldBankCommodity[];
-  loading: boolean;
+  loading?: boolean;
 }
 
-export default function WorldBankTable({ commodities, loading }: WorldBankTableProps) {
-  const [sortField, setSortField] = useState<keyof WorldBankCommodity>('name');
-  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+type SortField = 'name' | 'currentValue' | 'changePercent' | 'category';
+type SortDirection = 'asc' | 'desc';
 
-  const handleSort = (field: keyof WorldBankCommodity) => {
+export default function WorldBankTable({ commodities, loading = false }: WorldBankTableProps) {
+  const [searchTerm, setSearchTerm] = useState('');
+  const [sortField, setSortField] = useState<SortField>('name');
+  const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
+
+  const formatValue = (value: number, unit: string) => {
+    if (unit.includes('$')) {
+      return new Intl.NumberFormat('en-US', {
+        style: 'currency',
+        currency: 'USD',
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+      }).format(value);
+    }
+    
+    if (unit.includes('%')) {
+      return `${value.toFixed(2)}%`;
+    }
+    
+    return `${value.toLocaleString()} ${unit}`;
+  };
+
+  const getChangeIcon = (changePercent?: number) => {
+    if (!changePercent) return <Minus className="h-4 w-4 text-muted-foreground" />;
+    if (changePercent > 0) return <TrendingUp className="h-4 w-4 text-green-600" />;
+    return <TrendingDown className="h-4 w-4 text-red-600" />;
+  };
+
+  const getChangeColor = (changePercent?: number) => {
+    if (!changePercent) return "text-muted-foreground";
+    if (changePercent > 0) return "text-green-600";
+    return "text-red-600";
+  };
+
+  const getCategoryColor = (category: string) => {
+    switch (category) {
+      case 'Energy':
+        return 'bg-orange-100 text-orange-800 border-orange-200';
+      case 'Agricultural':
+        return 'bg-green-100 text-green-800 border-green-200';
+      case 'Metals':
+        return 'bg-blue-100 text-blue-800 border-blue-200';
+      case 'Fertilizers':
+        return 'bg-purple-100 text-purple-800 border-purple-200';
+      default:
+        return 'bg-gray-100 text-gray-800 border-gray-200';
+    }
+  };
+
+  const handleSort = (field: SortField) => {
     if (sortField === field) {
       setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
     } else {
@@ -23,172 +72,213 @@ export default function WorldBankTable({ commodities, loading }: WorldBankTableP
     }
   };
 
-  const sortedCommodities = [...commodities].sort((a, b) => {
-    let aValue: any = a[sortField];
-    let bValue: any = b[sortField];
+  const filteredAndSortedCommodities = commodities
+    .filter(commodity =>
+      commodity.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      commodity.symbol.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      commodity.category.toLowerCase().includes(searchTerm.toLowerCase())
+    )
+    .sort((a, b) => {
+      let aValue: any = a[sortField];
+      let bValue: any = b[sortField];
 
-    if (sortField === 'currentValue' || sortField === 'change' || sortField === 'changePercent') {
-      aValue = aValue || 0;
-      bValue = bValue || 0;
+      // Handle special cases for sorting
+      if (sortField === 'currentValue') {
+        aValue = a.currentValue || 0;
+        bValue = b.currentValue || 0;
+      } else if (sortField === 'changePercent') {
+        aValue = a.changePercent || 0;
+        bValue = b.changePercent || 0;
+      }
+
+      if (typeof aValue === 'string') {
+        aValue = aValue.toLowerCase();
+        bValue = bValue.toLowerCase();
+      }
+
+      if (aValue < bValue) return sortDirection === 'asc' ? -1 : 1;
+      if (aValue > bValue) return sortDirection === 'asc' ? 1 : -1;
+      return 0;
+    });
+
+  const SortIcon = ({ field }: { field: SortField }) => {
+    if (sortField !== field) {
+      return <SortAsc className="h-4 w-4 text-muted-foreground" />;
     }
-
-    if (typeof aValue === 'string') {
-      aValue = aValue.toLowerCase();
-      bValue = bValue.toLowerCase();
-    }
-
-    if (sortDirection === 'asc') {
-      return aValue > bValue ? 1 : -1;
-    } else {
-      return aValue < bValue ? 1 : -1;
-    }
-  });
-
-  const formatValue = (value: number | undefined, unit: string = '') => {
-    if (value === undefined || value === null) return 'N/A';
-    return `${value.toFixed(2)}${unit ? ` ${unit}` : ''}`;
-  };
-
-  const formatChange = (change: number | undefined, changePercent: number | undefined) => {
-    if (change === undefined || changePercent === undefined) return 'N/A';
-    
-    const isPositive = change > 0;
-    const isNegative = change < 0;
-    
-    return (
-      <div className={`flex items-center gap-1 ${isPositive ? 'text-green-600' : isNegative ? 'text-red-600' : 'text-gray-600'}`}>
-        {isPositive ? <TrendingUp size={14} /> : isNegative ? <TrendingDown size={14} /> : <Minus size={14} />}
-        <span>
-          {change > 0 ? '+' : ''}{change.toFixed(2)} ({changePercent > 0 ? '+' : ''}{changePercent.toFixed(2)}%)
-        </span>
-      </div>
-    );
+    return sortDirection === 'asc' ? 
+      <SortAsc className="h-4 w-4" /> : 
+      <SortDesc className="h-4 w-4" />;
   };
 
   if (loading) {
     return (
-      <Card>
-        <CardHeader>
-          <CardTitle>World Bank Commodity Data</CardTitle>
-          <CardDescription>Loading commodity data...</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-2">
-            {Array.from({ length: 5 }).map((_, i) => (
-              <div key={i} className="flex items-center space-x-4">
-                <Skeleton className="h-4 w-[200px]" />
-                <Skeleton className="h-4 w-[100px]" />
-                <Skeleton className="h-4 w-[80px]" />
-                <Skeleton className="h-4 w-[120px]" />
-              </div>
-            ))}
+      <div className="space-y-4">
+        <div className="flex items-center space-x-2">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+            <Input
+              placeholder="Search commodities..."
+              className="pl-10"
+              disabled
+            />
           </div>
-        </CardContent>
-      </Card>
-    );
-  }
-
-  if (commodities.length === 0) {
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle>World Bank Commodity Data</CardTitle>
-          <CardDescription>No commodity data available</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="text-center py-8 text-muted-foreground">
-            No commodities found. Please import World Bank Pink Sheet data.
+        </div>
+        <div className="border rounded-lg">
+          <div className="h-96 flex items-center justify-center">
+            <div className="text-center space-y-2">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
+              <p className="text-sm text-muted-foreground">Loading World Bank data...</p>
+            </div>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     );
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>World Bank Commodity Data</CardTitle>
-        <CardDescription>
-          {commodities.length} commodities from World Bank Pink Sheet
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        <div className="rounded-md border">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead 
-                  className="cursor-pointer hover:bg-muted/50"
+    <div className="space-y-4">
+      {/* Search Bar */}
+      <div className="flex items-center space-x-2">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+          <Input
+            placeholder="Search commodities..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="pl-10"
+          />
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setSearchTerm('')}
+          disabled={!searchTerm}
+        >
+          Clear
+        </Button>
+      </div>
+
+      {/* Results Count */}
+      <div className="text-sm text-muted-foreground">
+        Showing {filteredAndSortedCommodities.length} of {commodities.length} commodities
+      </div>
+
+      {/* Table */}
+      <div className="border rounded-lg">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>
+                <Button
+                  variant="ghost"
+                  size="sm"
                   onClick={() => handleSort('name')}
+                  className="h-auto p-0 font-semibold"
                 >
                   Commodity
-                  {sortField === 'name' && (
-                    <span className="ml-1">{sortDirection === 'asc' ? '↑' : '↓'}</span>
-                  )}
-                </TableHead>
-                <TableHead 
-                  className="cursor-pointer hover:bg-muted/50"
+                  <SortIcon field="name" />
+                </Button>
+              </TableHead>
+              <TableHead>
+                <Button
+                  variant="ghost"
+                  size="sm"
                   onClick={() => handleSort('category')}
+                  className="h-auto p-0 font-semibold"
                 >
                   Category
-                  {sortField === 'category' && (
-                    <span className="ml-1">{sortDirection === 'asc' ? '↑' : '↓'}</span>
-                  )}
-                </TableHead>
-                <TableHead 
-                  className="cursor-pointer hover:bg-muted/50"
+                  <SortIcon field="category" />
+                </Button>
+              </TableHead>
+              <TableHead>
+                <Button
+                  variant="ghost"
+                  size="sm"
                   onClick={() => handleSort('currentValue')}
+                  className="h-auto p-0 font-semibold"
                 >
-                  Current Value
-                  {sortField === 'currentValue' && (
-                    <span className="ml-1">{sortDirection === 'asc' ? '↑' : '↓'}</span>
-                  )}
-                </TableHead>
-                <TableHead 
-                  className="cursor-pointer hover:bg-muted/50"
-                  onClick={() => handleSort('change')}
+                  Current Price
+                  <SortIcon field="currentValue" />
+                </Button>
+              </TableHead>
+              <TableHead>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => handleSort('changePercent')}
+                  className="h-auto p-0 font-semibold"
                 >
                   Change
-                  {sortField === 'change' && (
-                    <span className="ml-1">{sortDirection === 'asc' ? '↑' : '↓'}</span>
-                  )}
-                </TableHead>
-                <TableHead>Unit</TableHead>
-                <TableHead>Data Points</TableHead>
+                  <SortIcon field="changePercent" />
+                </Button>
+              </TableHead>
+              <TableHead className="text-right">Data Points</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {filteredAndSortedCommodities.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                  No commodities found matching your search.
+                </TableCell>
               </TableRow>
-            </TableHeader>
-            <TableBody>
-              {sortedCommodities.map((commodity) => (
-                <TableRow key={commodity.id}>
-                  <TableCell className="font-medium">
+            ) : (
+              filteredAndSortedCommodities.map((commodity) => (
+                <TableRow key={commodity.id} className="hover:bg-muted/50">
+                  <TableCell>
                     <div>
-                      <div className="font-semibold">{commodity.name}</div>
+                      <div className="font-medium">{commodity.name}</div>
                       <div className="text-sm text-muted-foreground">{commodity.symbol}</div>
                     </div>
                   </TableCell>
                   <TableCell>
-                    <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                    <span className={cn(
+                      "inline-flex px-2 py-1 text-xs font-medium rounded-full border",
+                      getCategoryColor(commodity.category)
+                    )}>
                       {commodity.category}
                     </span>
                   </TableCell>
-                  <TableCell className="font-mono">
-                    {formatValue(commodity.currentValue, commodity.unit)}
+                  <TableCell>
+                    <div>
+                      <div className="font-medium">
+                        {commodity.currentValue ? formatValue(commodity.currentValue, commodity.unit) : 'N/A'}
+                      </div>
+                      <div className="text-sm text-muted-foreground">{commodity.unit}</div>
+                    </div>
                   </TableCell>
                   <TableCell>
-                    {formatChange(commodity.change, commodity.changePercent)}
+                    {commodity.changePercent !== undefined ? (
+                      <div className="flex items-center gap-2">
+                        {getChangeIcon(commodity.changePercent)}
+                        <span className={cn(
+                          "font-medium",
+                          getChangeColor(commodity.changePercent)
+                        )}>
+                          {commodity.changePercent > 0 ? '+' : ''}{commodity.changePercent.toFixed(2)}%
+                        </span>
+                        {commodity.change !== undefined && (
+                          <span className={cn(
+                            "text-sm",
+                            getChangeColor(commodity.changePercent)
+                          )}>
+                            ({commodity.change > 0 ? '+' : ''}{formatValue(commodity.change, commodity.unit)})
+                          </span>
+                        )}
+                      </div>
+                    ) : (
+                      <span className="text-muted-foreground">N/A</span>
+                    )}
                   </TableCell>
-                  <TableCell className="text-sm text-muted-foreground">
-                    {commodity.unit}
-                  </TableCell>
-                  <TableCell className="text-sm text-muted-foreground">
-                    {commodity.data.length} points
+                  <TableCell className="text-right">
+                    {commodity.data.length.toLocaleString()}
                   </TableCell>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
-      </CardContent>
-    </Card>
+              ))
+            )}
+          </TableBody>
+        </Table>
+      </div>
+    </div>
   );
 }
