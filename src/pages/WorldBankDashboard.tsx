@@ -36,19 +36,24 @@ export default function WorldBankDashboard() {
     setError(null);
     
     try {
-      const data = forceRefresh 
-        ? await refreshWorldBankData()
-        : await fetchWorldBankData();
-      setCommodities(data.commodities);
-      setLastUpdated(data.lastUpdated);
-      setCurrentData(data);
+      // Vérifier d'abord s'il y a des données dans le localStorage
+      const existingData = getCurrentWorldBankData();
       
-      if (data.commodities.length === 0) {
-        setError("No data found");
+      if (existingData && existingData.commodities.length > 0) {
+        setCommodities(existingData.commodities);
+        setLastUpdated(existingData.lastUpdated);
+        setCurrentData(existingData);
+        setError(null);
+      } else {
+        // Aucune donnée importée - ne pas afficher d'erreur
+        setCommodities([]);
+        setLastUpdated(null);
+        setCurrentData(null);
+        setError(null); // Pas d'erreur, juste pas de données
       }
     } catch (error) {
       console.error('Error loading World Bank data:', error);
-      setError('Failed to load World Bank commodity data. Please try again later.');
+      setError(null); // Pas d'erreur pour les données manuelles
       setCommodities([]);
       setLastUpdated(null);
       setCurrentData(null);
@@ -147,7 +152,7 @@ export default function WorldBankDashboard() {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => loadData(true)}
+            onClick={() => loadData()}
             disabled={loading}
           >
             <RefreshCw size={16} className={loading ? "animate-spin mr-2" : "mr-2"} />
@@ -156,7 +161,7 @@ export default function WorldBankDashboard() {
         </div>
       </div>
 
-      {/* Error Message */}
+      {/* Error Message - seulement si c'est une vraie erreur */}
       {error && (
         <div className="bg-destructive/15 p-4 rounded-md flex items-center gap-2 text-destructive">
           <AlertCircle size={20} />
@@ -164,11 +169,26 @@ export default function WorldBankDashboard() {
         </div>
       )}
 
+      {/* Message d'information si pas de données */}
+      {!loading && !error && commodities.length === 0 && (
+        <div className="bg-blue-50 border border-blue-200 p-6 rounded-lg text-center">
+          <Building2 className="h-12 w-12 mx-auto mb-4 text-blue-500" />
+          <h3 className="text-lg font-semibold text-blue-900 mb-2">No World Bank Data Available</h3>
+          <p className="text-blue-700 mb-4">
+            Import World Bank Pink Sheet data to start analyzing commodity prices and trends.
+          </p>
+          <Button onClick={() => setShowImport(true)} className="bg-blue-600 hover:bg-blue-700">
+            <Upload size={16} className="mr-2" />
+            Import World Bank Data
+          </Button>
+        </div>
+      )}
+
       {showImport ? (
         <WorldBankFileImport onDataImported={handleDataImported} />
       ) : loading ? (
         <LoadingSkeleton />
-      ) : (
+      ) : commodities.length > 0 ? (
         <>
           {/* Summary Cards */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -254,7 +274,7 @@ export default function WorldBankDashboard() {
             </TabsContent>
           </Tabs>
         </>
-      )}
+      ) : null}
     </div>
   );
 }

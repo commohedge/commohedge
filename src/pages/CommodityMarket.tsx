@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo } from "react";
+import { Layout } from "@/components/Layout";
 import { Commodity, fetchCommoditiesData, refreshCommoditiesData, CommodityCategory } from "@/services/commodityApi";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -181,7 +182,11 @@ export default function CommodityMarket() {
   );
 
   return (
-    <div className="space-y-6 p-6">
+    <Layout title="Commodity Market" breadcrumbs={[
+      { label: "Dashboard", href: "/dashboard" },
+      { label: "Commodity Market" }
+    ]}>
+      <div className="space-y-6 p-6">
       {/* Header */}
       <div className="relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-r from-blue-900/5 via-indigo-900/5 to-purple-900/5 rounded-2xl" />
@@ -646,6 +651,7 @@ export default function CommodityMarket() {
           </Tabs>
         </CardContent>
       </Card>
-    </div>
+      </div>
+    </Layout>
   );
 }
