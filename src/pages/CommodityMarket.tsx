@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { AlertCircle, RefreshCw, TrendingUp, TrendingDown, BarChart3, Factory, Wheat, Zap } from "lucide-react";
+import { AlertCircle, RefreshCw, TrendingUp, TrendingDown, BarChart3, Factory, Wheat, Zap, Ship, Fuel, Globe } from "lucide-react";
 import { toast } from "sonner";
 import {
   Table,
@@ -20,18 +20,22 @@ export default function CommodityMarket() {
   const [metalsCommodities, setMetalsCommodities] = useState<Commodity[]>([]);
   const [agriculturalCommodities, setAgriculturalCommodities] = useState<Commodity[]>([]);
   const [energyCommodities, setEnergyCommodities] = useState<Commodity[]>([]);
+  const [freightCommodities, setFreightCommodities] = useState<Commodity[]>([]);
+  const [bunkerCommodities, setBunkerCommodities] = useState<Commodity[]>([]);
   
   // État pour le chargement et les erreurs par catégorie
   const [loading, setLoading] = useState({
     metals: true,
     agricultural: true,
     energy: true,
+    freight: true,
+    bunker: true,
   });
-  const [error, setError] = useState<{[key in 'metals' | 'agricultural' | 'energy']?: string | null}>({});
-  const [lastUpdated, setLastUpdated] = useState<{[key in 'metals' | 'agricultural' | 'energy']?: Date | null}>({});
+  const [error, setError] = useState<{[key in 'metals' | 'agricultural' | 'energy' | 'freight' | 'bunker']?: string | null}>({});
+  const [lastUpdated, setLastUpdated] = useState<{[key in 'metals' | 'agricultural' | 'energy' | 'freight' | 'bunker']?: Date | null}>({});
 
   // État pour la catégorie active
-  const [activeCategory, setActiveCategory] = useState<'metals' | 'agricultural' | 'energy'>('metals');
+  const [activeCategory, setActiveCategory] = useState<'metals' | 'agricultural' | 'energy' | 'freight' | 'bunker'>('metals');
 
   // Charger les données pour une catégorie spécifique
   const loadCategoryData = async (category: CommodityCategory, forceRefresh: boolean = false) => {
@@ -50,6 +54,10 @@ export default function CommodityMarket() {
         setAgriculturalCommodities(data);
       } else if (category === 'energy') {
         setEnergyCommodities(data);
+      } else if (category === 'freight') {
+        setFreightCommodities(data);
+      } else if (category === 'bunker') {
+        setBunkerCommodities(data);
       }
       
       setLastUpdated(prev => ({ ...prev, [category]: new Date() }));
@@ -68,6 +76,10 @@ export default function CommodityMarket() {
         setAgriculturalCommodities([]);
       } else if (category === 'energy') {
         setEnergyCommodities([]);
+      } else if (category === 'freight') {
+        setFreightCommodities([]);
+      } else if (category === 'bunker') {
+        setBunkerCommodities([]);
       }
     } finally {
       setLoading(prev => ({ ...prev, [category]: false }));
@@ -83,6 +95,8 @@ export default function CommodityMarket() {
       loadCategoryData('metals', forceRefresh),
       loadCategoryData('agricultural', forceRefresh), 
       loadCategoryData('energy', forceRefresh),
+      loadCategoryData('freight', forceRefresh),
+      loadCategoryData('bunker', forceRefresh),
     ]);
     
     const endTime = Date.now();
@@ -115,6 +129,10 @@ export default function CommodityMarket() {
         return agriculturalCommodities;
       case 'energy':
         return energyCommodities;
+      case 'freight':
+        return freightCommodities;
+      case 'bunker':
+        return bunkerCommodities;
       default:
         return metalsCommodities;
     }
@@ -127,7 +145,7 @@ export default function CommodityMarket() {
 
   // Calculate market statistics
   const marketStats = useMemo(() => {
-    const allCommodities = [...metalsCommodities, ...agriculturalCommodities, ...energyCommodities];
+    const allCommodities = [...metalsCommodities, ...agriculturalCommodities, ...energyCommodities, ...freightCommodities, ...bunkerCommodities];
     const positive = allCommodities.filter(c => c.percentChange > 0).length;
     const negative = allCommodities.filter(c => c.percentChange < 0).length;
     const avgChange = allCommodities.length > 0 
@@ -135,7 +153,7 @@ export default function CommodityMarket() {
       : 0;
     
     return { total: allCommodities.length, positive, negative, avgChange };
-  }, [metalsCommodities, agriculturalCommodities, energyCommodities]);
+  }, [metalsCommodities, agriculturalCommodities, energyCommodities, freightCommodities, bunkerCommodities]);
 
   // Render price change badge
   const PriceChangeBadge = ({ value, isPercent = false }: { value: number, isPercent?: boolean }) => {
@@ -300,6 +318,20 @@ export default function CommodityMarket() {
                   <Zap size={16} />
                   <span>Energy</span>
                 </TabsTrigger>
+                <TabsTrigger 
+                  value="freight" 
+                  className="data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:border data-[state=active]:border-slate-200 rounded-lg px-4 py-3 font-medium transition-all duration-200 flex items-center gap-2"
+                >
+                  <Ship size={16} />
+                  <span>Freight</span>
+                </TabsTrigger>
+                <TabsTrigger 
+                  value="bunker" 
+                  className="data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:border data-[state=active]:border-slate-200 rounded-lg px-4 py-3 font-medium transition-all duration-200 flex items-center gap-2"
+                >
+                  <Fuel size={16} />
+                  <span>Bunker</span>
+                </TabsTrigger>
               </TabsList>
             </div>
             
@@ -427,6 +459,124 @@ export default function CommodityMarket() {
                   <CardHeader>
                     <CardTitle>Energy Commodities</CardTitle>
                     <CardDescription>Oil, gas, and renewable energy futures</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {isLoading ? (
+                      <LoadingTable />
+                    ) : commodities.length > 0 ? (
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Symbol</TableHead>
+                            <TableHead>Name</TableHead>
+                            <TableHead className="text-right">Price</TableHead>
+                            <TableHead className="text-right">Change</TableHead>
+                            <TableHead className="text-right">Change %</TableHead>
+                            <TableHead className="text-right">High</TableHead>
+                            <TableHead className="text-right">Low</TableHead>
+                            <TableHead>Technical</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {commodities.map((commodity) => (
+                            <TableRow key={commodity.symbol}>
+                              <TableCell className="font-medium">{commodity.symbol}</TableCell>
+                              <TableCell className="max-w-xs truncate">{commodity.name}</TableCell>
+                              <TableCell className="text-right font-mono">{commodity.price.toFixed(2)}</TableCell>
+                              <TableCell className="text-right">
+                                <PriceChangeBadge value={commodity.absoluteChange} />
+                              </TableCell>
+                              <TableCell className="text-right">
+                                <PriceChangeBadge value={commodity.percentChange} isPercent />
+                              </TableCell>
+                              <TableCell className="text-right font-mono text-sm text-slate-600">{commodity.high.toFixed(2)}</TableCell>
+                              <TableCell className="text-right font-mono text-sm text-slate-600">{commodity.low.toFixed(2)}</TableCell>
+                              <TableCell>
+                                <span className={`px-2 py-1 rounded text-xs font-medium ${
+                                  commodity.technicalEvaluation.toLowerCase().includes('buy') ? 'bg-green-100 text-green-700' :
+                                  commodity.technicalEvaluation.toLowerCase().includes('sell') ? 'bg-red-100 text-red-700' :
+                                  'bg-slate-100 text-slate-700'
+                                }`}>
+                                  {commodity.technicalEvaluation}
+                                </span>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    ) : (
+                      <div className="text-center py-8 text-slate-500">
+                        No data available
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </TabsContent>
+              
+              <TabsContent value="freight" className="space-y-4 mt-0">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Freight Commodities</CardTitle>
+                    <CardDescription>Container shipping and freight rates</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {isLoading ? (
+                      <LoadingTable />
+                    ) : commodities.length > 0 ? (
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Symbol</TableHead>
+                            <TableHead>Name</TableHead>
+                            <TableHead className="text-right">Price</TableHead>
+                            <TableHead className="text-right">Change</TableHead>
+                            <TableHead className="text-right">Change %</TableHead>
+                            <TableHead className="text-right">High</TableHead>
+                            <TableHead className="text-right">Low</TableHead>
+                            <TableHead>Technical</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {commodities.map((commodity) => (
+                            <TableRow key={commodity.symbol}>
+                              <TableCell className="font-medium">{commodity.symbol}</TableCell>
+                              <TableCell className="max-w-xs truncate">{commodity.name}</TableCell>
+                              <TableCell className="text-right font-mono">{commodity.price.toFixed(2)}</TableCell>
+                              <TableCell className="text-right">
+                                <PriceChangeBadge value={commodity.absoluteChange} />
+                              </TableCell>
+                              <TableCell className="text-right">
+                                <PriceChangeBadge value={commodity.percentChange} isPercent />
+                              </TableCell>
+                              <TableCell className="text-right font-mono text-sm text-slate-600">{commodity.high.toFixed(2)}</TableCell>
+                              <TableCell className="text-right font-mono text-sm text-slate-600">{commodity.low.toFixed(2)}</TableCell>
+                              <TableCell>
+                                <span className={`px-2 py-1 rounded text-xs font-medium ${
+                                  commodity.technicalEvaluation.toLowerCase().includes('buy') ? 'bg-green-100 text-green-700' :
+                                  commodity.technicalEvaluation.toLowerCase().includes('sell') ? 'bg-red-100 text-red-700' :
+                                  'bg-slate-100 text-slate-700'
+                                }`}>
+                                  {commodity.technicalEvaluation}
+                                </span>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    ) : (
+                      <div className="text-center py-8 text-slate-500">
+                        No data available
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </TabsContent>
+              
+              <TabsContent value="bunker" className="space-y-4 mt-0">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Bunker Fuel Prices</CardTitle>
+                    <CardDescription>Marine fuel prices and bunker rates</CardDescription>
                   </CardHeader>
                   <CardContent>
                     {isLoading ? (
