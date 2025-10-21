@@ -16,6 +16,55 @@ const CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
 // List of available commodity types
 export type CommodityCategory = 'metals' | 'agricultural' | 'energy' | 'freight' | 'bunker';
 
+// List of freight symbols with their information
+const FREIGHT_SYMBOLS = [
+  // Container Freight
+  { symbol: 'CS61!', name: 'Container Freight (China/East Asia to Mediterranean) (FBX13) (Baltic) Futures', type: 'container' as const },
+  { symbol: 'CS31!', name: 'Container Freight (China/East Asia to US East Coast) (FBX03) (Baltic) Futures', type: 'container' as const },
+  { symbol: 'CS51!', name: 'Container Freight (North Europe to China/East Asia) (FBX12) (Baltic) Futures', type: 'container' as const },
+  { symbol: 'CS11!', name: 'Container Freight (China/East Asia to US West Coast) (FBX01) (Baltic) Futures', type: 'container' as const },
+  { symbol: 'CS21!', name: 'Container Freight (US West Coast to China/East Asia) (FBX02) (Baltic) Futures', type: 'container' as const },
+  { symbol: 'CS41!', name: 'Container Freight (China/East Asia to North Europe) (FBX11) (Baltic) Futures', type: 'container' as const },
+  
+  // Freight Routes
+  { symbol: 'TM1!', name: 'Freight Route TC2 (Baltic) Futures', type: 'freight_route' as const },
+  { symbol: 'TD81!', name: 'Freight Route TD8 (Baltic) Futures', type: 'freight_route' as const },
+  { symbol: 'TC71!', name: 'Freight Route TC7 (Baltic) Futures', type: 'freight_route' as const },
+  { symbol: 'TC61!', name: 'Freight Route TC6 (Baltic) Futures', type: 'freight_route' as const },
+  { symbol: 'TH1!', name: 'Freight Route TC5 (Platts) Futures', type: 'freight_route' as const },
+  { symbol: 'TK1!', name: 'Freight Route TD7 (Baltic) Futures', type: 'freight_route' as const },
+  { symbol: 'TL1!', name: 'Freight Route TD3C (Baltic) Futures', type: 'freight_route' as const },
+  { symbol: 'AEB1!', name: 'Freight Route TD25 (Baltic) Futures', type: 'freight_route' as const },
+  { symbol: 'T2D1!', name: 'Freight Route TD20 (Baltic) Futures', type: 'freight_route' as const },
+  { symbol: 'T7C1!', name: 'Freight Route TC17 (Baltic) Futures', type: 'freight_route' as const },
+  { symbol: 'TD31!', name: 'Freight Route TD3C (Platts) Futures', type: 'freight_route' as const },
+  { symbol: 'TDM1!', name: 'Freight Route TD19 (Baltic) Futures', type: 'freight_route' as const },
+  { symbol: 'FRS1!', name: 'Freight Route TC12 (Baltic) Futures', type: 'freight_route' as const },
+  { symbol: 'T5C1!', name: 'Freight Route TC15 (Baltic) Futures', type: 'freight_route' as const },
+  { symbol: 'ACB1!', name: 'Freight Route TD22 (Baltic) Futures', type: 'freight_route' as const },
+  { symbol: 'FRC1!', name: 'Freight Route TC14 (Baltic) Futures', type: 'freight_route' as const },
+  { symbol: 'T8C1!', name: 'Freight Route TC18 (Baltic) Futures', type: 'freight_route' as const },
+  { symbol: 'TC11!', name: 'Freight Route South Korea to Singapore (TC11) (Baltic) Futures', type: 'freight_route' as const },
+  { symbol: 'TF21!', name: 'Freight Route Middle East to UK Continent (TC20) (Baltic) Futures', type: 'freight_route' as const },
+  
+  // LNG Freight
+  { symbol: 'BG11!', name: 'LNG Freight Australia to Japan (BLNG1-174)', type: 'lng_freight' as const },
+  { symbol: 'BG31!', name: 'LNG Freight US Gulf to Japan (BLNG3-174)', type: 'lng_freight' as const },
+  { symbol: 'BG21!', name: 'LNG Freight US Gulf to Continent (BLNG2-174)', type: 'lng_freight' as const },
+  { symbol: 'BL11!', name: 'LNG Freight Route BLNG1g (LNG Fuel) (Baltic) Futures', type: 'lng_freight' as const },
+  { symbol: 'BL21!', name: 'LNG Freight Route BLNG2g (LNG Fuel) (Baltic) Futures', type: 'lng_freight' as const },
+  { symbol: 'BL31!', name: 'LNG Freight Route BLNG3g (LNG Fuel) (Baltic) Futures', type: 'lng_freight' as const },
+  
+  // Dirty Freight
+  { symbol: 'USC1!', name: 'USGC to China (Platts) Dirty Freight Futures', type: 'dirty_freight' as const },
+  { symbol: 'USE1!', name: 'USGC to UK Continent (Platts) Dirty Freight Futures', type: 'dirty_freight' as const },
+  { symbol: 'XUK1!', name: 'Cross North Sea Dirty Freight 80kt (Platts) Futures', type: 'dirty_freight' as const },
+  
+  // Liquid Petroleum Gas Freight
+  { symbol: 'FLJ1!', name: 'Freight Route Liquid Petroleum Gas (BLPG3) (Baltic) Futures', type: 'lng_freight' as const },
+  { symbol: 'FLP1!', name: 'Freight Route Liquid Petroleum Gas (BLPG1) (Baltic) Futures', type: 'lng_freight' as const }
+];
+
 // Interfaces for commodity data
 export interface Commodity {
   symbol: string;
@@ -367,6 +416,20 @@ export async function fetchCommoditiesData(category: CommodityCategory = 'metals
       console.log(`Force refresh requested for ${category}, ignoring cache`);
     }
 
+    // Special handling for freight
+    if (category === 'freight') {
+      const freightData = await fetchFreightData();
+      saveToCache(category, freightData);
+      return freightData;
+    }
+    
+    // Special handling for bunker
+    if (category === 'bunker') {
+      const bunkerData = await fetchBunkerData();
+      saveToCache(category, bunkerData);
+      return bunkerData;
+    }
+
     // For other categories, use Puppeteer scraping
     const data = await scrapeTradingViewCategory(category);
     console.log("Raw scraping response:", data);
@@ -387,5 +450,505 @@ export async function fetchCommoditiesData(category: CommodityCategory = 'metals
  */
 export async function refreshCommoditiesData(category: CommodityCategory = 'metals'): Promise<Commodity[]> {
   return fetchCommoditiesData(category, true);
+}
+
+/**
+ * Retrieves data for a specific freight symbol from TradingView
+ */
+async function fetchFreightSymbolData(symbol: string, name: string, type: Commodity['type']): Promise<Commodity | null> {
+  try {
+    const data = await scrapeTradingViewSymbol(symbol);
+    
+    if (!data || !data.data) {
+      console.warn(`No data received for ${symbol}`);
+      return null;
+    }
+
+    // Parse the HTML to extract data
+    const htmlContent = data.data;
+    const root = parse(htmlContent);
+    
+    // Extract the main price
+    let price = 0;
+    let percentChange = 0;
+    let absoluteChange = 0;
+    
+    // Search for price elements in different possible selectors
+    const priceSelectors = [
+      '.tv-symbol-price-quote__value',
+      '[data-field="last_price"]',
+      '.js-symbol-last',
+      '.tv-symbol-header__price',
+      '[class*="price"]'
+    ];
+    
+    for (const selector of priceSelectors) {
+      const priceElement = root.querySelector(selector);
+      if (priceElement) {
+        const rawPriceText = priceElement.text.trim();
+        console.log(`Raw price text for ${symbol}: "${rawPriceText}"`);
+        
+        // Parse prices correctly for TradingView format
+        let priceText = rawPriceText;
+        
+        // Remove units and spaces
+        priceText = priceText.replace(/\s*(USD|usd|$|€|EUR|eur)\s*/gi, '');
+        
+        // Remove all non-numeric characters except commas and dots
+        priceText = priceText.replace(/[^\d.,]/g, '');
+        
+        // Handle TradingView number format
+        if (priceText.includes(',') && priceText.includes('.')) {
+          const lastDotIndex = priceText.lastIndexOf('.');
+          const lastCommaIndex = priceText.lastIndexOf(',');
+          
+          if (lastDotIndex > lastCommaIndex) {
+            priceText = priceText.replace(/,/g, '');
+          } else {
+            priceText = priceText.replace(/\./g, '').replace(/,([^,]*)$/, '.$1');
+          }
+        } else if (priceText.includes(',') && !priceText.includes('.')) {
+          const parts = priceText.split(',');
+          if (parts.length === 2 && parts[1].length === 3 && parts[0].length <= 3) {
+            priceText = priceText.replace(/,/g, '');
+          } else if (parts.length === 2 && parts[1].length <= 4) {
+            priceText = priceText.replace(',', '.');
+          } else {
+            priceText = priceText.replace(/,/g, '');
+          }
+        }
+        
+        console.log(`Processed price text for ${symbol}: "${priceText}"`);
+        price = parseFloat(priceText) || 0;
+        
+        if (price > 0) {
+          console.log(`Successfully parsed price for ${symbol}: ${price}`);
+          break;
+        }
+      }
+    }
+    
+    // If no price found, search in general content
+    if (price === 0) {
+      const pricePatterns = [
+        /(\d+\.\d{1,4})\s*USD/i,
+        /(\d{1,3}(?:,\d{3})*\.\d{1,4})\s*USD/i,
+        /(\d{1,3}(?:,\d{3})+)\s*USD/i,
+        /(\d+)\s*USD/i
+      ];
+      
+      for (const pattern of pricePatterns) {
+        const priceMatch = htmlContent.match(pattern);
+        if (priceMatch) {
+          let matchedPrice = priceMatch[1];
+          
+          if (matchedPrice.includes(',') && matchedPrice.includes('.')) {
+            const lastDotIndex = matchedPrice.lastIndexOf('.');
+            const lastCommaIndex = matchedPrice.lastIndexOf(',');
+            
+            if (lastDotIndex > lastCommaIndex) {
+              matchedPrice = matchedPrice.replace(/,/g, '');
+            } else {
+              matchedPrice = matchedPrice.replace(/\./g, '').replace(/,([^,]*)$/, '.$1');
+            }
+          } else if (matchedPrice.includes(',') && !matchedPrice.includes('.')) {
+            const parts = matchedPrice.split(',');
+            if (parts.length === 2 && parts[1].length === 3 && parts[0].length <= 3) {
+              matchedPrice = matchedPrice.replace(/,/g, '');
+            } else if (parts.length === 2 && parts[1].length <= 4) {
+              matchedPrice = matchedPrice.replace(',', '.');
+            } else {
+              matchedPrice = matchedPrice.replace(/,/g, '');
+            }
+          }
+          
+          price = parseFloat(matchedPrice) || 0;
+          if (price > 0) {
+            console.log(`Found price in content for ${symbol}: ${price}`);
+            break;
+          }
+        }
+      }
+    }
+    
+    // Return null if no valid data
+    if (price === 0) {
+      console.warn(`No valid price found for ${symbol}`);
+      return null;
+    }
+    
+    return {
+      symbol,
+      name,
+      price,
+      percentChange,
+      absoluteChange,
+      high: 0,
+      low: 0,
+      technicalEvaluation: 'Neutral',
+      type,
+      category: 'freight'
+    };
+    
+  } catch (error) {
+    console.error(`Error fetching ${symbol}:`, error);
+    return null;
+  }
+}
+
+/**
+ * Retrieves all freight data in parallel
+ */
+async function fetchFreightData(): Promise<Commodity[]> {
+  console.log('Fetching freight data from individual symbol pages...');
+  
+  // Limit to 5 symbols in parallel to avoid API overload
+  const batchSize = 5;
+  const results: Commodity[] = [];
+  
+  for (let i = 0; i < FREIGHT_SYMBOLS.length; i += batchSize) {
+    const batch = FREIGHT_SYMBOLS.slice(i, i + batchSize);
+    
+    const batchPromises = batch.map(({ symbol, name, type }) => 
+      fetchFreightSymbolData(symbol, name, type)
+    );
+    
+    const batchResults = await Promise.allSettled(batchPromises);
+    
+    batchResults.forEach((result, index) => {
+      if (result.status === 'fulfilled' && result.value) {
+        results.push(result.value);
+      } else {
+        console.warn(`Failed to fetch ${batch[index].symbol}:`, result.status === 'rejected' ? result.reason : 'No data');
+      }
+    });
+    
+    // Small delay between batches to respect API limits
+    if (i + batchSize < FREIGHT_SYMBOLS.length) {
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+  }
+  
+  console.log(`Successfully fetched ${results.length} freight commodities`);
+  return results;
+}
+
+/**
+ * Scrapes bunker prices data from shipandbunker.com
+ */
+async function fetchBunkerData(): Promise<Commodity[]> {
+  console.log('Fetching bunker data from shipandbunker.com...');
+  
+  const bunkerTypes = [
+    { type: 'vlsfo', url: 'https://shipandbunker.com/prices#VLSFO', name: 'VLSFO' },
+    { type: 'mgo', url: 'https://shipandbunker.com/prices#MGO', name: 'MGO' },
+    { type: 'ifo380', url: 'https://shipandbunker.com/prices#IFO380', name: 'IFO380' }
+  ];
+  
+  const allBunkerCommodities: Commodity[] = [];
+  
+  // First, try to fetch Gibraltar data specifically from EMEA page
+  try {
+    console.log('Fetching Gibraltar bunker data from EMEA page...');
+    
+    const gibraltarData = await scrapeShipAndBunkerEMEA();
+    
+    if (gibraltarData && gibraltarData.data) {
+      const gibraltarCommodities = parseGibraltarData(gibraltarData.data);
+      allBunkerCommodities.push(...gibraltarCommodities);
+      console.log(`Found ${gibraltarCommodities.length} Gibraltar bunker commodities`);
+    }
+    
+    // Add delay before next requests
+    await new Promise(resolve => setTimeout(resolve, 1000));
+  } catch (error) {
+    console.error('Error fetching Gibraltar data:', error);
+  }
+  
+  // Continue with regular bunker types scraping
+  for (const bunkerType of bunkerTypes) {
+    try {
+      console.log(`Fetching ${bunkerType.name} data...`);
+      
+      const data = await scrapeShipAndBunker(bunkerType.type);
+      
+      if (!data || !data.data) {
+        console.warn(`No data received for ${bunkerType.name}`);
+        continue;
+      }
+
+      const htmlContent = data.data;
+      const root = parse(htmlContent);
+      
+      // Parse the bunker data from Ship & Bunker website
+      const bunkerCommodities = parseBunkerData(htmlContent, bunkerType.type as 'vlsfo' | 'mgo' | 'ifo380', bunkerType.name);
+      allBunkerCommodities.push(...bunkerCommodities);
+      
+      // Add delay between requests
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+    } catch (error) {
+      console.error(`Error fetching ${bunkerType.name}:`, error);
+    }
+  }
+  
+  console.log(`Successfully fetched ${allBunkerCommodities.length} bunker commodities`);
+  return allBunkerCommodities;
+}
+
+/**
+ * Parses bunker prices data from Ship & Bunker HTML
+ */
+function parseBunkerData(htmlContent: string, bunkerType: 'vlsfo' | 'mgo' | 'ifo380', bunkerTypeName: string): Commodity[] {
+  try {
+    const root = parse(htmlContent);
+    const commodities: Commodity[] = [];
+    
+    console.log(`Parsing ${bunkerTypeName} data from HTML content (${htmlContent.length} chars)`);
+    
+    // Find price data in the HTML structure
+    let priceRows: any[] = [];
+    
+    // Try finding the main price table
+    const priceTables = root.querySelectorAll('table.price-table, table[class*="price"], table[id*="price"]');
+    if (priceTables.length > 0) {
+      priceRows = priceTables[0].querySelectorAll('tbody tr, tr');
+      console.log(`Found ${priceRows.length} rows in price table for ${bunkerTypeName}`);
+    }
+    
+    // Fallback: look for any table with price data
+    if (priceRows.length === 0) {
+      const allTables = root.querySelectorAll('table');
+      for (const table of allTables) {
+        const tableText = table.text.toLowerCase();
+        if (tableText.includes('price') || tableText.includes('$/mt') || 
+            tableText.includes(bunkerTypeName.toLowerCase())) {
+          priceRows = table.querySelectorAll('tbody tr, tr');
+          console.log(`Found ${priceRows.length} rows in fallback table for ${bunkerTypeName}`);
+          if (priceRows.length > 0) break;
+        }
+      }
+    }
+    
+    // Final fallback: look for any rows with price-like data
+    if (priceRows.length === 0) {
+      priceRows = root.querySelectorAll('tr');
+      console.log(`Using all ${priceRows.length} rows as final fallback for ${bunkerTypeName}`);
+    }
+    
+    // Process the rows
+    if (priceRows.length > 0) {
+      priceRows.forEach((row, index) => {
+        const commodity = extractBunkerCommodityFromRow(row, bunkerType, bunkerTypeName, index);
+        if (commodity) {
+          commodities.push(commodity);
+        }
+      });
+    }
+    
+    console.log(`Parsed ${commodities.length} commodities for ${bunkerTypeName}`);
+    return commodities;
+    
+  } catch (error) {
+    console.error(`Error parsing bunker data for ${bunkerTypeName}:`, error);
+    return [];
+  }
+}
+
+/**
+ * Extracts commodity data from a table row
+ */
+function extractBunkerCommodityFromRow(row: any, bunkerType: 'vlsfo' | 'mgo' | 'ifo380', bunkerTypeName: string, index: number): Commodity | null {
+  try {
+    const cells = row.querySelectorAll('td, th');
+    
+    if (cells.length < 2) {
+      return null; // Not enough data
+    }
+    
+    let portName = '';
+    let price = 0;
+    let change = 0;
+    let changePercent = 0;
+    let high = 0;
+    let low = 0;
+    
+    // Extract port/location name (usually first cell)
+    const firstCell = cells[0];
+    portName = firstCell.text.trim();
+    
+    if (!portName || portName.toLowerCase().includes('port') && portName.length < 3) {
+      portName = `${bunkerTypeName} Port ${index + 1}`;
+    }
+    
+    // Extract price data from cells
+    for (let i = 1; i < cells.length; i++) {
+      const cellText = cells[i].text.trim();
+      
+      // Cell 1: Price ($/mt)
+      if (i === 1 && /^\d+[\d.,]*$/.test(cellText.replace(/[^\d.,]/g, ''))) {
+        const priceText = cellText.replace(/[^\d.,]/g, '').replace(',', '.');
+        price = parseFloat(priceText) || 0;
+      }
+      // Cell 2: Change (can have + or -)
+      else if (i === 2 && /[+-]?\d+[\d.,]*/.test(cellText)) {
+        const changeText = cellText.replace(/[^\d.,-]/g, '').replace(',', '.');
+        change = parseFloat(changeText) || 0;
+      }
+      // Cell 3: High
+      else if (i === 3 && /^\d+[\d.,]*$/.test(cellText.replace(/[^\d.,]/g, ''))) {
+        const highText = cellText.replace(/[^\d.,]/g, '').replace(',', '.');
+        high = parseFloat(highText) || 0;
+      }
+      // Cell 4: Low
+      else if (i === 4 && /^\d+[\d.,]*$/.test(cellText.replace(/[^\d.,]/g, ''))) {
+        const lowText = cellText.replace(/[^\d.,]/g, '').replace(',', '.');
+        low = parseFloat(lowText) || 0;
+      }
+    }
+    
+    // If we found valid data, create commodity
+    if (price > 0 && portName) {
+      return createBunkerCommodity(
+        `${bunkerType.toUpperCase()}_${portName.replace(/\s+/g, '_')}`,
+        `${bunkerTypeName} - ${portName}`,
+        bunkerType,
+        price,
+        change,
+        changePercent,
+        high,
+        low
+      );
+    }
+    
+    return null;
+  } catch (error) {
+    console.error('Error extracting commodity from row:', error);
+    return null;
+  }
+}
+
+/**
+ * Parses Gibraltar specific data from EMEA page
+ */
+function parseGibraltarData(htmlContent: string): Commodity[] {
+  try {
+    const root = parse(htmlContent);
+    const commodities: Commodity[] = [];
+    
+    console.log('Parsing Gibraltar data from EMEA page...');
+    
+    // Look for Gibraltar specifically in the HTML
+    const gibraltarRows = root.querySelectorAll('tr').filter(row => {
+      const text = row.text.toLowerCase();
+      return text.includes('gibraltar');
+    });
+    
+    console.log(`Found ${gibraltarRows.length} Gibraltar rows`);
+    
+    for (const row of gibraltarRows) {
+      const cells = row.querySelectorAll('td, th');
+      
+      if (cells.length >= 4) {
+        const portName = cells[0]?.text.trim() || '';
+        
+        if (portName.toLowerCase().includes('gibraltar')) {
+          // Parse VLSFO (cell 1)
+          const vlsfoText = cells[1]?.text.trim() || '';
+          if (vlsfoText && vlsfoText !== '-' && !vlsfoText.includes('login')) {
+            const vlsfoMatch = vlsfoText.match(/(\d+\.?\d*)/);
+            if (vlsfoMatch) {
+              const price = parseFloat(vlsfoMatch[1]);
+              
+              commodities.push(createBunkerCommodity(
+                'VLSFO_Gibraltar',
+                'VLSFO - Gibraltar',
+                'vlsfo',
+                price,
+                0, // No change data for Gibraltar
+                0, // No percent change
+                0, // No high data for Gibraltar  
+                0  // No low data for Gibraltar
+              ));
+            }
+          }
+          
+          // Parse MGO (cell 2) 
+          const mgoText = cells[2]?.text.trim() || '';
+          if (mgoText && mgoText !== '-' && !mgoText.includes('login')) {
+            const mgoMatch = mgoText.match(/(\d+\.?\d*)/);
+            if (mgoMatch) {
+              const price = parseFloat(mgoMatch[1]);
+              
+              commodities.push(createBunkerCommodity(
+                'MGO_Gibraltar',
+                'MGO - Gibraltar',
+                'mgo',
+                price,
+                0, // No change data for Gibraltar
+                0, // No percent change
+                0, // No high data for Gibraltar
+                0  // No low data for Gibraltar
+              ));
+            }
+          }
+          
+          // Parse IFO380 (cell 3)
+          const ifo380Text = cells[3]?.text.trim() || '';
+          if (ifo380Text && ifo380Text !== '-' && !ifo380Text.includes('login')) {
+            const ifo380Match = ifo380Text.match(/(\d+\.?\d*)/);
+            if (ifo380Match) {
+              const price = parseFloat(ifo380Match[1]);
+              
+              commodities.push(createBunkerCommodity(
+                'IFO380_Gibraltar',
+                'IFO380 - Gibraltar',
+                'ifo380',
+                price,
+                0, // No change data for Gibraltar
+                0, // No percent change
+                0, // No high data for Gibraltar
+                0  // No low data for Gibraltar
+              ));
+            }
+          }
+        }
+      }
+    }
+    
+    console.log(`Extracted ${commodities.length} Gibraltar commodities`);
+    return commodities;
+    
+  } catch (error) {
+    console.error('Error parsing Gibraltar data:', error);
+    return [];
+  }
+}
+
+/**
+ * Creates a bunker commodity object
+ */
+function createBunkerCommodity(
+  symbol: string,
+  name: string,
+  type: 'vlsfo' | 'mgo' | 'ifo380',
+  price: number,
+  absoluteChange: number = 0,
+  percentChange: number = 0,
+  high: number = 0,
+  low: number = 0
+): Commodity {
+  return {
+    symbol,
+    name,
+    price,
+    percentChange,
+    absoluteChange,
+    high: high > 0 ? high : (symbol.includes('Gibraltar') ? 0 : price * 1.05),
+    low: low > 0 ? low : (symbol.includes('Gibraltar') ? 0 : price * 0.95),
+    technicalEvaluation: absoluteChange >= 0 ? 'Positive' : 'Negative',
+    type,
+    category: 'bunker'
+  };
 }
 
