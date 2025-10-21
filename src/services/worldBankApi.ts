@@ -247,108 +247,319 @@ function calculateChanges(commodity: WorldBankCommodity): WorldBankCommodity {
   };
 }
 
-// Fonction pour parser les données Excel
-function parseExcelData(arrayBuffer: ArrayBuffer): WorldBankCommodity[] {
-  try {
-    const workbook = XLSX.read(arrayBuffer, { type: 'array' });
-    const sheetName = workbook.SheetNames[0];
-    const worksheet = workbook.Sheets[sheetName];
-    
-    // Convertir en JSON
-    const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
-    
-    if (!jsonData || jsonData.length < 2) {
-      throw new Error('Invalid Excel file format');
-    }
+// Fonction pour détecter la structure du fichier
+function detectFileStructure(data: any[][]): {
+  headerRows: number;
+  dateColumn: number;
+  dataStartRow: number;
+  commodityColumns: number[];
+} {
+  console.log('Detecting file structure...');
+  console.log('Data shape:', data.length, 'rows x', data[0]?.length || 0, 'columns');
+  
+  // Afficher les premières lignes pour debug
+  console.log('First 15 rows:');
+  data.slice(0, 15).forEach((row, index) => {
+    console.log(`Row ${index}:`, row);
+  });
 
-    // La première ligne contient les en-têtes
-    const headers = jsonData[0] as string[];
-    const dataRows = jsonData.slice(1) as any[][];
-
-    // Trouver l'index de la colonne "Commodity"
-    const commodityIndex = headers.findIndex(header => 
-      header && header.toLowerCase().includes('commodity')
-    );
-
-    if (commodityIndex === -1) {
-      throw new Error('Commodity column not found');
-    }
-
-    // Créer un mapping des commodités
-    const commoditiesMap = new Map<string, WorldBankCommodity>();
-
-    dataRows.forEach((row, rowIndex) => {
-      if (!row || row.length === 0) return;
-
-      const commodityName = row[commodityIndex];
-      if (!commodityName || typeof commodityName !== 'string') return;
-
-      // Nettoyer le nom de la commodité
-      const cleanName = commodityName.trim();
-      if (!cleanName) return;
-
-      // Créer un ID unique
-      const id = cleanName.toLowerCase().replace(/[^a-z0-9]/g, '_');
-      
-      // Obtenir la catégorie
-      const category = getCommodityCategory(id);
-      const displayName = getCommodityDisplayName(id);
-
-      // Initialiser la commodité si elle n'existe pas
-      if (!commoditiesMap.has(id)) {
-        commoditiesMap.set(id, {
-          id,
-          name: displayName,
-          unit: 'USD/MT', // Unité par défaut
-          symbol: cleanName,
-          category,
-          data: []
-        });
+  // Chercher la ligne qui contient les dates (format YYYYMM)
+  let dateRowIndex = -1;
+  let dateColumnIndex = -1;
+  
+  for (let row = 0; row < Math.min(20, data.length); row++) {
+    const rowData = data[row] || [];
+    for (let col = 0; col < rowData.length; col++) {
+      const cell = rowData[col];
+      if (cell && typeof cell === 'string' && /^\d{4}M\d{2}$/.test(cell)) {
+        dateRowIndex = row;
+        dateColumnIndex = col;
+        console.log(`Found date pattern at row ${row}, column ${col}: ${cell}`);
+        break;
       }
+    }
+    if (dateRowIndex !== -1) break;
+  }
+  
+  if (dateRowIndex === -1) {
+    // Essayer de trouver des dates dans d'autres formats
+    for (let row = 0; row < Math.min(20, data.length); row++) {
+      const rowData = data[row] || [];
+      for (let col = 0; col < rowData.length; col++) {
+        const cell = rowData[col];
+        if (cell && (
+          (typeof cell === 'string' && /^\d{4}-\d{2}/.test(cell)) ||
+          (cell instanceof Date)
+        )) {
+          dateRowIndex = row;
+          dateColumnIndex = col;
+          console.log(`Found alternative date pattern at row ${row}, column ${col}: ${cell}`);
+          break;
+        }
+      }
+      if (dateRowIndex !== -1) break;
+    }
+  }
+  
+  if (dateRowIndex === -1) {
+    throw new Error('Could not find date column in the file');
+  }
+  
+  // Identifier les colonnes de commodités - INCLURE TOUTES LES COLONNES avec un nom
+  const commodityColumns: number[] = [];
+  const columnDataCount: { [col: number]: number } = {};
+  
+  // D'abord, analyser les données numériques disponibles pour information
+  const maxRowsToCheck = Math.min(50, data.length - dateRowIndex);
+  for (let row = dateRowIndex; row < dateRowIndex + maxRowsToCheck; row++) {
+    const rowData = data[row] || [];
+    for (let col = 0; col < rowData.length; col++) {
+      if (col === dateColumnIndex) continue; // Skip date column
+      
+      const cell = rowData[col];
+      if (cell !== null && cell !== undefined && cell !== '' && 
+          typeof cell === 'number' && !isNaN(cell)) {
+        columnDataCount[col] = (columnDataCount[col] || 0) + 1;
+      }
+    }
+  }
+  
+  // INCLURE TOUTES LES COLONNES qui ont un nom dans les en-têtes
+  const maxColumns = Math.max(data[0]?.length || 0, ...data.slice(0, dateRowIndex).map(row => row?.length || 0));
+  
+  for (let col = 0; col < maxColumns; col++) {
+    if (col === dateColumnIndex) continue; // Skip date column
+    
+    // Vérifier s'il y a un nom dans les lignes d'en-tête
+    let hasName = false;
+    for (let row = 0; row < dateRowIndex; row++) {
+      const cell = data[row]?.[col];
+      if (cell && typeof cell === 'string' && cell.trim().length >= 2 && 
+          !cell.match(/^\d+$/) && !cell.toLowerCase().includes('unit') && 
+          !cell.toLowerCase().includes('source') && !cell.includes('$') &&
+          !cell.toLowerCase().includes('period')) {
+        hasName = true;
+        break;
+      }
+    }
+    
+    if (hasName) {
+      commodityColumns.push(col);
+      console.log(`Including column ${col} (has name, ${columnDataCount[col] || 0} data points)`);
+    }
+  }
+  
+  console.log(`Found ${commodityColumns.length} commodity columns:`, commodityColumns);
+  console.log('Column data counts:', columnDataCount);
+  
+  // Déterminer le nombre de lignes d'en-tête
+  const headerRows = dateRowIndex;
+  const dataStartRow = dateRowIndex;
+  
+  return {
+    headerRows,
+    dateColumn: dateColumnIndex,
+    dataStartRow,
+    commodityColumns
+  };
+}
 
-      const commodity = commoditiesMap.get(id)!;
-
-      // Parcourir les colonnes pour extraire les données temporelles
-      headers.forEach((header, colIndex) => {
-        if (colIndex === commodityIndex) return; // Ignorer la colonne commodity
+// Fonction pour extraire les informations de commodité
+function extractCommodityInfo(data: any[][], structure: any): {
+  names: string[];
+  units: string[];
+  symbols: string[];
+} {
+  const names: string[] = [];
+  const units: string[] = [];
+  const symbols: string[] = [];
+  
+  // Chercher les noms des commodités dans les lignes d'en-tête
+  for (let colIndex of structure.commodityColumns) {
+    let name = '';
+    let unit = '';
+    let symbol = '';
+    
+    // Chercher le nom dans les lignes d'en-tête (en priorité les lignes les plus proches des données)
+    for (let row = Math.max(0, structure.headerRows - 3); row < structure.headerRows; row++) {
+      const cell = data[row]?.[colIndex];
+      if (cell && typeof cell === 'string' && cell.trim().length > 0) {
+        const cellValue = cell.trim();
         
-        const value = row[colIndex];
-        if (value === null || value === undefined || value === '') return;
-
-        // Essayer de parser la valeur comme un nombre
-        const numericValue = parseFloat(value);
-        if (isNaN(numericValue)) return;
-
-        // Essayer de parser la date depuis l'en-tête
-        let dateStr = header;
-        if (typeof header === 'string') {
-          // Formats de date courants
-          const dateMatch = header.match(/(\d{4})/);
-          if (dateMatch) {
-            dateStr = dateMatch[1];
+        // Identifier les unités
+        if (!unit && (cellValue.includes('$') || cellValue.includes('USD') || cellValue.includes('ton') || 
+                     cellValue.includes('kg') || cellValue.includes('bbl') || cellValue.includes('cents') ||
+                     cellValue.includes('yen') || cellValue.includes('euro') || cellValue.includes('per'))) {
+          unit = cellValue;
+        }
+        // Identifier le nom principal (ligne la plus proche des données avec un nom significatif)
+        // Accepter aussi les noms courts comme "DAP", "TSP" pour les fertilizers
+        else if (!name && cellValue.length >= 2 && !cellValue.match(/^\d+$/) && 
+                !cellValue.toLowerCase().includes('unit') && !cellValue.toLowerCase().includes('source')) {
+          name = cellValue;
+        }
+        // Identifier le symbole (généralement court et en majuscules)
+        else if (!symbol && cellValue.length <= 15 && cellValue.match(/^[A-Z_0-9]+$/)) {
+          symbol = cellValue;
+        }
+      }
+    }
+    
+    // Si pas de nom trouvé, chercher dans toutes les lignes d'en-tête
+    if (!name) {
+      for (let row = 0; row < structure.headerRows; row++) {
+        const cell = data[row]?.[colIndex];
+        if (cell && typeof cell === 'string' && cell.trim().length > 2) {
+          const cellValue = cell.trim();
+          if (!cellValue.toLowerCase().includes('unit') && !cellValue.toLowerCase().includes('source') && 
+              !cellValue.match(/^\d+$/) && !cellValue.includes('$')) {
+            name = cellValue;
+            break;
           }
         }
-
-        // Ajouter les données temporelles
-        commodity.data.push({
-          date: dateStr,
-          value: numericValue
-        });
-      });
-    });
-
-    // Convertir en array et calculer les changements
-    const commodities: WorldBankCommodity[] = Array.from(commoditiesMap.values())
-      .map(commodity => calculateChanges(commodity))
-      .filter(commodity => commodity.data.length > 0);
-
-    console.log(`Parsed ${commodities.length} commodities from Excel file`);
-    return commodities;
-
-  } catch (error) {
-    console.error('Error parsing Excel data:', error);
-    throw new Error('Failed to parse Excel file: ' + error.message);
+      }
+    }
+    
+    // Si toujours pas de nom, utiliser un nom générique
+    if (!name) {
+      name = `Commodity_${colIndex}`;
+    }
+    
+    // Générer un symbole basé sur le nom si pas trouvé
+    if (!symbol) {
+      symbol = name
+        .replace(/[^a-zA-Z0-9\s]/g, '') // Remove special characters
+        .replace(/\s+/g, '_') // Replace spaces with underscores
+        .toUpperCase()
+        .substring(0, 15);
+    }
+    
+    names.push(name);
+    units.push(unit);
+    symbols.push(symbol);
   }
+  
+  console.log('Extracted commodity info:', { names, units, symbols });
+  return { names, units, symbols };
+}
+
+// Fonction pour parser les données Excel
+function parseExcelData(arrayBuffer: ArrayBuffer): WorldBankCommodity[] {
+  const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+  
+  // Essayer de trouver la feuille appropriée
+  const sheetNames = workbook.SheetNames;
+  console.log('Available sheets:', sheetNames);
+  
+  let targetSheet = null;
+  const possibleSheetNames = [
+    'Monthly Prices',
+    'Monthly prices',
+    'MONTHLY PRICES',
+    'Prices',
+    'Data',
+    'Sheet1'
+  ];
+  
+  for (const sheetName of possibleSheetNames) {
+    if (sheetNames.includes(sheetName)) {
+      targetSheet = workbook.Sheets[sheetName];
+      console.log('Using sheet:', sheetName);
+      break;
+    }
+  }
+  
+  // Si aucune feuille spécifique n'est trouvée, utiliser la première
+  if (!targetSheet && sheetNames.length > 0) {
+    targetSheet = workbook.Sheets[sheetNames[0]];
+    console.log('Using first sheet:', sheetNames[0]);
+  }
+  
+  if (!targetSheet) {
+    throw new Error('No valid sheet found in the Excel file');
+  }
+  
+  const data = XLSX.utils.sheet_to_json(targetSheet, { header: 1 }) as any[][];
+  
+  if (data.length < 2) {
+    throw new Error('Invalid file format: insufficient data rows');
+  }
+  
+  // Détecter la structure du fichier
+  const structure = detectFileStructure(data);
+  
+  // Extraire les informations de commodité
+  const { names, units, symbols } = extractCommodityInfo(data, structure);
+  
+  const commodities: WorldBankCommodity[] = [];
+  
+  // Traiter chaque colonne de commodité
+  for (let i = 0; i < structure.commodityColumns.length; i++) {
+    const colIndex = structure.commodityColumns[i];
+    const name = names[i];
+    const unit = units[i];
+    const symbol = symbols[i];
+    
+    // Skip only if both name and symbol are empty
+    if (!name && !symbol) continue;
+    
+    // Use name as symbol if symbol is empty, and vice versa
+    const finalSymbol = symbol || name.replace(/\s+/g, '_').toUpperCase().substring(0, 20);
+    const finalName = name || symbol;
+    
+    const category = COMMODITY_CATEGORIES[finalSymbol] || WORLD_BANK_CATEGORIES.OTHER;
+    const displayName = COMMODITY_DISPLAY_NAMES[finalSymbol] || finalName;
+    
+    // Extraire les données de série temporelle
+    const timeSeriesData: { date: string; value: number }[] = [];
+    
+    for (let j = structure.dataStartRow; j < data.length; j++) {
+      const row = data[j];
+      if (!row || row.length <= colIndex) continue;
+      
+      const date = row[structure.dateColumn];
+      const value = row[colIndex];
+      
+      // Accepter les valeurs numériques valides (y compris 0) et ignorer les cellules vides/null/undefined
+      if (date && value !== null && value !== undefined && value !== '' && 
+          typeof value === 'number' && !isNaN(value)) {
+        timeSeriesData.push({
+          date: date.toString(),
+          value: value
+        });
+      }
+    }
+    
+    // Inclure la commodité même si elle n'a pas de données (pour afficher toutes les colonnes)
+    if (true) { // Toujours inclure la commodité
+      // Trouver la valeur la plus récente (non-nulle)
+      const currentValue = timeSeriesData.length > 0 ? timeSeriesData[timeSeriesData.length - 1]?.value : undefined;
+      
+      // Trouver la valeur précédente pour calculer le changement
+      let previousValue = undefined;
+      if (timeSeriesData.length > 1) {
+        previousValue = timeSeriesData[timeSeriesData.length - 2]?.value;
+      }
+      
+      const change = currentValue && previousValue ? currentValue - previousValue : undefined;
+      const changePercent = currentValue && previousValue ? ((change! / previousValue) * 100) : undefined;
+      
+      commodities.push({
+        id: finalSymbol,
+        name: displayName,
+        unit: unit || '',
+        symbol: finalSymbol,
+        category,
+        data: timeSeriesData,
+        currentValue,
+        change,
+        changePercent
+      });
+    }
+  }
+  
+  console.log(`Successfully parsed ${commodities.length} commodities`);
+  return commodities;
 }
 
 // Fonction pour créer des données par défaut
