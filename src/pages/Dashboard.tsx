@@ -7,6 +7,8 @@ import { Progress } from "@/components/ui/progress";
 import { useCommodityData } from "@/hooks/useCommodityData";
 import { useTheme } from "@/hooks/useTheme";
 import CommodityDataService from "@/services/CommodityDataService";
+import FinancialDataService from "@/services/FinancialDataService";
+import { fetchCommoditiesData } from "@/services/commodityApi";
 import { 
   TrendingUp, 
   TrendingDown, 
@@ -48,6 +50,9 @@ const Dashboard = () => {
     CORN: { rate: number; change: number };
     WHEAT: { rate: number; change: number };
     SOYBEAN: { rate: number; change: number };
+    COTTON: { rate: number; change: number };
+    SUGAR: { rate: number; change: number };
+    COFFEE: { rate: number; change: number };
   }>({
     WTI: { rate: 75.50, change: 1.2 },
     BRENT: { rate: 79.80, change: 0.8 },
@@ -57,10 +62,29 @@ const Dashboard = () => {
     NATGAS: { rate: 2.45, change: -1.5 },
     CORN: { rate: 4.85, change: 0.7 },
     WHEAT: { rate: 5.20, change: -0.2 },
-    SOYBEAN: { rate: 12.80, change: 1.1 }
+    SOYBEAN: { rate: 12.80, change: 1.1 },
+    COTTON: { rate: 0.85, change: 0.4 },
+    SUGAR: { rate: 0.18, change: -0.3 },
+    COFFEE: { rate: 1.45, change: 0.6 }
   });
 
+  const [previousRates, setPreviousRates] = useState<{
+    WTI: number;
+    BRENT: number;
+    GOLD: number;
+    SILVER: number;
+    COPPER: number;
+    NATGAS: number;
+    CORN: number;
+    WHEAT: number;
+    SOYBEAN: number;
+    COTTON: number;
+    SUGAR: number;
+    COFFEE: number;
+  } | null>(null);
+
   const commodityDataService = new CommodityDataService();
+  const financialDataService = new FinancialDataService();
 
 
   // Function to get theme-adaptive text colors using CSS classes
@@ -94,76 +118,91 @@ const Dashboard = () => {
     return colorMap[baseColor as keyof typeof colorMap] || colorMap.blue;
   };
 
-  // Function to load market overview data from Forex Market
+  // Function to load market overview data from Commodity Market API
   const loadMarketOverviewData = async () => {
     try {
-      const exchangeData = await exchangeRateService.getExchangeRates('USD');
+      // Fetch real commodity data from API
+      const [metalsData, energyData, agriculturalData] = await Promise.all([
+        fetchCommoditiesData('metals'),
+        fetchCommoditiesData('energy'),
+        fetchCommoditiesData('agricultural')
+      ]);
+
+      // Combine all commodity data
+      const allCommodities = [...metalsData, ...energyData, ...agriculturalData];
       
-      // Get current rates - CORRECTION: Invert EUR, GBP, AUD, NZD rates since API returns USD-based rates
+      // Create a map of commodity data by symbol/name
+      const commodityMap = new Map();
+      allCommodities.forEach(commodity => {
+        const key = commodity.symbol || commodity.name;
+        commodityMap.set(key, commodity);
+      });
+
+      // Extract specific commodities we want to display
       const currentRates = {
-        EUR_USD: 1 / exchangeData.rates.EUR, // Invert: 1/EUR_rate = EUR/USD
-        GBP_USD: 1 / exchangeData.rates.GBP, // Invert: 1/GBP_rate = GBP/USD
-        USD_JPY: exchangeData.rates.JPY, // Direct: USD/JPY
-        USD_CHF: exchangeData.rates.CHF, // Direct: USD/CHF
-        USD_CAD: exchangeData.rates.CAD, // Direct: USD/CAD
-        AUD_USD: 1 / exchangeData.rates.AUD, // Invert: 1/AUD_rate = AUD/USD
-        NZD_USD: 1 / exchangeData.rates.NZD, // Invert: 1/NZD_rate = NZD/USD
-        USD_CNY: exchangeData.rates.CNY, // Direct: USD/CNY
-        USD_INR: exchangeData.rates.INR, // Direct: USD/INR
-        USD_BRL: exchangeData.rates.BRL, // Direct: USD/BRL
-        USD_MXN: exchangeData.rates.MXN, // Direct: USD/MXN
-        USD_TRY: exchangeData.rates.TRY  // Direct: USD/TRY
+        WTI: commodityMap.get('WTI')?.price || commodityMap.get('Crude Oil WTI')?.price || 75.50,
+        BRENT: commodityMap.get('BRENT')?.price || commodityMap.get('Crude Oil Brent')?.price || 79.80,
+        GOLD: commodityMap.get('GOLD')?.price || commodityMap.get('Gold')?.price || 1980.50,
+        SILVER: commodityMap.get('SILVER')?.price || commodityMap.get('Silver')?.price || 24.30,
+        COPPER: commodityMap.get('COPPER')?.price || commodityMap.get('Copper')?.price || 3.85,
+        NATGAS: commodityMap.get('NATGAS')?.price || commodityMap.get('Natural Gas')?.price || 2.45,
+        CORN: commodityMap.get('CORN')?.price || commodityMap.get('Corn')?.price || 4.85,
+        WHEAT: commodityMap.get('WHEAT')?.price || commodityMap.get('Wheat')?.price || 5.20,
+        SOYBEAN: commodityMap.get('SOYBEAN')?.price || commodityMap.get('Soybean')?.price || 12.80,
+        COTTON: commodityMap.get('COTTON')?.price || commodityMap.get('Cotton')?.price || 0.85,
+        SUGAR: commodityMap.get('SUGAR')?.price || commodityMap.get('Sugar')?.price || 0.18,
+        COFFEE: commodityMap.get('COFFEE')?.price || commodityMap.get('Coffee')?.price || 1.45
       };
       
       // Calculate changes based on previous rates (only if we have previous data)
       const newMarketData = {
-        EUR_USD: { 
-          rate: currentRates.EUR_USD, 
-          change: previousRates ? calculateChange(currentRates.EUR_USD, previousRates.EUR_USD) : 0
+        WTI: { 
+          rate: currentRates.WTI, 
+          change: previousRates ? calculateChange(currentRates.WTI, previousRates.WTI) : 0
         },
-        GBP_USD: { 
-          rate: currentRates.GBP_USD, 
-          change: previousRates ? calculateChange(currentRates.GBP_USD, previousRates.GBP_USD) : 0
+        BRENT: { 
+          rate: currentRates.BRENT, 
+          change: previousRates ? calculateChange(currentRates.BRENT, previousRates.BRENT) : 0
         },
-        USD_JPY: { 
-          rate: currentRates.USD_JPY, 
-          change: previousRates ? calculateChange(currentRates.USD_JPY, previousRates.USD_JPY) : 0
+        GOLD: { 
+          rate: currentRates.GOLD, 
+          change: previousRates ? calculateChange(currentRates.GOLD, previousRates.GOLD) : 0
         },
-        USD_CHF: { 
-          rate: currentRates.USD_CHF, 
-          change: previousRates ? calculateChange(currentRates.USD_CHF, previousRates.USD_CHF) : 0
+        SILVER: { 
+          rate: currentRates.SILVER, 
+          change: previousRates ? calculateChange(currentRates.SILVER, previousRates.SILVER) : 0
         },
-        USD_CAD: { 
-          rate: currentRates.USD_CAD, 
-          change: previousRates ? calculateChange(currentRates.USD_CAD, previousRates.USD_CAD) : 0
+        COPPER: { 
+          rate: currentRates.COPPER, 
+          change: previousRates ? calculateChange(currentRates.COPPER, previousRates.COPPER) : 0
         },
-        AUD_USD: { 
-          rate: currentRates.AUD_USD, 
-          change: previousRates ? calculateChange(currentRates.AUD_USD, previousRates.AUD_USD) : 0
+        NATGAS: { 
+          rate: currentRates.NATGAS, 
+          change: previousRates ? calculateChange(currentRates.NATGAS, previousRates.NATGAS) : 0
         },
-        NZD_USD: { 
-          rate: currentRates.NZD_USD, 
-          change: previousRates ? calculateChange(currentRates.NZD_USD, previousRates.NZD_USD) : 0
+        CORN: { 
+          rate: currentRates.CORN, 
+          change: previousRates ? calculateChange(currentRates.CORN, previousRates.CORN) : 0
         },
-        USD_CNY: { 
-          rate: currentRates.USD_CNY, 
-          change: previousRates ? calculateChange(currentRates.USD_CNY, previousRates.USD_CNY) : 0
+        WHEAT: { 
+          rate: currentRates.WHEAT, 
+          change: previousRates ? calculateChange(currentRates.WHEAT, previousRates.WHEAT) : 0
         },
-        USD_INR: { 
-          rate: currentRates.USD_INR, 
-          change: previousRates ? calculateChange(currentRates.USD_INR, previousRates.USD_INR) : 0
+        SOYBEAN: { 
+          rate: currentRates.SOYBEAN, 
+          change: previousRates ? calculateChange(currentRates.SOYBEAN, previousRates.SOYBEAN) : 0
         },
-        USD_BRL: { 
-          rate: currentRates.USD_BRL, 
-          change: previousRates ? calculateChange(currentRates.USD_BRL, previousRates.USD_BRL) : 0
+        COTTON: { 
+          rate: currentRates.COTTON, 
+          change: previousRates ? calculateChange(currentRates.COTTON, previousRates.COTTON) : 0
         },
-        USD_MXN: { 
-          rate: currentRates.USD_MXN, 
-          change: previousRates ? calculateChange(currentRates.USD_MXN, previousRates.USD_MXN) : 0
+        SUGAR: { 
+          rate: currentRates.SUGAR, 
+          change: previousRates ? calculateChange(currentRates.SUGAR, previousRates.SUGAR) : 0
         },
-        USD_TRY: { 
-          rate: currentRates.USD_TRY, 
-          change: previousRates ? calculateChange(currentRates.USD_TRY, previousRates.USD_TRY) : 0
+        COFFEE: { 
+          rate: currentRates.COFFEE, 
+          change: previousRates ? calculateChange(currentRates.COFFEE, previousRates.COFFEE) : 0
         }
       };
       
@@ -171,7 +210,7 @@ const Dashboard = () => {
       setMarketOverviewData(newMarketData);
       setPreviousRates(currentRates);
     } catch (error) {
-      console.error('Error loading market overview data:', error);
+      console.error('Error loading commodity market data:', error);
     }
   };
 
@@ -197,7 +236,7 @@ const Dashboard = () => {
     
     // Check volatility alerts
     Object.entries(marketData.volatilities).forEach(([pair, vol]) => {
-      if (vol > 0.15) { // 15% volatility threshold
+      if (typeof vol === 'number' && vol > 0.15) { // 15% volatility threshold
         alerts.push({
           type: "high",
           message: `${pair} volatility above ${(vol * 100).toFixed(1)}%`,
@@ -207,7 +246,7 @@ const Dashboard = () => {
     });
 
     // Check hedge ratio alerts
-    currencyExposures.forEach(exp => {
+    commodityExposures.forEach(exp => {
       if (exp.hedgeRatio < 60 && exp.grossExposure > 1000000) {
         alerts.push({
           type: "medium",
@@ -261,38 +300,62 @@ const Dashboard = () => {
         { label: "Dashboard" }
       ]}
     >
-      {/* Real-time Controls */}
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-4">
-          <div className="text-sm text-muted-foreground">
-            Last updated: {lastUpdate.toLocaleTimeString()}
-          </div>
-          <div className={`flex items-center gap-2 text-sm ${isLiveMode ? 'text-green-600' : 'text-gray-600'}`}>
-            {isLiveMode ? <Play className="h-4 w-4" /> : <Pause className="h-4 w-4" />}
-            {isLiveMode ? 'Live Mode' : 'Static Mode'}
+      <div className="space-y-6 p-6">
+        {/* Header */}
+        <div className="relative overflow-hidden">
+          <div className="absolute inset-0 bg-gradient-to-r from-blue-900/5 via-indigo-900/5 to-purple-900/5 rounded-2xl" />
+          
+          <div className="relative bg-white/80 backdrop-blur-sm border border-white/20 rounded-2xl p-8 shadow-xl">
+            <div className="flex flex-col lg:flex-row lg:justify-between lg:items-start gap-6">
+              <div className="space-y-3">
+                <div className="flex items-center gap-3">
+                  <div className="p-3 bg-gradient-to-br from-blue-900 to-indigo-700 rounded-xl text-white shadow-lg">
+                    <BarChart3 className="h-6 w-6" />
+                  </div>
+                  <div>
+                    <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-900 to-indigo-600 bg-clip-text text-transparent">
+                      Risk Management Dashboard
+                    </h1>
+                    <p className="text-slate-600 font-medium">
+                      Real-time risk monitoring and commodity market analysis
+                    </p>
+                  </div>
+                </div>
+                
+                <div className="flex items-center gap-4">
+                  <div className="px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-700 border border-blue-200">
+                    Last Updated: {lastUpdate.toLocaleTimeString()}
+                  </div>
+                  <div className={`flex items-center gap-2 text-sm ${isLiveMode ? 'text-green-600' : 'text-gray-600'}`}>
+                    {isLiveMode ? <Play className="h-4 w-4" /> : <Pause className="h-4 w-4" />}
+                    {isLiveMode ? 'Live Mode' : 'Static Mode'}
+                  </div>
+                </div>
+              </div>
+              
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={updateMarketData}
+                  className="flex items-center gap-2"
+                >
+                  <RefreshCw className="h-4 w-4" />
+                  Refresh Data
+                </Button>
+                <Button
+                  variant={isLiveMode ? "destructive" : "default"}
+                  size="sm"
+                  onClick={() => setLiveMode(!isLiveMode)}
+                  className="flex items-center gap-2"
+                >
+                  {isLiveMode ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+                  {isLiveMode ? 'Stop Live' : 'Start Live'}
+                </Button>
+              </div>
+            </div>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={updateMarketData}
-            className="flex items-center gap-2"
-          >
-            <RefreshCw className="h-4 w-4" />
-            Refresh Data
-          </Button>
-          <Button
-            variant={isLiveMode ? "destructive" : "default"}
-            size="sm"
-            onClick={() => setLiveMode(!isLiveMode)}
-            className="flex items-center gap-2"
-          >
-            {isLiveMode ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
-            {isLiveMode ? 'Stop Live' : 'Start Live'}
-          </Button>
-        </div>
-      </div>
       {/* Key Metrics Cards */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card>
@@ -375,7 +438,7 @@ const Dashboard = () => {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            {currencyExposures.map((item) => (
+            {commodityExposures.map((item) => (
               <div key={item.currency} className="space-y-2">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
@@ -504,7 +567,7 @@ const Dashboard = () => {
                 Market Overview
               </CardTitle>
               <CardDescription className="text-slate-600 dark:text-slate-300 bloomberg-theme:text-orange-200">
-                Real-time FX rates and market movements
+                Real-time commodity prices and market movements
               </CardDescription>
             </div>
             <Button
@@ -522,16 +585,16 @@ const Dashboard = () => {
         <CardContent className="relative z-10">
           {marketOverviewData ? (
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4">
-              {/* Major Pairs */}
+              {/* Energy Commodities */}
               <div className={`group relative p-4 rounded-xl bg-gradient-to-br ${getCurrencyCardClasses('blue')} transition-all duration-300 hover:shadow-lg`}>
                 <div className="absolute inset-0 bg-gradient-to-br from-blue-500/10 to-transparent rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
                 <div className="relative">
                   <div className={`text-lg font-mono font-bold ${textColors.rate} transition-colors`}>
-                    {marketOverviewData.EUR_USD.rate.toFixed(4)}
+                    ${marketOverviewData.WTI.rate.toFixed(2)}
                   </div>
-                  <div className={`text-sm ${textColors.pair} font-medium`}>EUR/USD</div>
-                  <div className={`text-xs font-semibold ${marketOverviewData.EUR_USD.change >= 0 ? textColors.change : 'text-red-400'}`}>
-                    {marketOverviewData.EUR_USD.change >= 0 ? '↗' : '↘'} {marketOverviewData.EUR_USD.change >= 0 ? '+' : ''}{marketOverviewData.EUR_USD.change.toFixed(2)}%
+                  <div className={`text-sm ${textColors.pair} font-medium`}>WTI Crude</div>
+                  <div className={`text-xs font-semibold ${marketOverviewData.WTI.change >= 0 ? textColors.change : 'text-red-400'}`}>
+                    {marketOverviewData.WTI.change >= 0 ? '↗' : '↘'} {marketOverviewData.WTI.change >= 0 ? '+' : ''}{marketOverviewData.WTI.change.toFixed(2)}%
                   </div>
                 </div>
               </div>
@@ -540,11 +603,11 @@ const Dashboard = () => {
                 <div className="absolute inset-0 bg-gradient-to-br from-purple-500/10 to-transparent rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
                 <div className="relative">
                   <div className="text-lg font-mono font-bold text-purple-300 group-hover:text-purple-200 transition-colors">
-                    {marketOverviewData.GBP_USD.rate.toFixed(4)}
+                    ${marketOverviewData.BRENT.rate.toFixed(2)}
                   </div>
-                  <div className="text-sm text-purple-400/80 font-medium">GBP/USD</div>
-                  <div className={`text-xs font-semibold ${marketOverviewData.GBP_USD.change >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                    {marketOverviewData.GBP_USD.change >= 0 ? '↗' : '↘'} {marketOverviewData.GBP_USD.change >= 0 ? '+' : ''}{marketOverviewData.GBP_USD.change.toFixed(2)}%
+                  <div className="text-sm text-purple-400/80 font-medium">Brent Crude</div>
+                  <div className={`text-xs font-semibold ${marketOverviewData.BRENT.change >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                    {marketOverviewData.BRENT.change >= 0 ? '↗' : '↘'} {marketOverviewData.BRENT.change >= 0 ? '+' : ''}{marketOverviewData.BRENT.change.toFixed(2)}%
                   </div>
                 </div>
               </div>
@@ -553,11 +616,11 @@ const Dashboard = () => {
                 <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/10 to-transparent rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
                 <div className="relative">
                   <div className="text-lg font-mono font-bold text-cyan-300 group-hover:text-cyan-200 transition-colors">
-                    {marketOverviewData.USD_JPY.rate.toFixed(2)}
+                    ${marketOverviewData.GOLD.rate.toFixed(2)}
                   </div>
-                  <div className="text-sm text-cyan-400/80 font-medium">USD/JPY</div>
-                  <div className={`text-xs font-semibold ${marketOverviewData.USD_JPY.change >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                    {marketOverviewData.USD_JPY.change >= 0 ? '↗' : '↘'} {marketOverviewData.USD_JPY.change >= 0 ? '+' : ''}{marketOverviewData.USD_JPY.change.toFixed(2)}%
+                  <div className="text-sm text-cyan-400/80 font-medium">Gold</div>
+                  <div className={`text-xs font-semibold ${marketOverviewData.GOLD.change >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                    {marketOverviewData.GOLD.change >= 0 ? '↗' : '↘'} {marketOverviewData.GOLD.change >= 0 ? '+' : ''}{marketOverviewData.GOLD.change.toFixed(2)}%
                   </div>
                 </div>
               </div>
@@ -566,11 +629,11 @@ const Dashboard = () => {
                 <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/10 to-transparent rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
                 <div className="relative">
                   <div className="text-lg font-mono font-bold text-emerald-300 group-hover:text-emerald-200 transition-colors">
-                    {marketOverviewData.USD_CHF.rate.toFixed(4)}
+                    ${marketOverviewData.SILVER.rate.toFixed(2)}
                   </div>
-                  <div className="text-sm text-emerald-400/80 font-medium">USD/CHF</div>
-                  <div className={`text-xs font-semibold ${marketOverviewData.USD_CHF.change >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                    {marketOverviewData.USD_CHF.change >= 0 ? '↗' : '↘'} {marketOverviewData.USD_CHF.change >= 0 ? '+' : ''}{marketOverviewData.USD_CHF.change.toFixed(2)}%
+                  <div className="text-sm text-emerald-400/80 font-medium">Silver</div>
+                  <div className={`text-xs font-semibold ${marketOverviewData.SILVER.change >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                    {marketOverviewData.SILVER.change >= 0 ? '↗' : '↘'} {marketOverviewData.SILVER.change >= 0 ? '+' : ''}{marketOverviewData.SILVER.change.toFixed(2)}%
                   </div>
                 </div>
               </div>
@@ -579,11 +642,11 @@ const Dashboard = () => {
                 <div className="absolute inset-0 bg-gradient-to-br from-orange-500/10 to-transparent rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
                 <div className="relative">
                   <div className="text-lg font-mono font-bold text-orange-300 group-hover:text-orange-200 transition-colors">
-                    {marketOverviewData.USD_CAD.rate.toFixed(4)}
+                    ${marketOverviewData.COPPER.rate.toFixed(2)}
                   </div>
-                  <div className="text-sm text-orange-400/80 font-medium">USD/CAD</div>
-                  <div className={`text-xs font-semibold ${marketOverviewData.USD_CAD.change >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                    {marketOverviewData.USD_CAD.change >= 0 ? '↗' : '↘'} {marketOverviewData.USD_CAD.change >= 0 ? '+' : ''}{marketOverviewData.USD_CAD.change.toFixed(2)}%
+                  <div className="text-sm text-orange-400/80 font-medium">Copper</div>
+                  <div className={`text-xs font-semibold ${marketOverviewData.COPPER.change >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                    {marketOverviewData.COPPER.change >= 0 ? '↗' : '↘'} {marketOverviewData.COPPER.change >= 0 ? '+' : ''}{marketOverviewData.COPPER.change.toFixed(2)}%
                   </div>
                 </div>
               </div>
@@ -592,11 +655,11 @@ const Dashboard = () => {
                 <div className="absolute inset-0 bg-gradient-to-br from-rose-500/10 to-transparent rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
                 <div className="relative">
                   <div className="text-lg font-mono font-bold text-rose-300 group-hover:text-rose-200 transition-colors">
-                    {marketOverviewData.AUD_USD.rate.toFixed(4)}
+                    ${marketOverviewData.NATGAS.rate.toFixed(2)}
                   </div>
-                  <div className="text-sm text-rose-400/80 font-medium">AUD/USD</div>
-                  <div className={`text-xs font-semibold ${marketOverviewData.AUD_USD.change >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                    {marketOverviewData.AUD_USD.change >= 0 ? '↗' : '↘'} {marketOverviewData.AUD_USD.change >= 0 ? '+' : ''}{marketOverviewData.AUD_USD.change.toFixed(2)}%
+                  <div className="text-sm text-rose-400/80 font-medium">Natural Gas</div>
+                  <div className={`text-xs font-semibold ${marketOverviewData.NATGAS.change >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                    {marketOverviewData.NATGAS.change >= 0 ? '↗' : '↘'} {marketOverviewData.NATGAS.change >= 0 ? '+' : ''}{marketOverviewData.NATGAS.change.toFixed(2)}%
                   </div>
                 </div>
               </div>
@@ -605,24 +668,24 @@ const Dashboard = () => {
                 <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/10 to-transparent rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
                 <div className="relative">
                   <div className="text-lg font-mono font-bold text-indigo-300 group-hover:text-indigo-200 transition-colors">
-                    {marketOverviewData.NZD_USD.rate.toFixed(4)}
+                    ${marketOverviewData.CORN.rate.toFixed(2)}
                   </div>
-                  <div className="text-sm text-indigo-400/80 font-medium">NZD/USD</div>
-                  <div className={`text-xs font-semibold ${marketOverviewData.NZD_USD.change >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                    {marketOverviewData.NZD_USD.change >= 0 ? '↗' : '↘'} {marketOverviewData.NZD_USD.change >= 0 ? '+' : ''}{marketOverviewData.NZD_USD.change.toFixed(2)}%
-              </div>
-            </div>
+                  <div className="text-sm text-indigo-400/80 font-medium">Corn</div>
+                  <div className={`text-xs font-semibold ${marketOverviewData.CORN.change >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                    {marketOverviewData.CORN.change >= 0 ? '↗' : '↘'} {marketOverviewData.CORN.change >= 0 ? '+' : ''}{marketOverviewData.CORN.change.toFixed(2)}%
+                  </div>
+                </div>
               </div>
 
               <div className={`group relative p-4 rounded-xl bg-gradient-to-br ${getCurrencyCardClasses('yellow')} transition-all duration-300 hover:shadow-lg`}>
                 <div className="absolute inset-0 bg-gradient-to-br from-yellow-500/10 to-transparent rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
                 <div className="relative">
                   <div className="text-lg font-mono font-bold text-yellow-300 group-hover:text-yellow-200 transition-colors">
-                    {marketOverviewData.USD_CNY.rate.toFixed(4)}
+                    ${marketOverviewData.WHEAT.rate.toFixed(2)}
                   </div>
-                  <div className="text-sm text-yellow-400/80 font-medium">USD/CNY</div>
-                  <div className={`text-xs font-semibold ${marketOverviewData.USD_CNY.change >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                    {marketOverviewData.USD_CNY.change >= 0 ? '↗' : '↘'} {marketOverviewData.USD_CNY.change >= 0 ? '+' : ''}{marketOverviewData.USD_CNY.change.toFixed(2)}%
+                  <div className="text-sm text-yellow-400/80 font-medium">Wheat</div>
+                  <div className={`text-xs font-semibold ${marketOverviewData.WHEAT.change >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                    {marketOverviewData.WHEAT.change >= 0 ? '↗' : '↘'} {marketOverviewData.WHEAT.change >= 0 ? '+' : ''}{marketOverviewData.WHEAT.change.toFixed(2)}%
                   </div>
                 </div>
               </div>
@@ -631,24 +694,24 @@ const Dashboard = () => {
                 <div className="absolute inset-0 bg-gradient-to-br from-teal-500/10 to-transparent rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
                 <div className="relative">
                   <div className="text-lg font-mono font-bold text-teal-300 group-hover:text-teal-200 transition-colors">
-                    {marketOverviewData.USD_INR.rate.toFixed(2)}
+                    ${marketOverviewData.SOYBEAN.rate.toFixed(2)}
                   </div>
-                  <div className="text-sm text-teal-400/80 font-medium">USD/INR</div>
-                  <div className={`text-xs font-semibold ${marketOverviewData.USD_INR.change >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                    {marketOverviewData.USD_INR.change >= 0 ? '↗' : '↘'} {marketOverviewData.USD_INR.change >= 0 ? '+' : ''}{marketOverviewData.USD_INR.change.toFixed(2)}%
-              </div>
-            </div>
+                  <div className="text-sm text-teal-400/80 font-medium">Soybean</div>
+                  <div className={`text-xs font-semibold ${marketOverviewData.SOYBEAN.change >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                    {marketOverviewData.SOYBEAN.change >= 0 ? '↗' : '↘'} {marketOverviewData.SOYBEAN.change >= 0 ? '+' : ''}{marketOverviewData.SOYBEAN.change.toFixed(2)}%
+                  </div>
+                </div>
               </div>
 
               <div className={`group relative p-4 rounded-xl bg-gradient-to-br ${getCurrencyCardClasses('pink')} transition-all duration-300 hover:shadow-lg`}>
                 <div className="absolute inset-0 bg-gradient-to-br from-pink-500/10 to-transparent rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
                 <div className="relative">
                   <div className="text-lg font-mono font-bold text-pink-300 group-hover:text-pink-200 transition-colors">
-                    {marketOverviewData.USD_BRL.rate.toFixed(4)}
+                    ${marketOverviewData.COTTON.rate.toFixed(2)}
                   </div>
-                  <div className="text-sm text-pink-400/80 font-medium">USD/BRL</div>
-                  <div className={`text-xs font-semibold ${marketOverviewData.USD_BRL.change >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                    {marketOverviewData.USD_BRL.change >= 0 ? '↗' : '↘'} {marketOverviewData.USD_BRL.change >= 0 ? '+' : ''}{marketOverviewData.USD_BRL.change.toFixed(2)}%
+                  <div className="text-sm text-pink-400/80 font-medium">Cotton</div>
+                  <div className={`text-xs font-semibold ${marketOverviewData.COTTON.change >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                    {marketOverviewData.COTTON.change >= 0 ? '↗' : '↘'} {marketOverviewData.COTTON.change >= 0 ? '+' : ''}{marketOverviewData.COTTON.change.toFixed(2)}%
                   </div>
                 </div>
               </div>
@@ -657,24 +720,24 @@ const Dashboard = () => {
                 <div className="absolute inset-0 bg-gradient-to-br from-violet-500/10 to-transparent rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
                 <div className="relative">
                   <div className="text-lg font-mono font-bold text-violet-300 group-hover:text-violet-200 transition-colors">
-                    {marketOverviewData.USD_MXN.rate.toFixed(4)}
+                    ${marketOverviewData.SUGAR.rate.toFixed(2)}
                   </div>
-                  <div className="text-sm text-violet-400/80 font-medium">USD/MXN</div>
-                  <div className={`text-xs font-semibold ${marketOverviewData.USD_MXN.change >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                    {marketOverviewData.USD_MXN.change >= 0 ? '↗' : '↘'} {marketOverviewData.USD_MXN.change >= 0 ? '+' : ''}{marketOverviewData.USD_MXN.change.toFixed(2)}%
-              </div>
-            </div>
+                  <div className="text-sm text-violet-400/80 font-medium">Sugar</div>
+                  <div className={`text-xs font-semibold ${marketOverviewData.SUGAR.change >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                    {marketOverviewData.SUGAR.change >= 0 ? '↗' : '↘'} {marketOverviewData.SUGAR.change >= 0 ? '+' : ''}{marketOverviewData.SUGAR.change.toFixed(2)}%
+                  </div>
+                </div>
               </div>
 
               <div className={`group relative p-4 rounded-xl bg-gradient-to-br ${getCurrencyCardClasses('amber')} transition-all duration-300 hover:shadow-lg`}>
                 <div className="absolute inset-0 bg-gradient-to-br from-amber-500/10 to-transparent rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
                 <div className="relative">
                   <div className="text-lg font-mono font-bold text-amber-300 group-hover:text-amber-200 transition-colors">
-                    {marketOverviewData.USD_TRY.rate.toFixed(4)}
+                    ${marketOverviewData.COFFEE.rate.toFixed(2)}
                   </div>
-                  <div className="text-sm text-amber-400/80 font-medium">USD/TRY</div>
-                  <div className={`text-xs font-semibold ${marketOverviewData.USD_TRY.change >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                    {marketOverviewData.USD_TRY.change >= 0 ? '↗' : '↘'} {marketOverviewData.USD_TRY.change >= 0 ? '+' : ''}{marketOverviewData.USD_TRY.change.toFixed(2)}%
+                  <div className="text-sm text-amber-400/80 font-medium">Coffee</div>
+                  <div className={`text-xs font-semibold ${marketOverviewData.COFFEE.change >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                    {marketOverviewData.COFFEE.change >= 0 ? '↗' : '↘'} {marketOverviewData.COFFEE.change >= 0 ? '+' : ''}{marketOverviewData.COFFEE.change.toFixed(2)}%
                   </div>
                 </div>
               </div>
@@ -684,8 +747,8 @@ const Dashboard = () => {
               <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gradient-to-r from-blue-500/30 to-purple-500/30 border-blue-500/40 dark:from-blue-500/20 dark:to-purple-500/20 dark:border-blue-500/30 bloomberg-theme:from-orange-500/25 bloomberg-theme:to-yellow-500/25 bloomberg-theme:border-orange-500/40 mb-4">
                 <Activity className="h-8 w-8 text-blue-400 animate-pulse" />
               </div>
-              <div className="text-slate-600 dark:text-slate-300 bloomberg-theme:text-orange-200 text-lg font-medium mb-2">Loading Market Data</div>
-              <div className="text-slate-500 dark:text-slate-400 bloomberg-theme:text-orange-300 text-sm mb-4">Fetching real-time FX rates...</div>
+              <div className="text-slate-600 dark:text-slate-300 bloomberg-theme:text-orange-200 text-lg font-medium mb-2">Loading Commodity Data</div>
+              <div className="text-slate-500 dark:text-slate-400 bloomberg-theme:text-orange-300 text-sm mb-4">Fetching real-time commodity prices...</div>
               <Button
                 variant="outline"
                 size="sm"
@@ -699,6 +762,7 @@ const Dashboard = () => {
           )}
         </CardContent>
       </Card>
+      </div>
     </Layout>
   );
 };
