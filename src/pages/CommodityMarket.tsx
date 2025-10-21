@@ -1,484 +1,489 @@
-import React, { useState, useEffect } from 'react';
-import { parse } from 'node-html-parser';
-import { Layout } from '@/components/Layout';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Search, RefreshCw, ChevronUp, ChevronDown, TrendingUp, TrendingDown, Minus, Layers } from 'lucide-react';
+import { useEffect, useState, useMemo } from "react";
+import { Commodity, fetchCommoditiesData, refreshCommoditiesData, CommodityCategory } from "@/services/commodityApi";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
+import { AlertCircle, RefreshCw, TrendingUp, TrendingDown, BarChart3, Factory, Wheat, Zap } from "lucide-react";
+import { toast } from "sonner";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 
-type CommodityCategory = 'metals' | 'agricultural' | 'energy' | 'freight' | 'bunker';
-
-interface ScrapingResult { data: string }
-
-interface CommodityData {
-  symbol: string;
-  name: string;
-  price: number;
-  category: CommodityCategory;
-  change: number;
-  changePercent: number;
-}
-
-const API_BASE = import.meta.env.DEV ? 'http://localhost:3000' : '';
-
-async function scrapeTradingViewCategory(category: string): Promise<ScrapingResult> {
-  const response = await fetch(`${API_BASE}/api/tradingview/${category}`, { method: 'GET' } as any);
-  if (!response.ok) throw new Error('Failed to scrape TradingView category');
-  return response.json();
-}
-
-async function scrapeTradingViewSymbol(symbol: string): Promise<ScrapingResult> {
-  const response = await fetch(`${API_BASE}/api/tradingview/symbol/${symbol}`, { method: 'GET' } as any);
-  if (!response.ok) throw new Error('Failed to scrape TradingView symbol');
-  return response.json();
-}
-
-async function scrapeShipAndBunker(type?: string): Promise<ScrapingResult> {
-  const url = type ? `${API_BASE}/api/shipandbunker?type=${encodeURIComponent(type)}` : `${API_BASE}/api/shipandbunker`;
-  const response = await fetch(url, { method: 'GET' } as any);
-  if (!response.ok) throw new Error('Failed to scrape Ship & Bunker');
-  return response.json();
-}
-
-async function scrapeShipAndBunkerEMEA(): Promise<ScrapingResult> {
-  const response = await fetch(`${API_BASE}/api/shipandbunker/emea`, { method: 'GET' } as any);
-  if (!response.ok) throw new Error('Failed to scrape Ship & Bunker EMEA');
-  return response.json();
-}
-
-function parseNumberWithSeparators(text: string): number {
-  if (!text) return 0;
-  let t = text.replace(/[^\d.,\-+]/g, '');
-  if (t.includes(',') && t.includes('.')) {
-    const lastDot = t.lastIndexOf('.');
-    const lastComma = t.lastIndexOf(',');
-    t = lastDot > lastComma ? t.replace(/,/g, '') : t.replace(/\./g, '').replace(/,([^,]*)$/, '.$1');
-  } else if (t.includes(',') && !t.includes('.')) {
-    const parts = t.split(',');
-    if (parts.length === 2 && parts[1].length <= 4) {
-      t = t.replace(',', '.');
-    } else {
-      t = t.replace(/,/g, '');
-    }
-  }
-  return parseFloat(t) || 0;
-}
-
-function parseCommoditiesTableHTML(html: string, category: CommodityCategory): CommodityData[] {
-  const root = parse(html);
-  let rows = root.querySelectorAll('.tv-data-table__row');
-  if (!rows || rows.length === 0) rows = root.querySelectorAll('tr[data-rowid]');
-  if (!rows || rows.length === 0) rows = root.querySelectorAll('table tr');
-  const commodities: CommodityData[] = [];
-  rows.forEach((row: any) => {
-    const cells = row.querySelectorAll('td');
-    if (!cells || cells.length < 6) return;
-    const first = cells[0];
-    let symbol = '';
-    let name = '';
-    const symbolEl = first.querySelector('.symbol-name');
-    if (symbolEl) {
-      symbol = symbolEl.text.trim();
-      name = symbolEl.getAttribute('title') || symbol;
-    } else {
-      const parts = (first.text || '').trim().split(/\s+/);
-      symbol = parts[0] || '';
-      name = parts.slice(1).join(' ') || symbol;
-    }
-    if (!symbol) return;
-    const price = parseNumberWithSeparators((cells[1]?.text || '').trim());
-    const percentCell = cells[2];
-    let pct = parseNumberWithSeparators((percentCell?.text || '').trim());
-    const negClass = percentCell?.toString().includes('negative') || percentCell?.toString().includes('down') || percentCell?.toString().includes('red');
-    if (negClass && pct > 0) pct = -pct;
-    const absCell = cells[3];
-    let abs = parseNumberWithSeparators((absCell?.text || '').trim());
-    const absNegClass = absCell?.toString().includes('negative') || absCell?.toString().includes('down') || absCell?.toString().includes('red');
-    if (absNegClass && abs > 0) abs = -abs;
-    commodities.push({ symbol, name, price, category, change: abs, changePercent: pct });
+export default function CommodityMarket() {
+  // État pour stocker les commodités par catégorie
+  const [metalsCommodities, setMetalsCommodities] = useState<Commodity[]>([]);
+  const [agriculturalCommodities, setAgriculturalCommodities] = useState<Commodity[]>([]);
+  const [energyCommodities, setEnergyCommodities] = useState<Commodity[]>([]);
+  
+  // État pour le chargement et les erreurs par catégorie
+  const [loading, setLoading] = useState({
+    metals: true,
+    agricultural: true,
+    energy: true,
   });
-  return commodities.filter(c => c.price > 0);
-}
+  const [error, setError] = useState<{[key in 'metals' | 'agricultural' | 'energy']?: string | null}>({});
+  const [lastUpdated, setLastUpdated] = useState<{[key in 'metals' | 'agricultural' | 'energy']?: Date | null}>({});
 
-async function fetchFreightData(): Promise<CommodityData[]> {
-  const symbols = [
-    { s: 'CS61!', n: 'Container Freight (FBX13)', c: 'freight' as const },
-    { s: 'CS31!', n: 'Container Freight (FBX03)', c: 'freight' as const },
-    { s: 'CS51!', n: 'Container Freight (FBX12)', c: 'freight' as const },
-    { s: 'CS11!', n: 'Container Freight (FBX01)', c: 'freight' as const },
-    { s: 'CS21!', n: 'Container Freight (FBX02)', c: 'freight' as const },
-    { s: 'CS41!', n: 'Container Freight (FBX11)', c: 'freight' as const },
-    { s: 'TM1!', n: 'Freight Route TC2', c: 'freight' as const },
-    { s: 'TD81!', n: 'Freight Route TD8', c: 'freight' as const },
-    { s: 'TC71!', n: 'Freight Route TC7', c: 'freight' as const },
-    { s: 'TC61!', n: 'Freight Route TC6', c: 'freight' as const },
-  ];
-  const batchSize = 5;
-  const out: CommodityData[] = [];
-  for (let i = 0; i < symbols.length; i += batchSize) {
-    const batch = symbols.slice(i, i + batchSize);
-    const results = await Promise.allSettled(batch.map(async (it) => {
-      const data = await scrapeTradingViewSymbol(it.s);
-      const list = parseCommoditiesTableHTML(data.data, 'freight');
-      // Find best match by symbol prefix
-      if (list.length > 0) {
-        const m = list[0];
-        return { symbol: it.s, name: it.n, price: m.price, category: 'freight' as const, change: m.change, changePercent: m.changePercent };
+  // État pour la catégorie active
+  const [activeCategory, setActiveCategory] = useState<'metals' | 'agricultural' | 'energy'>('metals');
+
+  // Charger les données pour une catégorie spécifique
+  const loadCategoryData = async (category: CommodityCategory, forceRefresh: boolean = false) => {
+    setLoading(prev => ({ ...prev, [category]: true }));
+    setError(prev => ({ ...prev, [category]: null }));
+    
+    try {
+      const data = forceRefresh 
+        ? await refreshCommoditiesData(category)
+        : await fetchCommoditiesData(category);
+      
+      // Mettre à jour l'état approprié selon la catégorie
+      if (category === 'metals') {
+        setMetalsCommodities(data);
+      } else if (category === 'agricultural') {
+        setAgriculturalCommodities(data);
+      } else if (category === 'energy') {
+        setEnergyCommodities(data);
       }
-      return null;
-    }));
-    results.forEach(r => { if (r.status === 'fulfilled' && r.value) out.push(r.value); });
-    if (i + batchSize < symbols.length) await new Promise(res => setTimeout(res, 800));
-  }
-  return out;
-}
-
-function parseBunkerFromHTML(html: string): CommodityData[] {
-  const root = parse(html);
-  const rows = root.querySelectorAll('tr');
-  const items: CommodityData[] = [];
-  rows.forEach((row: any) => {
-    const cells = row.querySelectorAll('td, th');
-    if (cells.length < 2) return;
-    const port = (cells[0]?.text || '').trim();
-    const priceCell = (cells[1]?.text || '').trim();
-    const price = parseNumberWithSeparators(priceCell);
-    if (port && price > 100) {
-      items.push({ symbol: `VLSFO_${port.replace(/\s+/g, '_')}`, name: `VLSFO - ${port}`, price, category: 'bunker', change: 0, changePercent: 0 });
+      
+      setLastUpdated(prev => ({ ...prev, [category]: new Date() }));
+      
+      if (data.length === 0) {
+        setError(prev => ({ ...prev, [category]: "No data found" }));
+      }
+    } catch (error) {
+      console.error(`Error loading ${category} data:`, error);
+      setError(prev => ({ ...prev, [category]: `Error loading ${category} data. Please try again later.` }));
+      
+      // Réinitialiser les données en cas d'erreur
+      if (category === 'metals') {
+        setMetalsCommodities([]);
+      } else if (category === 'agricultural') {
+        setAgriculturalCommodities([]);
+      } else if (category === 'energy') {
+        setEnergyCommodities([]);
+      }
+    } finally {
+      setLoading(prev => ({ ...prev, [category]: false }));
     }
-  });
-  return items.slice(0, 20);
-}
+  };
 
-async function fetchBunkerData(): Promise<CommodityData[]> {
-  const gibraltar = await scrapeShipAndBunkerEMEA().catch(() => null);
-  const vlsfo = await scrapeShipAndBunker('vlsfo').catch(() => null);
-  const mgo = await scrapeShipAndBunker('mgo').catch(() => null);
-  const ifo = await scrapeShipAndBunker('ifo380').catch(() => null);
-  const out: CommodityData[] = [];
-  if (gibraltar?.data) out.push(...parseBunkerFromHTML(gibraltar.data));
-  if (vlsfo?.data) out.push(...parseBunkerFromHTML(vlsfo.data));
-  if (mgo?.data) out.push(...parseBunkerFromHTML(mgo.data));
-  if (ifo?.data) out.push(...parseBunkerFromHTML(ifo.data));
-  return out;
-}
+  // Charger toutes les données en parallèle
+  const loadAllData = async (forceRefresh: boolean = false) => {
+    console.log('🚀 Starting parallel data loading...');
+    const startTime = Date.now();
+    
+    await Promise.all([
+      loadCategoryData('metals', forceRefresh),
+      loadCategoryData('agricultural', forceRefresh), 
+      loadCategoryData('energy', forceRefresh),
+    ]);
+    
+    const endTime = Date.now();
+    const loadTime = endTime - startTime;
+    console.log(`✅ All data loaded in ${loadTime}ms (${(loadTime/1000).toFixed(1)}s)`);
+    
+    if (loadTime < 10000) {
+      toast.success(`Data loaded in ${(loadTime/1000).toFixed(1)}s`);
+    }
+  };
 
-const CommodityMarket: React.FC = () => {
-  const [commodities, setCommodities] = useState<CommodityData[]>([]);
-  const [filteredCommodities, setFilteredCommodities] = useState<CommodityData[]>([]);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [loading, setLoading] = useState(true);
-  const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
-  const [sortField, setSortField] = useState<'symbol' | 'name' | 'price' | 'changePercent'>('symbol');
-  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
-  const [activeTab, setActiveTab] = useState<'all' | CommodityCategory>('all');
-
+  // Charger les données initiales
   useEffect(() => {
-    loadCommodityData();
-    const interval = setInterval(loadCommodityData, 60000); // Update every minute
+    loadAllData();
+    
+    // Rafraîchir les données toutes les 5 minutes
+    const interval = setInterval(() => {
+      loadAllData();
+    }, 5 * 60 * 1000);
+    
     return () => clearInterval(interval);
   }, []);
 
-  useEffect(() => {
-    filterAndSortCommodities();
-  }, [commodities, searchTerm, sortField, sortDirection, activeTab]);
-
-  const loadCommodityData = async () => {
-    setLoading(true);
-    try {
-      const [metals, agri, energy] = await Promise.all([
-        scrapeTradingViewCategory('metals').then(r => parseCommoditiesTableHTML(r.data, 'metals')),
-        scrapeTradingViewCategory('agricultural').then(r => parseCommoditiesTableHTML(r.data, 'agricultural')),
-        scrapeTradingViewCategory('energy').then(r => parseCommoditiesTableHTML(r.data, 'energy')),
-      ]);
-      const [freight, bunker] = await Promise.all([
-        fetchFreightData().catch(() => []),
-        fetchBunkerData().catch(() => []),
-      ]);
-      const list = [...metals, ...agri, ...energy, ...freight, ...bunker];
-      setCommodities(list);
-      setLastUpdated(new Date());
-    } catch (error) {
-      console.error('Error loading commodity data:', error);
-      setCommodities([]);
-    } finally {
-      setLoading(false);
+  // Obtenir les commodités actives en fonction de la catégorie sélectionnée
+  const getActiveCommodities = (): Commodity[] => {
+    switch(activeCategory) {
+      case 'metals':
+        return metalsCommodities;
+      case 'agricultural':
+        return agriculturalCommodities;
+      case 'energy':
+        return energyCommodities;
+      default:
+        return metalsCommodities;
     }
   };
 
-  const filterAndSortCommodities = () => {
-    let filtered = [...commodities];
+  const commodities = getActiveCommodities();
+  const isLoading = loading[activeCategory];
+  const currentError = error[activeCategory];
+  const currentLastUpdated = lastUpdated[activeCategory];
 
-    // Filter by search term
-    if (searchTerm) {
-      filtered = filtered.filter(c =>
-        c.symbol.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        c.name.toLowerCase().includes(searchTerm.toLowerCase())
-      );
-    }
+  // Calculate market statistics
+  const marketStats = useMemo(() => {
+    const allCommodities = [...metalsCommodities, ...agriculturalCommodities, ...energyCommodities];
+    const positive = allCommodities.filter(c => c.percentChange > 0).length;
+    const negative = allCommodities.filter(c => c.percentChange < 0).length;
+    const avgChange = allCommodities.length > 0 
+      ? allCommodities.reduce((sum, c) => sum + c.percentChange, 0) / allCommodities.length 
+      : 0;
+    
+    return { total: allCommodities.length, positive, negative, avgChange };
+  }, [metalsCommodities, agriculturalCommodities, energyCommodities]);
 
-    // Filter by category tab
-    if (activeTab !== 'all') {
-      filtered = filtered.filter(c => c.category === activeTab);
-    }
-
-    // Sort
-    filtered.sort((a, b) => {
-      const aVal = a[sortField];
-      const bVal = b[sortField];
-      
-      if (typeof aVal === 'string' && typeof bVal === 'string') {
-        return sortDirection === 'asc' 
-          ? aVal.localeCompare(bVal)
-          : bVal.localeCompare(aVal);
-      }
-      
-      if (typeof aVal === 'number' && typeof bVal === 'number') {
-        return sortDirection === 'asc' ? aVal - bVal : bVal - aVal;
-      }
-      
-      return 0;
-    });
-
-    setFilteredCommodities(filtered);
+  // Render price change badge
+  const PriceChangeBadge = ({ value, isPercent = false }: { value: number, isPercent?: boolean }) => {
+    const isPositive = value >= 0;
+    const Icon = isPositive ? TrendingUp : TrendingDown;
+    
+    return (
+      <span className={`inline-flex items-center gap-1 px-2 py-1 rounded text-sm font-medium ${
+        isPositive ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+      }`}>
+        <Icon className="w-3 h-3" />
+        {isPositive ? '+' : ''}{value.toFixed(2)}{isPercent ? '%' : ''}
+      </span>
+    );
   };
 
-  const handleSort = (field: 'symbol' | 'name' | 'price' | 'changePercent') => {
-    if (sortField === field) {
-      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
-    } else {
-      setSortField(field);
-      setSortDirection('asc');
-    }
-  };
-
-  const getCategoryIcon = (category: string) => {
-    switch (category) {
-      case 'energy': return '⚡';
-      case 'metals': return '🔩';
-      case 'agricultural': return '🌾';
-      case 'freight': return '🚢';
-      case 'bunker': return '⛽';
-      default: return '📦';
-    }
-  };
-
-  const getCategoryLabel = (category: string) => {
-    switch (category) {
-      case 'energy': return 'Energy';
-      case 'metals': return 'Metals';
-      case 'agricultural': return 'Agriculture';
-      case 'freight': return 'Freight';
-      case 'bunker': return 'Bunker';
-      default: return 'Others';
-    }
-  };
-
-  const getCategoryColor = (category: string) => {
-    switch (category) {
-      case 'energy': return 'bg-orange-500';
-      case 'metals': return 'bg-gray-500';
-      case 'agricultural': return 'bg-green-500';
-      case 'freight': return 'bg-sky-600';
-      case 'bunker': return 'bg-purple-600';
-      default: return 'bg-blue-500';
-    }
-  };
-
-  const getTrendIcon = (changePercent: number) => {
-    if (changePercent > 0.1) return <TrendingUp className="h-4 w-4 text-green-500" />;
-    if (changePercent < -0.1) return <TrendingDown className="h-4 w-4 text-red-500" />;
-    return <Minus className="h-4 w-4 text-gray-400" />;
-  };
-
-  const SortIcon = ({ field }: { field: string }) => {
-    if (sortField !== field) return null;
-    return sortDirection === 'asc' 
-      ? <ChevronUp className="inline h-4 w-4" />
-      : <ChevronDown className="inline h-4 w-4" />;
-  };
+  // Loading skeleton
+  const LoadingTable = () => (
+    <div className="space-y-3">
+      {Array.from({ length: 8 }).map((_, i) => (
+        <Skeleton key={i} className="h-12 w-full" />
+      ))}
+    </div>
+  );
 
   return (
-    <Layout>
-      <div className="container mx-auto p-6 space-y-6">
-        <div className="flex justify-between items-center">
-          <div>
-            <h1 className="text-3xl font-bold flex items-center gap-2">
-              <Layers className="h-8 w-8" />
-              Commodity Market Data
-            </h1>
-            <p className="text-muted-foreground mt-1">
-              Real-time commodity prices and market data
-            </p>
-          </div>
-          <Button onClick={loadCommodityData} disabled={loading}>
-            <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-            Refresh
-          </Button>
-        </div>
-
-        <Card>
-          <CardHeader>
-            <div className="flex justify-between items-center">
-              <CardTitle>Market Overview</CardTitle>
-              <span className="text-sm text-muted-foreground">
-                Last updated: {lastUpdated.toLocaleTimeString()}
-              </span>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <Tabs value={activeTab} onValueChange={(v: string) => setActiveTab(v as CommodityCategory | 'all')}>
-              <div className="flex justify-between items-center mb-4">
-                <TabsList>
-                  <TabsTrigger value="all">All ({commodities.length})</TabsTrigger>
-                  <TabsTrigger value="metals">🔩 Metals ({commodities.filter(c => c.category === 'metals').length})</TabsTrigger>
-                  <TabsTrigger value="agricultural">🌾 Agriculture ({commodities.filter(c => c.category === 'agricultural').length})</TabsTrigger>
-                  <TabsTrigger value="energy">⚡ Energy ({commodities.filter(c => c.category === 'energy').length})</TabsTrigger>
-                  <TabsTrigger value="freight">🚢 Freight ({commodities.filter(c => c.category === 'freight').length})</TabsTrigger>
-                  <TabsTrigger value="bunker">⛽ Bunker ({commodities.filter(c => c.category === 'bunker').length})</TabsTrigger>
-                </TabsList>
-
-                <div className="relative w-64">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    type="text"
-                    placeholder="Search commodities..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="pl-10"
-                  />
+    <div className="space-y-6 p-6">
+      {/* Header */}
+      <div className="relative overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-r from-blue-900/5 via-indigo-900/5 to-purple-900/5 rounded-2xl" />
+        
+        <div className="relative bg-white/80 backdrop-blur-sm border border-white/20 rounded-2xl p-8 shadow-xl">
+          <div className="flex flex-col lg:flex-row lg:justify-between lg:items-start gap-6">
+            <div className="space-y-3">
+              <div className="flex items-center gap-3">
+                <div className="p-3 bg-gradient-to-br from-blue-900 to-indigo-700 rounded-xl text-white shadow-lg">
+                  <BarChart3 className="h-6 w-6" />
+                </div>
+                <div>
+                  <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-900 to-indigo-600 bg-clip-text text-transparent">
+                    Commodity Market
+                  </h1>
+                  <p className="text-slate-600 font-medium">
+                    Real-time commodity prices from global markets
+                  </p>
                 </div>
               </div>
-
-              <TabsContent value={activeTab} className="mt-4">
-                <div className="rounded-md border">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="w-12"></TableHead>
-                        <TableHead 
-                          className="cursor-pointer hover:bg-accent"
-                          onClick={() => handleSort('symbol')}
-                        >
-                          Symbol <SortIcon field="symbol" />
-                        </TableHead>
-                        <TableHead 
-                          className="cursor-pointer hover:bg-accent"
-                          onClick={() => handleSort('name')}
-                        >
-                          Name <SortIcon field="name" />
-                        </TableHead>
-                        <TableHead>Category</TableHead>
-                        <TableHead 
-                          className="text-right cursor-pointer hover:bg-accent"
-                          onClick={() => handleSort('price')}
-                        >
-                          Price <SortIcon field="price" />
-                        </TableHead>
-                        <TableHead className="text-right">Change</TableHead>
-                        <TableHead 
-                          className="text-right cursor-pointer hover:bg-accent"
-                          onClick={() => handleSort('changePercent')}
-                        >
-                          Change % <SortIcon field="changePercent" />
-                        </TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {loading ? (
-                        <TableRow>
-                          <TableCell colSpan={7} className="text-center py-8">
-                            <RefreshCw className="h-6 w-6 animate-spin mx-auto mb-2" />
-                            Loading commodity data...
-                          </TableCell>
-                        </TableRow>
-                      ) : filteredCommodities.length === 0 ? (
-                        <TableRow>
-                          <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
-                            No commodities found
-                          </TableCell>
-                        </TableRow>
-                      ) : (
-                        filteredCommodities.map((commodity) => (
-                          <TableRow key={commodity.symbol} className="hover:bg-accent/50">
-                            <TableCell className="text-center">
-                              {getTrendIcon(commodity.changePercent)}
-                            </TableCell>
-                            <TableCell className="font-mono font-semibold">
-                              {commodity.symbol}
-                            </TableCell>
-                            <TableCell>{commodity.name}</TableCell>
-                            <TableCell>
-                              <Badge className={`${getCategoryColor(commodity.category)} text-white`}>
-                                {getCategoryIcon(commodity.category)} {getCategoryLabel(commodity.category)}
-                              </Badge>
-                            </TableCell>
-                            <TableCell className="text-right font-mono">
-                              ${commodity.price.toLocaleString(undefined, { maximumFractionDigits: 4 })}
-                            </TableCell>
-                            <TableCell className="text-right font-mono">
-                              <span className={commodity.change >= 0 ? 'text-green-600' : 'text-red-600'}>
-                                {commodity.change >= 0 ? '+' : ''}{commodity.change.toFixed(2)}
-                              </span>
-                            </TableCell>
-                            <TableCell className="text-right font-mono">
-                              <span className={`font-semibold ${
-                                commodity.changePercent > 0.1 ? 'text-green-600' :
-                                commodity.changePercent < -0.1 ? 'text-red-600' :
-                                'text-gray-500'
-                              }`}>
-                                {commodity.changePercent >= 0 ? '+' : ''}{commodity.changePercent.toFixed(2)}%
-                              </span>
-                            </TableCell>
-                          </TableRow>
-                        ))
-                      )}
-                    </TableBody>
-                  </Table>
-                </div>
-              </TabsContent>
-            </Tabs>
-          </CardContent>
-        </Card>
-
-        {/* Summary Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          {(['metals','agricultural','energy','freight','bunker'] as CommodityCategory[]).map((category) => {
-            const categoryCommodities = commodities.filter(c => c.category === category);
-            const avgChange = categoryCommodities.length > 0
-              ? categoryCommodities.reduce((sum, c) => sum + c.changePercent, 0) / categoryCommodities.length
-              : 0;
-
-            return (
-              <Card key={category}>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium flex items-center gap-2">
-                    <span className="text-2xl">{getCategoryIcon(category)}</span>
-                    {getCategoryLabel(category)}
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold flex items-center gap-2">
-                    <span className={avgChange >= 0 ? 'text-green-600' : 'text-red-600'}>
-                      {avgChange >= 0 ? '+' : ''}{avgChange.toFixed(2)}%
-                    </span>
-                    {getTrendIcon(avgChange)}
+              
+              {currentLastUpdated && (
+                <div className="flex items-center gap-4">
+                  <div className="px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-700 border border-blue-200">
+                    Last Updated: {currentLastUpdated.toLocaleTimeString()}
                   </div>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Average change ({categoryCommodities.length} commodities)
-                  </p>
-                </CardContent>
-              </Card>
-            );
-          })}
+                  <div className="text-sm text-slate-500">
+                    {marketStats.total} commodities tracked
+                  </div>
+                </div>
+              )}
+            </div>
+            
+            <Button
+              onClick={() => loadCategoryData(activeCategory, true)}
+              disabled={isLoading}
+              className="bg-gradient-to-r from-blue-900 to-indigo-700 hover:from-blue-800 hover:to-indigo-600 text-white shadow-lg hover:shadow-xl transition-all duration-200"
+            >
+              <RefreshCw size={16} className={isLoading ? "animate-spin mr-2" : "mr-2"} />
+              Refresh
+            </Button>
+          </div>
+
+          {/* Market Statistics */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-6">
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-slate-600">Total Tracked</p>
+                    <p className="text-2xl font-bold text-slate-900">{marketStats.total}</p>
+                  </div>
+                  <BarChart3 className="h-8 w-8 text-blue-600" />
+                </div>
+              </CardContent>
+            </Card>
+            
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-slate-600">Gainers</p>
+                    <p className="text-2xl font-bold text-green-600">{marketStats.positive}</p>
+                  </div>
+                  <TrendingUp className="h-8 w-8 text-green-600" />
+                </div>
+              </CardContent>
+            </Card>
+            
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-slate-600">Losers</p>
+                    <p className="text-2xl font-bold text-red-600">{marketStats.negative}</p>
+                  </div>
+                  <TrendingDown className="h-8 w-8 text-red-600" />
+                </div>
+              </CardContent>
+            </Card>
+            
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-slate-600">Avg Change</p>
+                    <p className={`text-2xl font-bold ${marketStats.avgChange >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      {marketStats.avgChange >= 0 ? '+' : ''}{marketStats.avgChange.toFixed(2)}%
+                    </p>
+                  </div>
+                  <BarChart3 className="h-8 w-8 text-slate-400" />
+                </div>
+              </CardContent>
+            </Card>
+          </div>
         </div>
       </div>
-    </Layout>
+
+      {currentError && (
+        <div className="bg-red-50 border border-red-200 p-4 rounded-lg flex items-center gap-2 text-red-700">
+          <AlertCircle size={20} />
+          <p>{currentError}</p>
+        </div>
+      )}
+
+      {/* Main Tabs */}
+      <Card className="border-0 shadow-xl bg-white/50 backdrop-blur-sm">
+        <CardContent className="p-0">
+          <Tabs 
+            defaultValue="metals" 
+            className="w-full"
+            value={activeCategory}
+            onValueChange={(value) => setActiveCategory(value as any)}
+          >
+            <div className="border-b border-slate-100 bg-slate-50/80 rounded-t-xl">
+              <TabsList className="h-auto p-2 bg-transparent w-full justify-start gap-2">
+                <TabsTrigger 
+                  value="metals" 
+                  className="data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:border data-[state=active]:border-slate-200 rounded-lg px-4 py-3 font-medium transition-all duration-200 flex items-center gap-2"
+                >
+                  <Factory size={16} />
+                  <span>Metals</span>
+                </TabsTrigger>
+                <TabsTrigger 
+                  value="agricultural" 
+                  className="data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:border data-[state=active]:border-slate-200 rounded-lg px-4 py-3 font-medium transition-all duration-200 flex items-center gap-2"
+                >
+                  <Wheat size={16} />
+                  <span>Agricultural</span>
+                </TabsTrigger>
+                <TabsTrigger 
+                  value="energy" 
+                  className="data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:border data-[state=active]:border-slate-200 rounded-lg px-4 py-3 font-medium transition-all duration-200 flex items-center gap-2"
+                >
+                  <Zap size={16} />
+                  <span>Energy</span>
+                </TabsTrigger>
+              </TabsList>
+            </div>
+            
+            <div className="p-6">
+              <TabsContent value="metals" className="space-y-4 mt-0">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Metal Commodities</CardTitle>
+                    <CardDescription>Precious and industrial metals futures</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {isLoading ? (
+                      <LoadingTable />
+                    ) : commodities.length > 0 ? (
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Symbol</TableHead>
+                            <TableHead>Name</TableHead>
+                            <TableHead className="text-right">Price</TableHead>
+                            <TableHead className="text-right">Change</TableHead>
+                            <TableHead className="text-right">Change %</TableHead>
+                            <TableHead className="text-right">High</TableHead>
+                            <TableHead className="text-right">Low</TableHead>
+                            <TableHead>Technical</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {commodities.map((commodity) => (
+                            <TableRow key={commodity.symbol}>
+                              <TableCell className="font-medium">{commodity.symbol}</TableCell>
+                              <TableCell className="max-w-xs truncate">{commodity.name}</TableCell>
+                              <TableCell className="text-right font-mono">{commodity.price.toFixed(2)}</TableCell>
+                              <TableCell className="text-right">
+                                <PriceChangeBadge value={commodity.absoluteChange} />
+                              </TableCell>
+                              <TableCell className="text-right">
+                                <PriceChangeBadge value={commodity.percentChange} isPercent />
+                              </TableCell>
+                              <TableCell className="text-right font-mono text-sm text-slate-600">{commodity.high.toFixed(2)}</TableCell>
+                              <TableCell className="text-right font-mono text-sm text-slate-600">{commodity.low.toFixed(2)}</TableCell>
+                              <TableCell>
+                                <span className={`px-2 py-1 rounded text-xs font-medium ${
+                                  commodity.technicalEvaluation.toLowerCase().includes('buy') ? 'bg-green-100 text-green-700' :
+                                  commodity.technicalEvaluation.toLowerCase().includes('sell') ? 'bg-red-100 text-red-700' :
+                                  'bg-slate-100 text-slate-700'
+                                }`}>
+                                  {commodity.technicalEvaluation}
+                                </span>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    ) : (
+                      <div className="text-center py-8 text-slate-500">
+                        No data available
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </TabsContent>
+              
+              <TabsContent value="agricultural" className="space-y-4 mt-0">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Agricultural Commodities</CardTitle>
+                    <CardDescription>Grains, softs, and livestock futures</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {isLoading ? (
+                      <LoadingTable />
+                    ) : commodities.length > 0 ? (
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Symbol</TableHead>
+                            <TableHead>Name</TableHead>
+                            <TableHead className="text-right">Price</TableHead>
+                            <TableHead className="text-right">Change</TableHead>
+                            <TableHead className="text-right">Change %</TableHead>
+                            <TableHead className="text-right">High</TableHead>
+                            <TableHead className="text-right">Low</TableHead>
+                            <TableHead>Technical</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {commodities.map((commodity) => (
+                            <TableRow key={commodity.symbol}>
+                              <TableCell className="font-medium">{commodity.symbol}</TableCell>
+                              <TableCell className="max-w-xs truncate">{commodity.name}</TableCell>
+                              <TableCell className="text-right font-mono">{commodity.price.toFixed(2)}</TableCell>
+                              <TableCell className="text-right">
+                                <PriceChangeBadge value={commodity.absoluteChange} />
+                              </TableCell>
+                              <TableCell className="text-right">
+                                <PriceChangeBadge value={commodity.percentChange} isPercent />
+                              </TableCell>
+                              <TableCell className="text-right font-mono text-sm text-slate-600">{commodity.high.toFixed(2)}</TableCell>
+                              <TableCell className="text-right font-mono text-sm text-slate-600">{commodity.low.toFixed(2)}</TableCell>
+                              <TableCell>
+                                <span className={`px-2 py-1 rounded text-xs font-medium ${
+                                  commodity.technicalEvaluation.toLowerCase().includes('buy') ? 'bg-green-100 text-green-700' :
+                                  commodity.technicalEvaluation.toLowerCase().includes('sell') ? 'bg-red-100 text-red-700' :
+                                  'bg-slate-100 text-slate-700'
+                                }`}>
+                                  {commodity.technicalEvaluation}
+                                </span>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    ) : (
+                      <div className="text-center py-8 text-slate-500">
+                        No data available
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </TabsContent>
+              
+              <TabsContent value="energy" className="space-y-4 mt-0">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Energy Commodities</CardTitle>
+                    <CardDescription>Oil, gas, and renewable energy futures</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {isLoading ? (
+                      <LoadingTable />
+                    ) : commodities.length > 0 ? (
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Symbol</TableHead>
+                            <TableHead>Name</TableHead>
+                            <TableHead className="text-right">Price</TableHead>
+                            <TableHead className="text-right">Change</TableHead>
+                            <TableHead className="text-right">Change %</TableHead>
+                            <TableHead className="text-right">High</TableHead>
+                            <TableHead className="text-right">Low</TableHead>
+                            <TableHead>Technical</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {commodities.map((commodity) => (
+                            <TableRow key={commodity.symbol}>
+                              <TableCell className="font-medium">{commodity.symbol}</TableCell>
+                              <TableCell className="max-w-xs truncate">{commodity.name}</TableCell>
+                              <TableCell className="text-right font-mono">{commodity.price.toFixed(2)}</TableCell>
+                              <TableCell className="text-right">
+                                <PriceChangeBadge value={commodity.absoluteChange} />
+                              </TableCell>
+                              <TableCell className="text-right">
+                                <PriceChangeBadge value={commodity.percentChange} isPercent />
+                              </TableCell>
+                              <TableCell className="text-right font-mono text-sm text-slate-600">{commodity.high.toFixed(2)}</TableCell>
+                              <TableCell className="text-right font-mono text-sm text-slate-600">{commodity.low.toFixed(2)}</TableCell>
+                              <TableCell>
+                                <span className={`px-2 py-1 rounded text-xs font-medium ${
+                                  commodity.technicalEvaluation.toLowerCase().includes('buy') ? 'bg-green-100 text-green-700' :
+                                  commodity.technicalEvaluation.toLowerCase().includes('sell') ? 'bg-red-100 text-red-700' :
+                                  'bg-slate-100 text-slate-700'
+                                }`}>
+                                  {commodity.technicalEvaluation}
+                                </span>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    ) : (
+                      <div className="text-center py-8 text-slate-500">
+                        No data available
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </TabsContent>
+            </div>
+          </Tabs>
+        </CardContent>
+      </Card>
+    </div>
   );
-};
-
-export default CommodityMarket;
-
+}
