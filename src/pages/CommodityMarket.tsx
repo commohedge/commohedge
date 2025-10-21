@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { AlertCircle, RefreshCw, TrendingUp, TrendingDown, BarChart3, Factory, Wheat, Zap, Ship, Fuel, Globe } from "lucide-react";
+import { AlertCircle, RefreshCw, TrendingUp, TrendingDown, BarChart3, Factory, Wheat, Zap, Ship, Fuel, Globe, Building2 } from "lucide-react";
 import { toast } from "sonner";
 import {
   Table,
@@ -14,6 +14,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import WorldBankDashboard from "./WorldBankDashboard";
 
 export default function CommodityMarket() {
   // État pour stocker les commodités par catégorie
@@ -332,6 +333,13 @@ export default function CommodityMarket() {
                   <Fuel size={16} />
                   <span>Bunker</span>
                 </TabsTrigger>
+                <TabsTrigger 
+                  value="worldbank" 
+                  className="data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:border data-[state=active]:border-slate-200 rounded-lg px-4 py-3 font-medium transition-all duration-200 flex items-center gap-2"
+                >
+                  <Building2 size={16} />
+                  <span>World Bank</span>
+                </TabsTrigger>
               </TabsList>
             </div>
             
@@ -629,6 +637,10 @@ export default function CommodityMarket() {
                     )}
                   </CardContent>
                 </Card>
+              </TabsContent>
+              
+              <TabsContent value="worldbank" className="space-y-4 mt-0">
+                <WorldBankDashboard />
               </TabsContent>
             </div>
           </Tabs>
