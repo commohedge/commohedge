@@ -128,81 +128,93 @@ const Dashboard = () => {
         fetchCommoditiesData('agricultural')
       ]);
 
-      // Combine all commodity data
+      // Combine all commodity data and build robust access helpers
       const allCommodities = [...metalsData, ...energyData, ...agriculturalData];
-      
-      // Create a map of commodity data by symbol/name
-      const commodityMap = new Map();
-      allCommodities.forEach(commodity => {
-        const key = commodity.symbol || commodity.name;
-        commodityMap.set(key, commodity);
-      });
 
-      // Extract specific commodities we want to display
+      const findCommodity = (keywords: string[]) => {
+        const lowered = keywords.map(k => k.toLowerCase());
+        return allCommodities.find(c => {
+          const s = (c.symbol || '').toLowerCase();
+          const n = (c.name || '').toLowerCase();
+          return lowered.some(k => s.includes(k) || n.includes(k));
+        });
+      };
+
+      const getPrice = (keywords: string[], fallback: number) => {
+        const c = findCommodity(keywords);
+        return c?.price ?? fallback;
+      };
+
+      const getPercentChange = (keywords: string[]) => {
+        const c = findCommodity(keywords);
+        return typeof c?.percentChange === 'number' ? c!.percentChange : null;
+      };
+
+      // Extract specific commodities we want to display using keyword matching
       const currentRates = {
-        WTI: commodityMap.get('WTI')?.price || commodityMap.get('Crude Oil WTI')?.price || 75.50,
-        BRENT: commodityMap.get('BRENT')?.price || commodityMap.get('Crude Oil Brent')?.price || 79.80,
-        GOLD: commodityMap.get('GOLD')?.price || commodityMap.get('Gold')?.price || 1980.50,
-        SILVER: commodityMap.get('SILVER')?.price || commodityMap.get('Silver')?.price || 24.30,
-        COPPER: commodityMap.get('COPPER')?.price || commodityMap.get('Copper')?.price || 3.85,
-        NATGAS: commodityMap.get('NATGAS')?.price || commodityMap.get('Natural Gas')?.price || 2.45,
-        CORN: commodityMap.get('CORN')?.price || commodityMap.get('Corn')?.price || 4.85,
-        WHEAT: commodityMap.get('WHEAT')?.price || commodityMap.get('Wheat')?.price || 5.20,
-        SOYBEAN: commodityMap.get('SOYBEAN')?.price || commodityMap.get('Soybean')?.price || 12.80,
-        COTTON: commodityMap.get('COTTON')?.price || commodityMap.get('Cotton')?.price || 0.85,
-        SUGAR: commodityMap.get('SUGAR')?.price || commodityMap.get('Sugar')?.price || 0.18,
-        COFFEE: commodityMap.get('COFFEE')?.price || commodityMap.get('Coffee')?.price || 1.45
+        WTI: getPrice(['wti', 'west texas', 'cl1!', 'crude oil wti', 'crude wti'], 75.50),
+        BRENT: getPrice(['brent', 'brn1!', 'crude oil brent'], 79.80),
+        GOLD: getPrice(['gold', 'xau', 'au', '1oz', 'gc1!'], 1980.50),
+        SILVER: getPrice(['silver', 'xag', 'ag', 'si1!'], 24.30),
+        COPPER: getPrice(['copper', 'hg1!', 'cu'], 3.85),
+        NATGAS: getPrice(['natural gas', 'natgas', 'ng1!', 'gas naturel'], 2.45),
+        CORN: getPrice(['corn', 'zc1!'], 4.85),
+        WHEAT: getPrice(['wheat', 'zw1!'], 5.20), 
+        SOYBEAN: getPrice(['soybean', 'zs1!'], 12.80),
+        COTTON: getPrice(['cotton', 'ct1!'], 0.85),
+        SUGAR: getPrice(['sugar', 'sb1!'], 0.18),
+        COFFEE: getPrice(['coffee', 'kc1!'], 1.45)
       };
       
       // Calculate changes based on previous rates (only if we have previous data)
       const newMarketData = {
         WTI: { 
           rate: currentRates.WTI, 
-          change: previousRates ? calculateChange(currentRates.WTI, previousRates.WTI) : 0
+          change: getPercentChange(['wti', 'west texas', 'cl1!', 'crude oil wti', 'crude wti']) ?? (previousRates ? calculateChange(currentRates.WTI, previousRates.WTI) : 0)
         },
         BRENT: { 
           rate: currentRates.BRENT, 
-          change: previousRates ? calculateChange(currentRates.BRENT, previousRates.BRENT) : 0
+          change: getPercentChange(['brent', 'brn1!', 'crude oil brent']) ?? (previousRates ? calculateChange(currentRates.BRENT, previousRates.BRENT) : 0)
         },
         GOLD: { 
           rate: currentRates.GOLD, 
-          change: previousRates ? calculateChange(currentRates.GOLD, previousRates.GOLD) : 0
+          change: getPercentChange(['gold', 'xau', 'au', '1oz', 'gc1!']) ?? (previousRates ? calculateChange(currentRates.GOLD, previousRates.GOLD) : 0)
         },
         SILVER: { 
           rate: currentRates.SILVER, 
-          change: previousRates ? calculateChange(currentRates.SILVER, previousRates.SILVER) : 0
+          change: getPercentChange(['silver', 'xag', 'ag', 'si1!']) ?? (previousRates ? calculateChange(currentRates.SILVER, previousRates.SILVER) : 0)
         },
         COPPER: { 
           rate: currentRates.COPPER, 
-          change: previousRates ? calculateChange(currentRates.COPPER, previousRates.COPPER) : 0
+          change: getPercentChange(['copper', 'hg1!', 'cu']) ?? (previousRates ? calculateChange(currentRates.COPPER, previousRates.COPPER) : 0)
         },
         NATGAS: { 
           rate: currentRates.NATGAS, 
-          change: previousRates ? calculateChange(currentRates.NATGAS, previousRates.NATGAS) : 0
+          change: getPercentChange(['natural gas', 'natgas', 'ng1!', 'gas naturel']) ?? (previousRates ? calculateChange(currentRates.NATGAS, previousRates.NATGAS) : 0)
         },
         CORN: { 
           rate: currentRates.CORN, 
-          change: previousRates ? calculateChange(currentRates.CORN, previousRates.CORN) : 0
+          change: getPercentChange(['corn', 'zc1!']) ?? (previousRates ? calculateChange(currentRates.CORN, previousRates.CORN) : 0)
         },
         WHEAT: { 
           rate: currentRates.WHEAT, 
-          change: previousRates ? calculateChange(currentRates.WHEAT, previousRates.WHEAT) : 0
+          change: getPercentChange(['wheat', 'zw1!']) ?? (previousRates ? calculateChange(currentRates.WHEAT, previousRates.WHEAT) : 0)
         },
         SOYBEAN: { 
           rate: currentRates.SOYBEAN, 
-          change: previousRates ? calculateChange(currentRates.SOYBEAN, previousRates.SOYBEAN) : 0
+          change: getPercentChange(['soybean', 'zs1!']) ?? (previousRates ? calculateChange(currentRates.SOYBEAN, previousRates.SOYBEAN) : 0)
         },
         COTTON: { 
           rate: currentRates.COTTON, 
-          change: previousRates ? calculateChange(currentRates.COTTON, previousRates.COTTON) : 0
+          change: getPercentChange(['cotton', 'ct1!']) ?? (previousRates ? calculateChange(currentRates.COTTON, previousRates.COTTON) : 0)
         },
         SUGAR: { 
           rate: currentRates.SUGAR, 
-          change: previousRates ? calculateChange(currentRates.SUGAR, previousRates.SUGAR) : 0
+          change: getPercentChange(['sugar', 'sb1!']) ?? (previousRates ? calculateChange(currentRates.SUGAR, previousRates.SUGAR) : 0)
         },
         COFFEE: { 
           rate: currentRates.COFFEE, 
-          change: previousRates ? calculateChange(currentRates.COFFEE, previousRates.COFFEE) : 0
+          change: getPercentChange(['coffee', 'kc1!']) ?? (previousRates ? calculateChange(currentRates.COFFEE, previousRates.COFFEE) : 0)
         }
       };
       
