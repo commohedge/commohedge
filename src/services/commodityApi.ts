@@ -309,6 +309,23 @@ function parseCommoditiesData(data: any, category: CommodityCategory): Commodity
           name = parts.slice(1).join(' ');
         }
         
+        // Some TradingView tables concatenate the display name directly after the symbol
+        // (e.g. "AG1!Silver", "AL1!Aluminum"). In that case, the true symbol is the
+        // segment up to and including the last '!', and the remainder belongs to the name.
+        if (symbol && symbol.includes('!')) {
+          const concatMatch = symbol.match(/^(.*?!)(.+)$/);
+          if (concatMatch) {
+            const extractedSymbol = concatMatch[1].trim();
+            const trailingName = concatMatch[2].trim();
+            
+            // Update symbol and augment name accordingly
+            symbol = extractedSymbol;
+            if (trailingName) {
+              name = name ? `${trailingName} ${name}`.trim() : trailingName;
+            }
+          }
+        }
+        
         if (!symbol) {
           return;
         }
