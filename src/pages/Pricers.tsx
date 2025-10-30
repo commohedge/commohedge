@@ -99,6 +99,10 @@ const Pricers = () => {
   
   // ✅ AJOUT: Sélection du modèle de pricing pour les barrières
   const [barrierPricingModel, setBarrierPricingModel] = useState<'closed-form' | 'monte-carlo'>('closed-form');
+  // ✅ AJOUT: Sélection du modèle de pricing vanille (même logique que Strategy Builder)
+  const [optionPricingModel, setOptionPricingModel] = useState<'black-scholes' | 'monte-carlo'>('black-scholes');
+  // ✅ AJOUT: Nombre de simulations pour barrières/digitales (comme Strategy Builder)
+  const [barrierOptionSimulations, setBarrierOptionSimulations] = useState<number>(1000);
   
   // ✅ AJOUT: Sélection du prix sous-jacent pour TOUTES les options
   const [underlyingPriceType, setUnderlyingPriceType] = useState<'forward' | 'spot'>('forward');
@@ -199,27 +203,19 @@ const Pricers = () => {
         type: strategyComponent.type
       });
 
-      // ✅ UTILISATION STRICTE DE PricingService.calculateOptionPrice
-      // Cette fonction gère TOUS les types d'options automatiquement
+      // ✅ UTILISATION STRICTE COMME STRATEGY BUILDER — TOUJOURS LE SPOT (S)
       let price = 0;
       let methodName = '';
       
-      // ✅ CALCUL DU PRIX SOUS-JACENT POUR TOUTES LES OPTIONS
-      let underlyingPrice: number;
-      let underlyingLabel: string;
-      
-      if (underlyingPriceType === 'forward') {
-        // Commodity forward: F = S * exp(b * t) where b = r + storage - convenience
-        underlyingPrice = pricingInputs.spotPrice * Math.exp(calculateCostOfCarry() * pricingInputs.timeToMaturity);
-        underlyingLabel = 'Forward';
-      } else {
-        underlyingPrice = pricingInputs.spotPrice;
-        underlyingLabel = 'Spot';
-      }
+      // ✅ STRATEGY BUILDER UTILISE TOUJOURS LE SPOT DIRECTEMENT (pas de forward dans les options)
+      const S = pricingInputs.spotPrice; // Spot price (comme Strategy Builder)
+      const K = strike;
+      const r = getRiskFreeRate();
+      const t = pricingInputs.timeToMaturity;
+      const sigma = strategyComponent.volatility / 100;
       
       if (strategyComponent.type === 'forward') {
-        // Pour les forwards, utiliser directement la fonction forward
-        // Commodity forward: F = S * exp(b * t) where b = r + storage - convenience
+        // Pour les forwards seulement, calculer le forward
         const forward = pricingInputs.spotPrice * Math.exp(calculateCostOfCarry() * pricingInputs.timeToMaturity);
         price = forward - strike;
         methodName = 'Forward Pricing';
@@ -233,62 +229,84 @@ const Pricers = () => {
         );
         methodName = 'Swap Pricing';
       } else if (strategyComponent.type === 'call' || strategyComponent.type === 'put') {
-        // ✅ VANILLA OPTIONS - Black-76 for commodities (utilise prix sous-jacent choisi)
-        price = PricingService.calculateBlack76Price(
-          strategyComponent.type,
-          underlyingPrice, // ✅ Forward ou Spot selon le choix
-          strike,
-          getRiskFreeRate(),
-          calculateCostOfCarry(),
-          pricingInputs.timeToMaturity,
-          strategyComponent.volatility / 100
-        );
-        methodName = `Black-76 (${underlyingLabel})`;
+        // ✅ VANILLAS — STRICTEMENT COMME STRATEGY BUILDER (Index.tsx lignes 2097-2124)
+        if (optionPricingModel === 'monte-carlo') {
+          price = PricingService.calculateVanillaOptionMonteCarlo(
+            strategyComponent.type,
+            S, // Spot comme Strategy Builder
+            K,
+            r,
+            0, // foreignRate = 0 pour commodity (Strategy Builder utilise params.foreignRate / 100)
+            t,
+            sigma,
+            1000 // Strategy Builder utilise 1000 pour vanilla
+          );
+          methodName = 'Monte Carlo (vanilla)';
+        } else {
+          // ✅ Black-Scholes EXACT comme Strategy Builder (lignes 2112-2123)
+          const d1 = (Math.log(S / K) + (r + sigma * sigma / 2) * t) / (sigma * Math.sqrt(t));
+          const d2 = d1 - sigma * Math.sqrt(t);
+          const Nd1 = (1 + PricingService.erf(d1 / Math.sqrt(2))) / 2;
+          const Nd2 = (1 + PricingService.erf(d2 / Math.sqrt(2))) / 2;
+          
+          if (strategyComponent.type === 'call') {
+            price = S * Nd1 - K * Math.exp(-r * t) * Nd2;
+          } else { // put
+            price = K * Math.exp(-r * t) * (1 - Nd2) - S * (1 - Nd1);
+          }
+          methodName = 'Black-Scholes (spot)';
+        }
       } else if (strategyComponent.type.includes('knockout') || strategyComponent.type.includes('knockin')) {
-        // ✅ BARRIER OPTIONS - UTILISE LE PRIX SOUS-JACENT CALCULÉ
+        // ✅ BARRIER OPTIONS — STRICTEMENT COMME STRATEGY BUILDER (lignes 2022-2063)
         if (barrierPricingModel === 'closed-form') {
           price = PricingService.calculateBarrierOptionClosedForm(
             strategyComponent.type,
-            underlyingPrice, // ✅ Forward ou Spot selon le choix
-            strike,
-            getRiskFreeRate(),
-            pricingInputs.timeToMaturity,
-            strategyComponent.volatility / 100,
+            S, // Spot comme Strategy Builder
+            K,
+            r,
+            t,
+            sigma,
             barrier || 0,
-            secondBarrier
-            // Note: Black-76 uses risk-free rate only
+            secondBarrier,
+            0, // r_f = 0 pour commodities
+            barrierOptionSimulations || 1000 // Pour fallback Monte Carlo si nécessaire
           );
-          methodName = `Barrier Closed-Form (${underlyingLabel})`;
+          methodName = 'Barrier Closed-Form';
         } else {
           price = PricingService.calculateBarrierOptionPrice(
             strategyComponent.type,
-            underlyingPrice, // ✅ Forward ou Spot selon le choix
-            strike,
-            getRiskFreeRate(),
-            pricingInputs.timeToMaturity,
-            strategyComponent.volatility / 100,
+            S, // Spot comme Strategy Builder
+            K,
+            r,
+            t,
+            sigma,
             barrier || 0,
             secondBarrier,
-            1000 // ✅ 1000 simulations comme Strategy Builder
+            barrierOptionSimulations || 1000 // Strategy Builder utilise barrierOptionSimulations
           );
-          methodName = `Barrier Monte Carlo (${underlyingLabel})`;
+          methodName = 'Barrier Monte Carlo';
         }
       } else {
-        // ✅ DIGITAL OPTIONS - Monte Carlo (utilise prix sous-jacent choisi)
+        // ✅ DIGITAL OPTIONS — STRICTEMENT COMME STRATEGY BUILDER (lignes 2066-2094)
+        const rebate = strategyComponent.rebate !== undefined ? strategyComponent.rebate : 1;
+        const numSimulations = barrierOptionSimulations || 10000; // Strategy Builder utilise barrierOptionSimulations || 10000
         price = PricingService.calculateDigitalOptionPrice(
           strategyComponent.type,
-          underlyingPrice, // ✅ Forward ou Spot selon le choix
-          strike,
-          getRiskFreeRate(),
-          pricingInputs.timeToMaturity,
-          strategyComponent.volatility / 100,
+          S, // Spot comme Strategy Builder
+          K,
+          r,
+          t,
+          sigma,
           barrier,
           secondBarrier,
-          pricingInputs.numSimulations,
-          strategyComponent.rebate || 1
+          numSimulations,
+          rebate
         );
-        methodName = `Digital Monte Carlo (${underlyingLabel})`;
+        methodName = 'Digital Monte Carlo';
       }
+      
+      // ✅ Strategy Builder assure que le prix n'est jamais négatif (ligne 2127)
+      price = Math.max(0, price);
       
       // Calculer les grecques si demandé
       let greeks: Greeks | undefined;
@@ -385,11 +403,11 @@ const Pricers = () => {
     strategyComponent.rebate,
     strategyComponent.timeToPayoff,
     pricingInputs.spotPrice,
-    pricingInputs.domesticRate,
-    pricingInputs.foreignRate,
+    pricingInputs.interestRate,
     pricingInputs.timeToMaturity,
     barrierPricingModel, // ✅ Recalculer quand le modèle change
-    underlyingPriceType, // ✅ Recalculer quand le type de sous-jacent change
+    optionPricingModel, // ✅ Recalculer quand le modèle vanille change
+    barrierOptionSimulations, // ✅ Recalculer quand le nombre de simulations change
     volume, // ✅ Recalculer quand le volume change
     showGreeks // ✅ Recalculer quand l'affichage des grecques change
   ]);
@@ -406,7 +424,8 @@ const Pricers = () => {
     strategyComponent,
     pricingInputs,
     barrierPricingModel,
-    underlyingPriceType,
+    optionPricingModel,
+    barrierOptionSimulations,
     showGreeks,
     pricingResults // ✅ Recalculer quand les résultats de pricing changent
   ]);
@@ -525,21 +544,17 @@ const Pricers = () => {
             : strategyComponent.secondBarrier
         ) : undefined;
 
-        // ✅ CALCUL DU PRIX SOUS-JACENT POUR TOUTES LES OPTIONS
-        let underlyingPrice: number;
-        
-        if (underlyingPriceType === 'forward') {
-          // Commodity forward: F = S * exp(b * t) where b = r + storage - convenience
-          underlyingPrice = spot * Math.exp(calculateCostOfCarry() * pricingInputs.timeToMaturity);
-        } else {
-          underlyingPrice = spot; // Utiliser le spot variable
-        }
+        // ✅ STRICTEMENT COMME STRATEGY BUILDER — TOUJOURS LE SPOT (S)
+        const S = spot; // Spot variable pour la courbe de sensibilité
+        const K = strike;
+        const r = getRiskFreeRate();
+        const t = pricingInputs.timeToMaturity;
+        const sigma = strategyComponent.volatility / 100;
         
         let price = 0;
         let greeks: Greeks | undefined;
         
         if (strategyComponent.type === 'forward') {
-          // Commodity forward: F = S * exp(b * t) where b = r + storage - convenience
           const forward = spot * Math.exp(calculateCostOfCarry() * pricingInputs.timeToMaturity);
           price = forward - strike;
         } else if (strategyComponent.type === 'swap') {
@@ -550,95 +565,78 @@ const Pricers = () => {
             getRiskFreeRate()
           );
         } else if (strategyComponent.type === 'call' || strategyComponent.type === 'put') {
-          // ✅ VANILLA OPTIONS - Black-76 for commodities
-          price = PricingService.calculateBlack76Price(
-            strategyComponent.type,
-            underlyingPrice,
-            strike,
-            getRiskFreeRate(),
-            calculateCostOfCarry(),
-            pricingInputs.timeToMaturity,
-            strategyComponent.volatility / 100
-          );
-          
-          // Calculer les grecques
-          if (showGreeks) {
-            // Greeks calculation temporarily disabled
-            // greeks = PricingService.calculateGreeks(
-            //   strategyComponent.type,
-            //   underlyingPrice,
-            //   strike,
-            //   getRiskFreeRate(),
-            //   calculateCostOfCarry(),
-            //   pricingInputs.timeToMaturity,
-            //   strategyComponent.volatility / 100,
-            //   barrier,
-            //   secondBarrier,
-            //   strategyComponent.rebate || 1
-            // );
+          // ✅ VANILLAS — STRICTEMENT COMME STRATEGY BUILDER
+          if (optionPricingModel === 'monte-carlo') {
+            price = PricingService.calculateVanillaOptionMonteCarlo(
+              strategyComponent.type,
+              S,
+              K,
+              r,
+              0,
+              t,
+              sigma,
+              1000
+            );
+          } else {
+            // Black-Scholes EXACT comme Strategy Builder
+            const d1 = (Math.log(S / K) + (r + sigma * sigma / 2) * t) / (sigma * Math.sqrt(t));
+            const d2 = d1 - sigma * Math.sqrt(t);
+            const Nd1 = (1 + PricingService.erf(d1 / Math.sqrt(2))) / 2;
+            const Nd2 = (1 + PricingService.erf(d2 / Math.sqrt(2))) / 2;
+            
+            if (strategyComponent.type === 'call') {
+              price = S * Nd1 - K * Math.exp(-r * t) * Nd2;
+            } else {
+              price = K * Math.exp(-r * t) * (1 - Nd2) - S * (1 - Nd1);
+            }
           }
         } else if (strategyComponent.type.includes('knockout') || strategyComponent.type.includes('knockin')) {
-          // ✅ BARRIER OPTIONS
+          // ✅ BARRIER OPTIONS — STRICTEMENT COMME STRATEGY BUILDER
           if (barrierPricingModel === 'closed-form') {
             price = PricingService.calculateBarrierOptionClosedForm(
               strategyComponent.type,
-              underlyingPrice,
-              strike,
-              getRiskFreeRate(),
-              pricingInputs.timeToMaturity,
-              strategyComponent.volatility / 100,
+              S,
+              K,
+              r,
+              t,
+              sigma,
               barrier || 0,
-              secondBarrier
+              secondBarrier,
+              0, // r_f = 0 pour commodities
+              barrierOptionSimulations || 1000
             );
           } else {
             price = PricingService.calculateBarrierOptionPrice(
               strategyComponent.type,
-              underlyingPrice,
-              strike,
-              getRiskFreeRate(),
-              pricingInputs.timeToMaturity,
-              strategyComponent.volatility / 100,
+              S,
+              K,
+              r,
+              t,
+              sigma,
               barrier || 0,
               secondBarrier,
-              1000
+              barrierOptionSimulations || 1000
             );
           }
-          
-          // Calculer les grecques pour les barrières
-          if (showGreeks) {
-            // Greeks calculation temporarily disabled
-            // try {
-            //   greeks = PricingService.calculateGreeks(
-            //     strategyComponent.type,
-            //     underlyingPrice,
-            //     strike,
-            //     getRiskFreeRate(),
-            //     calculateCostOfCarry(),
-            //     pricingInputs.timeToMaturity,
-            //     strategyComponent.volatility / 100,
-            //     barrier,
-            //     secondBarrier,
-            //     strategyComponent.rebate || 1
-            //   );
-            // } catch (error) {
-            //   console.warn('Error calculating Greeks for barrier option at spot', spot, error);
-            // }
-          }
         } else {
-          // ✅ DIGITAL OPTIONS
+          // ✅ DIGITAL OPTIONS — STRICTEMENT COMME STRATEGY BUILDER
+          const rebate = strategyComponent.rebate !== undefined ? strategyComponent.rebate : 1;
+          const numSimulations = barrierOptionSimulations || 10000;
           price = PricingService.calculateDigitalOptionPrice(
             strategyComponent.type,
-            underlyingPrice,
-            strike,
-            getRiskFreeRate(),
-            pricingInputs.timeToMaturity,
-            strategyComponent.volatility / 100,
+            S,
+            K,
+            r,
+            t,
+            sigma,
             barrier,
             secondBarrier,
-            pricingInputs.numSimulations,
-            strategyComponent.rebate || 1
+            numSimulations,
+            rebate
           );
         }
+        
+        price = Math.max(0, price); // Strategy Builder assure que le prix n'est jamais négatif
         
         // Ajuster le prix par la quantité
         const adjustedPrice = price * strategyComponent.quantity / 100;
@@ -768,37 +766,37 @@ const Pricers = () => {
                   </div>
                 )}
 
-                {/* ✅ AJOUT: Type de prix sous-jacent pour TOUTES les options */}
-                {(selectedInstrument !== 'forward' && selectedInstrument !== 'swap') && (
+                {/* ✅ AJOUT: Modèle de pricing des vanilles (conforme Strategy Builder) */}
+                {(selectedInstrument === 'call' || selectedInstrument === 'put') && (
                   <div className="space-y-2">
-                    <Label>Underlying Price for Options</Label>
-                    <Select value={underlyingPriceType} onValueChange={(value: 'forward' | 'spot') => setUnderlyingPriceType(value)}>
+                    <Label>Vanilla Pricing Model</Label>
+                    <Select value={optionPricingModel} onValueChange={(value: 'black-scholes' | 'monte-carlo') => setOptionPricingModel(value)}>
                       <SelectTrigger>
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="forward">
-                          <div className="flex items-center gap-2">
-                            <TrendingUp className="w-4 h-4" />
-                            Forward Price (Recommended)
-                          </div>
-                        </SelectItem>
-                        <SelectItem value="spot">
+                        <SelectItem value="black-scholes">
                           <div className="flex items-center gap-2">
                             <Calculator className="w-4 h-4" />
-                            Spot Price
+                            Black-Scholes (spot)
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="monte-carlo">
+                          <div className="flex items-center gap-2">
+                            <BarChart3 className="w-4 h-4" />
+                            Monte Carlo (vanilla)
                           </div>
                         </SelectItem>
                       </SelectContent>
                     </Select>
                     <div className="text-xs text-muted-foreground">
-                      {underlyingPriceType === 'forward' 
-                        ? `Forward = ${pricingInputs.spotPrice} × exp(${pricingInputs.interestRate}% × ${pricingInputs.timeToMaturity.toFixed(2)}) ≈ ${(pricingInputs.spotPrice * Math.exp(calculateCostOfCarry() * pricingInputs.timeToMaturity)).toFixed(4)}`
-                        : `Spot = ${pricingInputs.spotPrice} (current market price)`
-                      }
+                      Same behavior as Strategy Builder for vanilla options
                     </div>
                   </div>
                 )}
+
+                {/* ✅ NOTE: Strategy Builder utilise TOUJOURS le spot pour les options, pas le forward */}
+                {/* L'option forward/spot a été supprimée pour rester strictement aligné avec Strategy Builder */}
 
                 {/* ✅ AJOUT: Affichage des grecques */}
                 {(selectedInstrument !== 'forward' && selectedInstrument !== 'swap') && (

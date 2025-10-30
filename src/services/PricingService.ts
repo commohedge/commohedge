@@ -128,7 +128,11 @@ export function calculateDigitalOptionPrice(
 }
 
 /**
- * Closed-form pour options à barrière (utilise Monte Carlo pour commodities)
+ * ✅ CLOSED-FORM COMPLÈTE POUR OPTIONS À BARRIÈRE (SIMPLE ET DOUBLE)
+ * Implémentation exacte de Strategy Builder (Index.tsx lignes 371-637)
+ * Supporte:
+ * - Single barrier: call/put knock-out/knock-in (normal et reverse)
+ * - Double barrier: call/put double knock-out/knock-in
  */
 export function calculateBarrierOptionClosedForm(
   optionType: string,
@@ -139,12 +143,258 @@ export function calculateBarrierOptionClosedForm(
   sigma: number,
   barrier: number,
   secondBarrier?: number,
-  r_f: number = 0
+  r_f: number = 0,
+  barrierOptionSimulations: number = 1000 // Pour fallback Monte Carlo si nécessaire
 ): number {
   const r = r_d;
-  const b = r_d - r_f;
-  // Pour commodities, on utilise Monte Carlo au lieu de closed-form
-  return calculateBarrierPriceFromModels(optionType, S, K, r, b, t, sigma, barrier, secondBarrier, 1000);
+  const b = r; // Pour commodities: cost of carry = risk-free rate
+  const v = sigma;
+  const T = t;
+  
+  // Helper function: Cumulative Normal Distribution
+  const CND = (x: number) => (1 + erf(x / Math.sqrt(2))) / 2;
+  
+  // PARTIE 1: Options à barrière SIMPLE (comme Strategy Builder ligne 390)
+  if (!optionType.includes('double')) {
+    // Calcul des paramètres de base selon Strategy Builder
+    const mu = (b - v ** 2 / 2) / (v ** 2);
+    const lambda = Math.sqrt(mu ** 2 + 2 * r / (v ** 2));
+    
+    const X = K; // Strike price
+    const H = barrier; // Barrière
+    
+    const X1 = Math.log(S / X) / (v * Math.sqrt(T)) + (1 + mu) * v * Math.sqrt(T);
+    const X2 = Math.log(S / H) / (v * Math.sqrt(T)) + (1 + mu) * v * Math.sqrt(T);
+    const y1 = Math.log(H ** 2 / (S * X)) / (v * Math.sqrt(T)) + (1 + mu) * v * Math.sqrt(T);
+    const y2 = Math.log(H / S) / (v * Math.sqrt(T)) + (1 + mu) * v * Math.sqrt(T);
+    const Z = Math.log(H / S) / (v * Math.sqrt(T)) + lambda * v * Math.sqrt(T);
+    
+    // Variables binaires eta et phi selon le type d'option
+    let eta = 0, phi = 0;
+    let TypeFlag = "";
+    
+    // Déterminer le TypeFlag basé sur le type d'option (EXACTEMENT comme Strategy Builder ligne 409-462)
+    // Normaliser le type pour gérer les variations (knockout/knock-out, knockin/knock-in)
+    const normalizedType = optionType.toLowerCase().replace(/-/g, '').replace(/_/g, '').replace(/\s/g, '');
+    const isCall = normalizedType.includes('call');
+    const isPut = normalizedType.includes('put');
+    const isKnockout = normalizedType.includes('knockout');
+    const isKnockin = normalizedType.includes('knockin');
+    const isReverse = normalizedType.includes('reverse');
+    
+    // Détection EXACTE selon Strategy Builder (lignes 410-462)
+    // Note: Strategy Builder utilise H < S et H > S (strict), donc si H === S, TypeFlag reste vide -> Monte Carlo
+    if (isReverse) {
+      // Options reverse (lignes 442-461)
+      if (isCall && isKnockin) {
+        TypeFlag = "pui"; eta = -1; phi = -1;
+      } else if (isCall && isKnockout) {
+        TypeFlag = "puo"; eta = -1; phi = -1;
+      } else if (isPut && isKnockin) {
+        TypeFlag = "cui"; eta = -1; phi = 1;
+      } else if (isPut && isKnockout) {
+        TypeFlag = "cuo"; eta = -1; phi = 1;
+      }
+    } else {
+      // Options normales (non-reverse): déterminer selon H vs S (strict < et > comme Strategy Builder)
+      if (isCall && isKnockin && H < S) {
+        TypeFlag = "cdi"; eta = 1; phi = 1;
+      } else if (isCall && isKnockin && H > S) {
+        TypeFlag = "cui"; eta = -1; phi = 1;
+      } else if (isPut && isKnockin && H < S) {
+        TypeFlag = "pdi"; eta = 1; phi = -1;
+      } else if (isPut && isKnockin && H > S) {
+        TypeFlag = "pui"; eta = -1; phi = -1;
+      } else if (isCall && isKnockout && H < S) {
+        TypeFlag = "cdo"; eta = 1; phi = 1;
+      } else if (isCall && isKnockout && H > S) {
+        TypeFlag = "cuo"; eta = -1; phi = 1;
+      } else if (isPut && isKnockout && H < S) {
+        TypeFlag = "pdo"; eta = 1; phi = -1;
+      } else if (isPut && isKnockout && H > S) {
+        TypeFlag = "puo"; eta = -1; phi = -1;
+      }
+    }
+    
+    // Si le type d'option n'est pas reconnu, utiliser Monte Carlo
+    if (TypeFlag === "") {
+      return calculateBarrierPriceFromModels(optionType, S, K, r, b, t, sigma, barrier, secondBarrier, barrierOptionSimulations);
+    }
+    
+    // Calculer les termes f1-f6 selon Strategy Builder
+    const f1 = phi * S * Math.exp((b - r) * T) * CND(phi * X1) - 
+              phi * X * Math.exp(-r * T) * CND(phi * X1 - phi * v * Math.sqrt(T));
+              
+    const f2 = phi * S * Math.exp((b - r) * T) * CND(phi * X2) - 
+              phi * X * Math.exp(-r * T) * CND(phi * X2 - phi * v * Math.sqrt(T));
+              
+    const f3 = phi * S * Math.exp((b - r) * T) * (H / S) ** (2 * (mu + 1)) * CND(eta * y1) - 
+              phi * X * Math.exp(-r * T) * (H / S) ** (2 * mu) * CND(eta * y1 - eta * v * Math.sqrt(T));
+              
+    const f4 = phi * S * Math.exp((b - r) * T) * (H / S) ** (2 * (mu + 1)) * CND(eta * y2) - 
+              phi * X * Math.exp(-r * T) * (H / S) ** (2 * mu) * CND(eta * y2 - eta * v * Math.sqrt(T));
+    
+    const cashRebate = 0; // Généralement 0 pour les options standards
+    
+    const f5 = cashRebate * Math.exp(-r * T) * (CND(eta * X2 - eta * v * Math.sqrt(T)) - 
+            (H / S) ** (2 * mu) * CND(eta * y2 - eta * v * Math.sqrt(T)));
+            
+    const f6 = cashRebate * ((H / S) ** (mu + lambda) * CND(eta * Z) + 
+            (H / S) ** (mu - lambda) * CND(eta * Z - 2 * eta * lambda * v * Math.sqrt(T)));
+    
+    // Calculer le prix selon le TypeFlag et la relation entre X et H (comme Strategy Builder ligne 494-516)
+    let optionPrice = 0;
+    
+    if (X > H) {
+      switch (TypeFlag) {
+        case "cdi": optionPrice = f3 + f5; break;
+        case "cui": optionPrice = f1 + f5; break;
+        case "pdi": optionPrice = f2 - f3 + f4 + f5; break;
+        case "pui": optionPrice = f1 - f2 + f4 + f5; break;
+        case "cdo": optionPrice = f1 - f3 + f6; break;
+        case "cuo": optionPrice = f6; break;
+        case "pdo": optionPrice = f1 - f2 + f3 - f4 + f6; break;
+        case "puo": optionPrice = f2 - f4 + f6; break;
+        default: break;
+      }
+    } else if (X < H) {
+      switch (TypeFlag) {
+        case "cdi": optionPrice = f1 - f2 + f4 + f5; break;
+        case "cui": optionPrice = f2 - f3 + f4 + f5; break;
+        case "pdi": optionPrice = f1 + f5; break;
+        case "pui": optionPrice = f3 + f5; break;
+        case "cdo": optionPrice = f2 - f4 + f6; break;
+        case "cuo": optionPrice = f1 - f2 + f3 - f4 + f6; break;
+        case "pdo": optionPrice = f6; break;
+        case "puo": optionPrice = f1 - f3 + f6; break;
+        default: break;
+      }
+    } else {
+      // Cas X === H (strike égal à la barrière) - utiliser le même traitement que X < H
+      switch (TypeFlag) {
+        case "cdi": optionPrice = f1 - f2 + f4 + f5; break;
+        case "cui": optionPrice = f2 - f3 + f4 + f5; break;
+        case "pdi": optionPrice = f1 + f5; break;
+        case "pui": optionPrice = f3 + f5; break;
+        case "cdo": optionPrice = f2 - f4 + f6; break;
+        case "cuo": optionPrice = f1 - f2 + f3 - f4 + f6; break;
+        case "pdo": optionPrice = f6; break;
+        case "puo": optionPrice = f1 - f3 + f6; break;
+        default: break;
+      }
+    }
+    
+    return Math.max(0, optionPrice);
+  }
+  
+  // PARTIE 2: Options à DOUBLE BARRIÈRE
+  else if (secondBarrier !== undefined || optionType.includes('double')) {
+    const X = K;
+    const L = Math.min(barrier, secondBarrier || barrier); // Barrière inférieure
+    const U = Math.max(barrier, secondBarrier || barrier); // Barrière supérieure
+    
+    const delta1 = 0; // Taux de croissance des barrières
+    const delta2 = 0; // Taux de dividende
+    
+    // Déterminer le TypeFlag
+    let TypeFlag = "";
+    if (optionType.includes('call-double-knockout')) {
+      TypeFlag = "co";
+    } else if (optionType.includes('call-double-knockin')) {
+      TypeFlag = "ci";
+    } else if (optionType.includes('put-double-knockout')) {
+      TypeFlag = "po";
+    } else if (optionType.includes('put-double-knockin')) {
+      TypeFlag = "pi";
+    }
+    
+    // Si le type n'est pas reconnu, utiliser Monte Carlo
+    if (TypeFlag === "") {
+      return calculateBarrierPriceFromModels(optionType, S, K, r, b, t, sigma, barrier, secondBarrier, barrierOptionSimulations);
+    }
+    
+    const F = U * Math.exp(delta1 * T);
+    const E = L * Math.exp(delta1 * T);
+    
+    let Sum1 = 0;
+    let Sum2 = 0;
+    
+    // Pour les options call double-barrière
+    if (TypeFlag === "co" || TypeFlag === "ci") {
+      for (let n = -5; n <= 5; n++) {
+        const d1 = (Math.log(S * U ** (2 * n) / (X * L ** (2 * n))) + (b + v ** 2 / 2) * T) / (v * Math.sqrt(T));
+        const d2 = (Math.log(S * U ** (2 * n) / (F * L ** (2 * n))) + (b + v ** 2 / 2) * T) / (v * Math.sqrt(T));
+        const d3 = (Math.log(L ** (2 * n + 2) / (X * S * U ** (2 * n))) + (b + v ** 2 / 2) * T) / (v * Math.sqrt(T));
+        const d4 = (Math.log(L ** (2 * n + 2) / (F * S * U ** (2 * n))) + (b + v ** 2 / 2) * T) / (v * Math.sqrt(T));
+        
+        const mu1 = 2 * (b - delta2 - n * (delta1 - delta2)) / v ** 2 + 1;
+        const mu2 = 2 * n * (delta1 - delta2) / v ** 2;
+        const mu3 = 2 * (b - delta2 + n * (delta1 - delta2)) / v ** 2 + 1;
+        
+        Sum1 += (U ** n / L ** n) ** mu1 * (L / S) ** mu2 * (CND(d1) - CND(d2)) - 
+              (L ** (n + 1) / (U ** n * S)) ** mu3 * (CND(d3) - CND(d4));
+              
+        Sum2 += (U ** n / L ** n) ** (mu1 - 2) * (L / S) ** mu2 * (CND(d1 - v * Math.sqrt(T)) - CND(d2 - v * Math.sqrt(T))) - 
+              (L ** (n + 1) / (U ** n * S)) ** (mu3 - 2) * (CND(d3 - v * Math.sqrt(T)) - CND(d4 - v * Math.sqrt(T)));
+      }
+    }
+    // Pour les options put double-barrière
+    else if (TypeFlag === "po" || TypeFlag === "pi") {
+      for (let n = -5; n <= 5; n++) {
+        const d1 = (Math.log(S * U ** (2 * n) / (E * L ** (2 * n))) + (b + v ** 2 / 2) * T) / (v * Math.sqrt(T));
+        const d2 = (Math.log(S * U ** (2 * n) / (X * L ** (2 * n))) + (b + v ** 2 / 2) * T) / (v * Math.sqrt(T));
+        const d3 = (Math.log(L ** (2 * n + 2) / (E * S * U ** (2 * n))) + (b + v ** 2 / 2) * T) / (v * Math.sqrt(T));
+        const d4 = (Math.log(L ** (2 * n + 2) / (X * S * U ** (2 * n))) + (b + v ** 2 / 2) * T) / (v * Math.sqrt(T));
+        
+        const mu1 = 2 * (b - delta2 - n * (delta1 - delta2)) / v ** 2 + 1;
+        const mu2 = 2 * n * (delta1 - delta2) / v ** 2;
+        const mu3 = 2 * (b - delta2 + n * (delta1 - delta2)) / v ** 2 + 1;
+        
+        Sum1 += (U ** n / L ** n) ** mu1 * (L / S) ** mu2 * (CND(d1) - CND(d2)) - 
+              (L ** (n + 1) / (U ** n * S)) ** mu3 * (CND(d3) - CND(d4));
+              
+        Sum2 += (U ** n / L ** n) ** (mu1 - 2) * (L / S) ** mu2 * (CND(d1 - v * Math.sqrt(T)) - CND(d2 - v * Math.sqrt(T))) - 
+              (L ** (n + 1) / (U ** n * S)) ** (mu3 - 2) * (CND(d3 - v * Math.sqrt(T)) - CND(d4 - v * Math.sqrt(T)));
+      }
+    }
+    
+    // Calculer OutValue selon le type d'option
+    let OutValue = 0;
+    if (TypeFlag === "co" || TypeFlag === "ci") {
+      OutValue = S * Math.exp((b - r) * T) * Sum1 - X * Math.exp(-r * T) * Sum2;
+    } else if (TypeFlag === "po" || TypeFlag === "pi") {
+      OutValue = X * Math.exp(-r * T) * Sum2 - S * Math.exp((b - r) * T) * Sum1;
+    }
+    
+    // Fonction Black-Scholes standard pour les knockin
+    const GBlackScholes = (type: string, S: number, X: number, T: number, r: number, b: number, v: number) => {
+      const d1 = (Math.log(S / X) + (b + v ** 2 / 2) * T) / (v * Math.sqrt(T));
+      const d2 = d1 - v * Math.sqrt(T);
+      
+      if (type === "c") {
+        return S * Math.exp((b - r) * T) * CND(d1) - X * Math.exp(-r * T) * CND(d2);
+      } else {
+        return X * Math.exp(-r * T) * CND(-d2) - S * Math.exp((b - r) * T) * CND(-d1);
+      }
+    };
+    
+    // Calculer le prix final selon le TypeFlag
+    let optionPrice = 0;
+    if (TypeFlag === "co" || TypeFlag === "po") {
+      optionPrice = OutValue;
+    } else if (TypeFlag === "ci") {
+      // Relation de parité: knockin + knockout = vanille
+      optionPrice = GBlackScholes("c", S, X, T, r, b, v) - OutValue;
+    } else if (TypeFlag === "pi") {
+      // Relation de parité: knockin + knockout = vanille
+      optionPrice = GBlackScholes("p", S, X, T, r, b, v) - OutValue;
+    }
+    
+    return Math.max(0, optionPrice);
+  }
+  
+  // Fallback: utiliser Monte Carlo si le type n'est pas supporté
+  return calculateBarrierPriceFromModels(optionType, S, K, r, b, t, sigma, barrier, secondBarrier, barrierOptionSimulations);
 }
 
 /**
