@@ -6,7 +6,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
-import { AlertCircle, RefreshCw, TrendingUp, TrendingDown, BarChart3, Factory, Wheat, Zap, Ship, Fuel, Globe, Building2, Search, X } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { ScrollArea } from "@/components/ui/ScrollArea";
+import { AlertCircle, RefreshCw, TrendingUp, TrendingDown, BarChart3, Factory, Wheat, Zap, Ship, Fuel, Globe, Building2 } from "lucide-react";
 import { toast } from "sonner";
 import {
   Table,
@@ -39,7 +41,12 @@ export default function CommodityMarket() {
 
   // État pour la catégorie active
   const [activeCategory, setActiveCategory] = useState<'metals' | 'agricultural' | 'energy' | 'freight' | 'bunker'>('metals');
+
+  // Global intelligent search state
   const [searchQuery, setSearchQuery] = useState("");
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [highlightSymbol, setHighlightSymbol] = useState<string | null>(null);
+  const rowRefs = useMemo(() => new Map<string, HTMLTableRowElement | null>(), []);
 
   // Charger les données pour une catégorie spécifique
   const loadCategoryData = async (category: CommodityCategory, forceRefresh: boolean = false) => {
@@ -147,35 +154,60 @@ export default function CommodityMarket() {
   const currentError = error[activeCategory];
   const currentLastUpdated = lastUpdated[activeCategory];
 
-  // Intelligent search on symbol or name (accent/case insensitive)
-  const normalize = (text: string) => (text || "")
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/\p{Diacritic}/gu, '')
-    .replace(/\s+/g, ' ')
-    .trim();
+  // Aggregate all commodities for cross-tab search
+  const allCommodities: Commodity[] = useMemo(() => (
+    [
+      ...metalsCommodities,
+      ...agriculturalCommodities,
+      ...energyCommodities,
+      ...freightCommodities,
+      ...bunkerCommodities
+    ]
+  ), [metalsCommodities, agriculturalCommodities, energyCommodities, freightCommodities, bunkerCommodities]);
 
-  const filteredCommodities = useMemo(() => {
-    const q = normalize(searchQuery);
-    if (!q) return commodities;
-    const words = q.split(' ');
-    const scored = commodities
-      .map(c => {
-        const s = normalize(c.symbol);
-        const n = normalize(c.name);
-        const hay = `${s} ${n}`;
-        // Score: startsWith > includes; all query words must be present
-        const allPresent = words.every(w => hay.includes(w));
-        if (!allPresent) return { c, score: -1 };
-        const starts = (s.startsWith(q) ? 3 : 0) + (n.startsWith(q) ? 2 : 0);
-        const includes = (s.includes(q) ? 1 : 0) + (n.includes(q) ? 1 : 0);
-        return { c, score: starts + includes };
-      })
-      .filter(x => x.score >= 0)
-      .sort((a, b) => b.score - a.score)
+  // Compute suggestions with light fuzzy logic
+  const suggestions = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return [] as Commodity[];
+    const tokens = q.split(/\s+/);
+
+    const score = (c: Commodity) => {
+      const s = (c.symbol || '').toLowerCase();
+      const n = (c.name || '').toLowerCase();
+      const hay = `${s} ${n}`;
+      // token match score
+      let sc = 0;
+      tokens.forEach(t => {
+        if (!t) return;
+        if (s.startsWith(t)) sc += 3;
+        else if (n.startsWith(t)) sc += 2;
+        else if (hay.includes(t)) sc += 1;
+      });
+      return sc;
+    };
+
+    return allCommodities
+      .map(c => ({ c, sc: score(c) }))
+      .filter(x => x.sc > 0)
+      .sort((a, b) => b.sc - a.sc)
+      .slice(0, 12)
       .map(x => x.c);
-    return scored;
-  }, [commodities, searchQuery]);
+  }, [searchQuery, allCommodities]);
+
+  // When a suggestion is chosen, switch tab and scroll to row
+  const selectSuggestion = (item: Commodity) => {
+    setActiveCategory(item.category);
+    setShowSuggestions(false);
+    setSearchQuery("");
+    setHighlightSymbol(item.symbol);
+    // give time for tab content to render
+    setTimeout(() => {
+      const row = rowRefs.get(item.symbol);
+      if (row && typeof row.scrollIntoView === 'function') {
+        row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }, 100);
+  };
 
   // Calculate market statistics
   const marketStats = useMemo(() => {
@@ -252,26 +284,49 @@ export default function CommodityMarket() {
               )}
             </div>
             
-            <div className="flex items-center gap-3 w-full md:w-auto">
-              <div className="relative w-full md:w-80">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                <Input
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search by symbol or name..."
-                  className="pl-9 pr-9"
-                />
-                {searchQuery && (
-                  <button
-                    className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600"
-                    onClick={() => setSearchQuery("")}
-                    aria-label="Clear search"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
-                )}
-              </div>
-              <Button
+            {/* Intelligent Global Search */}
+            <div className="w-full max-w-md">
+              <Popover open={showSuggestions && !!searchQuery} onOpenChange={setShowSuggestions}>
+                <PopoverTrigger asChild>
+                  <div className="relative">
+                    <Input
+                      placeholder="Search commodity by symbol or name..."
+                      value={searchQuery}
+                      onChange={(e) => { setSearchQuery(e.target.value); setShowSuggestions(true); }}
+                      onFocus={() => setShowSuggestions(true)}
+                      className="pr-10"
+                    />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400">/</span>
+                  </div>
+                </PopoverTrigger>
+                <PopoverContent className="w-[28rem] p-0" align="end">
+                  {suggestions.length > 0 ? (
+                    <ScrollArea className="max-h-80">
+                      <ul className="divide-y">
+                        {suggestions.map((sug) => (
+                          <li key={`${sug.category}-${sug.symbol}`} className="p-3 hover:bg-slate-50 cursor-pointer" onClick={() => selectSuggestion(sug)}>
+                            <div className="flex items-center justify-between gap-3">
+                              <div className="min-w-0">
+                                <div className="font-mono font-semibold truncate">{sug.symbol}</div>
+                                <div className="text-xs text-slate-500 truncate">{sug.name}</div>
+                              </div>
+                              <div className="flex items-center gap-2 shrink-0">
+                                <span className="text-xs rounded-full px-2 py-0.5 bg-slate-100 text-slate-700 border">{sug.category}</span>
+                                <div className="font-mono text-sm text-slate-700">{sug.price.toFixed(2)}</div>
+                              </div>
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
+                    </ScrollArea>
+                  ) : (
+                    <div className="p-4 text-sm text-slate-500">No results</div>
+                  )}
+                </PopoverContent>
+              </Popover>
+            </div>
+
+            <Button
               onClick={() => loadCategoryData(activeCategory, true)}
               disabled={isLoading}
               className="bg-gradient-to-r from-blue-900 to-indigo-700 hover:from-blue-800 hover:to-indigo-600 text-white shadow-lg hover:shadow-xl transition-all duration-200"
@@ -279,7 +334,6 @@ export default function CommodityMarket() {
               <RefreshCw size={16} className={isLoading ? "animate-spin mr-2" : "mr-2"} />
               Refresh
             </Button>
-            </div>
           </div>
 
           {/* Market Statistics */}
@@ -410,7 +464,7 @@ export default function CommodityMarket() {
                   <CardContent>
                     {isLoading ? (
                       <LoadingTable />
-                    ) : filteredCommodities.length > 0 ? (
+                    ) : commodities.length > 0 ? (
                       <Table>
                         <TableHeader>
                           <TableRow>
@@ -425,8 +479,13 @@ export default function CommodityMarket() {
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {filteredCommodities.map((commodity) => (
-                            <TableRow key={commodity.symbol}>
+                          {commodities.map((commodity) => (
+                            <TableRow
+                              key={commodity.symbol}
+                              ref={(el) => rowRefs.set(commodity.symbol, el)}
+                              className={highlightSymbol === commodity.symbol ? 'ring-2 ring-blue-400/60' : ''}
+                              onAnimationEnd={() => setHighlightSymbol(null)}
+                            >
                               <TableCell className="font-medium">{commodity.symbol}</TableCell>
                               <TableCell className="max-w-xs truncate">{commodity.name}</TableCell>
                               <TableCell className="text-right font-mono">{commodity.price.toFixed(2)}</TableCell>
@@ -469,7 +528,7 @@ export default function CommodityMarket() {
                   <CardContent>
                     {isLoading ? (
                       <LoadingTable />
-                    ) : filteredCommodities.length > 0 ? (
+                    ) : commodities.length > 0 ? (
                       <Table>
                         <TableHeader>
                           <TableRow>
@@ -484,8 +543,13 @@ export default function CommodityMarket() {
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {filteredCommodities.map((commodity) => (
-                            <TableRow key={commodity.symbol}>
+                          {commodities.map((commodity) => (
+                            <TableRow
+                              key={commodity.symbol}
+                              ref={(el) => rowRefs.set(commodity.symbol, el)}
+                              className={highlightSymbol === commodity.symbol ? 'ring-2 ring-blue-400/60' : ''}
+                              onAnimationEnd={() => setHighlightSymbol(null)}
+                            >
                               <TableCell className="font-medium">{commodity.symbol}</TableCell>
                               <TableCell className="max-w-xs truncate">{commodity.name}</TableCell>
                               <TableCell className="text-right font-mono">{commodity.price.toFixed(2)}</TableCell>
@@ -528,7 +592,7 @@ export default function CommodityMarket() {
                   <CardContent>
                     {isLoading ? (
                       <LoadingTable />
-                    ) : filteredCommodities.length > 0 ? (
+                    ) : commodities.length > 0 ? (
                       <Table>
                         <TableHeader>
                           <TableRow>
@@ -543,8 +607,13 @@ export default function CommodityMarket() {
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {filteredCommodities.map((commodity) => (
-                            <TableRow key={commodity.symbol}>
+                          {commodities.map((commodity) => (
+                            <TableRow
+                              key={commodity.symbol}
+                              ref={(el) => rowRefs.set(commodity.symbol, el)}
+                              className={highlightSymbol === commodity.symbol ? 'ring-2 ring-blue-400/60' : ''}
+                              onAnimationEnd={() => setHighlightSymbol(null)}
+                            >
                               <TableCell className="font-medium">{commodity.symbol}</TableCell>
                               <TableCell className="max-w-xs truncate">{commodity.name}</TableCell>
                               <TableCell className="text-right font-mono">{commodity.price.toFixed(2)}</TableCell>
@@ -603,7 +672,12 @@ export default function CommodityMarket() {
                         </TableHeader>
                         <TableBody>
                           {commodities.map((commodity) => (
-                            <TableRow key={commodity.symbol}>
+                            <TableRow
+                              key={commodity.symbol}
+                              ref={(el) => rowRefs.set(commodity.symbol, el)}
+                              className={highlightSymbol === commodity.symbol ? 'ring-2 ring-blue-400/60' : ''}
+                              onAnimationEnd={() => setHighlightSymbol(null)}
+                            >
                               <TableCell className="font-medium">{commodity.symbol}</TableCell>
                               <TableCell className="max-w-xs truncate">{commodity.name}</TableCell>
                               <TableCell className="text-right font-mono">{commodity.price.toFixed(2)}</TableCell>
@@ -662,7 +736,12 @@ export default function CommodityMarket() {
                         </TableHeader>
                         <TableBody>
                           {commodities.map((commodity) => (
-                            <TableRow key={commodity.symbol}>
+                            <TableRow
+                              key={commodity.symbol}
+                              ref={(el) => rowRefs.set(commodity.symbol, el)}
+                              className={highlightSymbol === commodity.symbol ? 'ring-2 ring-blue-400/60' : ''}
+                              onAnimationEnd={() => setHighlightSymbol(null)}
+                            >
                               <TableCell className="font-medium">{commodity.symbol}</TableCell>
                               <TableCell className="max-w-xs truncate">{commodity.name}</TableCell>
                               <TableCell className="text-right font-mono">{commodity.price.toFixed(2)}</TableCell>
