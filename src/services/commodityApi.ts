@@ -88,6 +88,22 @@ function getCacheKey(category: CommodityCategory): string {
   return `${CACHE_PREFIX}${category}`;
 }
 
+// Normalize symbols that include trailing name after '!'
+function normalizeCommoditySymbols(commodities: any[]): any[] {
+  return (commodities || []).map((item) => {
+    if (item && typeof item.symbol === 'string' && item.symbol.includes('!')) {
+      const match = item.symbol.match(/^(.*?!)(.+)$/);
+      if (match) {
+        const fixedSymbol = match[1].trim();
+        const trailingName = match[2].trim();
+        const fixedName = trailingName ? `${trailingName} ${item.name || ''}`.trim() : (item.name || '');
+        return { ...item, symbol: fixedSymbol, name: fixedName };
+      }
+    }
+    return item;
+  });
+}
+
 // Function to save data to localStorage
 function saveToCache(category: CommodityCategory, data: any[]): void {
   try {
@@ -426,8 +442,11 @@ export async function fetchCommoditiesData(category: CommodityCategory = 'metals
     if (!forceRefresh) {
       const cachedData = loadFromCache(category);
       if (cachedData) {
-        console.log(`Returning cached data for ${category}: ${cachedData.length} items`);
-        return cachedData;
+        const normalized = normalizeCommoditySymbols(cachedData);
+        // If normalization changed any entry, update cache silently
+        try { saveToCache(category, normalized); } catch {}
+        console.log(`Returning cached data for ${category}: ${normalized.length} items`);
+        return normalized as any;
       }
     } else {
       console.log(`Force refresh requested for ${category}, ignoring cache`);
@@ -452,7 +471,7 @@ export async function fetchCommoditiesData(category: CommodityCategory = 'metals
     console.log("Raw scraping response:", data);
     
     // Parse the HTML retrieved to extract commodity data
-    const commodities = parseCommoditiesData(data, category);
+    const commodities = normalizeCommoditySymbols(parseCommoditiesData(data, category));
     saveToCache(category, commodities);
     return commodities;
   } catch (error) {
