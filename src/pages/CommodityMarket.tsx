@@ -5,7 +5,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { AlertCircle, RefreshCw, TrendingUp, TrendingDown, BarChart3, Factory, Wheat, Zap, Ship, Fuel, Globe, Building2 } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { AlertCircle, RefreshCw, TrendingUp, TrendingDown, BarChart3, Factory, Wheat, Zap, Ship, Fuel, Globe, Building2, Search, X } from "lucide-react";
 import { toast } from "sonner";
 import {
   Table,
@@ -38,6 +39,7 @@ export default function CommodityMarket() {
 
   // État pour la catégorie active
   const [activeCategory, setActiveCategory] = useState<'metals' | 'agricultural' | 'energy' | 'freight' | 'bunker'>('metals');
+  const [searchQuery, setSearchQuery] = useState("");
 
   // Charger les données pour une catégorie spécifique
   const loadCategoryData = async (category: CommodityCategory, forceRefresh: boolean = false) => {
@@ -145,6 +147,36 @@ export default function CommodityMarket() {
   const currentError = error[activeCategory];
   const currentLastUpdated = lastUpdated[activeCategory];
 
+  // Intelligent search on symbol or name (accent/case insensitive)
+  const normalize = (text: string) => (text || "")
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  const filteredCommodities = useMemo(() => {
+    const q = normalize(searchQuery);
+    if (!q) return commodities;
+    const words = q.split(' ');
+    const scored = commodities
+      .map(c => {
+        const s = normalize(c.symbol);
+        const n = normalize(c.name);
+        const hay = `${s} ${n}`;
+        // Score: startsWith > includes; all query words must be present
+        const allPresent = words.every(w => hay.includes(w));
+        if (!allPresent) return { c, score: -1 };
+        const starts = (s.startsWith(q) ? 3 : 0) + (n.startsWith(q) ? 2 : 0);
+        const includes = (s.includes(q) ? 1 : 0) + (n.includes(q) ? 1 : 0);
+        return { c, score: starts + includes };
+      })
+      .filter(x => x.score >= 0)
+      .sort((a, b) => b.score - a.score)
+      .map(x => x.c);
+    return scored;
+  }, [commodities, searchQuery]);
+
   // Calculate market statistics
   const marketStats = useMemo(() => {
     const allCommodities = [...metalsCommodities, ...agriculturalCommodities, ...energyCommodities, ...freightCommodities, ...bunkerCommodities];
@@ -220,7 +252,26 @@ export default function CommodityMarket() {
               )}
             </div>
             
-            <Button
+            <div className="flex items-center gap-3 w-full md:w-auto">
+              <div className="relative w-full md:w-80">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                <Input
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search by symbol or name..."
+                  className="pl-9 pr-9"
+                />
+                {searchQuery && (
+                  <button
+                    className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600"
+                    onClick={() => setSearchQuery("")}
+                    aria-label="Clear search"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                )}
+              </div>
+              <Button
               onClick={() => loadCategoryData(activeCategory, true)}
               disabled={isLoading}
               className="bg-gradient-to-r from-blue-900 to-indigo-700 hover:from-blue-800 hover:to-indigo-600 text-white shadow-lg hover:shadow-xl transition-all duration-200"
@@ -228,6 +279,7 @@ export default function CommodityMarket() {
               <RefreshCw size={16} className={isLoading ? "animate-spin mr-2" : "mr-2"} />
               Refresh
             </Button>
+            </div>
           </div>
 
           {/* Market Statistics */}
@@ -358,7 +410,7 @@ export default function CommodityMarket() {
                   <CardContent>
                     {isLoading ? (
                       <LoadingTable />
-                    ) : commodities.length > 0 ? (
+                    ) : filteredCommodities.length > 0 ? (
                       <Table>
                         <TableHeader>
                           <TableRow>
@@ -373,7 +425,7 @@ export default function CommodityMarket() {
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {commodities.map((commodity) => (
+                          {filteredCommodities.map((commodity) => (
                             <TableRow key={commodity.symbol}>
                               <TableCell className="font-medium">{commodity.symbol}</TableCell>
                               <TableCell className="max-w-xs truncate">{commodity.name}</TableCell>
@@ -417,7 +469,7 @@ export default function CommodityMarket() {
                   <CardContent>
                     {isLoading ? (
                       <LoadingTable />
-                    ) : commodities.length > 0 ? (
+                    ) : filteredCommodities.length > 0 ? (
                       <Table>
                         <TableHeader>
                           <TableRow>
@@ -432,7 +484,7 @@ export default function CommodityMarket() {
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {commodities.map((commodity) => (
+                          {filteredCommodities.map((commodity) => (
                             <TableRow key={commodity.symbol}>
                               <TableCell className="font-medium">{commodity.symbol}</TableCell>
                               <TableCell className="max-w-xs truncate">{commodity.name}</TableCell>
@@ -476,7 +528,7 @@ export default function CommodityMarket() {
                   <CardContent>
                     {isLoading ? (
                       <LoadingTable />
-                    ) : commodities.length > 0 ? (
+                    ) : filteredCommodities.length > 0 ? (
                       <Table>
                         <TableHeader>
                           <TableRow>
@@ -491,7 +543,7 @@ export default function CommodityMarket() {
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {commodities.map((commodity) => (
+                          {filteredCommodities.map((commodity) => (
                             <TableRow key={commodity.symbol}>
                               <TableCell className="font-medium">{commodity.symbol}</TableCell>
                               <TableCell className="max-w-xs truncate">{commodity.name}</TableCell>
