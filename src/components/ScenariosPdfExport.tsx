@@ -30,6 +30,15 @@ const ScenariosPdfExport = ({ scenarios, selectedScenarios, setSelectedScenarios
   };
 
   const exportToPdf = async () => {
+    // Attendre que les graphiques soient rendus
+    const waitForCharts = () => {
+      return new Promise((resolve) => {
+        setTimeout(resolve, 2000); // Attendre 2 secondes pour le rendu des graphiques
+      });
+    };
+
+    await waitForCharts();
+    
     const pdf = new jsPDF({
       orientation: 'p',
       unit: 'mm',
@@ -112,7 +121,7 @@ const ScenariosPdfExport = ({ scenarios, selectedScenarios, setSelectedScenarios
         basicParams.push(
           [`Base Volume (${scenario.params.currencyPair?.base || 'BASE'})`, scenario.params.baseVolume.toLocaleString()],
           [`Quote Volume (${scenario.params.currencyPair?.quote || 'QUOTE'})`, Math.round(scenario.params.quoteVolume).toLocaleString()],
-          ['Rate', scenario.params.spotPrice?.toFixed(4) || 'N/A']
+          ['Price', scenario.params.spotPrice?.toFixed(4) || 'N/A']
         );
       } else {
         basicParams.push(
@@ -232,6 +241,7 @@ const ScenariosPdfExport = ({ scenarios, selectedScenarios, setSelectedScenarios
         // Graphique P&L Evolution
         const chartElement = document.getElementById(`pnl-chart-${scenario.id}`);
         if (chartElement) {
+          console.log(`Found P&L element for scenario ${scenario.id}`);
           const renderOptions = {
             scale: 1.8, // Réduire légèrement la résolution
             useCORS: true,
@@ -239,13 +249,26 @@ const ScenariosPdfExport = ({ scenarios, selectedScenarios, setSelectedScenarios
             backgroundColor: '#ffffff'
           };
           
-          const canvas = await html2canvas(chartElement, renderOptions);
-          const imgData = canvas.toDataURL('image/png');
-          pdf.addImage(imgData, 'PNG', contentPadding, yOffset, usableWidth, chartHeight);
-          yOffset += chartHeight + 3; // Espace très réduit entre les graphiques
+          try {
+            const canvas = await html2canvas(chartElement, renderOptions);
+            const imgData = canvas.toDataURL('image/png');
+            pdf.addImage(imgData, 'PNG', contentPadding, yOffset, usableWidth, chartHeight);
+            yOffset += chartHeight + 3; // Espace très réduit entre les graphiques
+            console.log(`Successfully rendered P&L chart for scenario ${scenario.id}`);
+          } catch (chartError) {
+            console.error(`Error rendering P&L chart for scenario ${scenario.id}:`, chartError);
+            pdf.setFontSize(8);
+            pdf.text('Error rendering P&L chart', contentPadding, yOffset);
+            yOffset += 10;
+          }
+        } else {
+          console.warn(`P&L element not found for scenario ${scenario.id}`);
+          pdf.setFontSize(8);
+          pdf.text('P&L chart not available', contentPadding, yOffset);
+          yOffset += 10;
         }
         
-        // Vérifier si on a besoin d'une nouvelle page pour le graphique FX Hedging
+        // Vérifier si on a besoin d'une nouvelle page pour le graphique Commodity Hedging
         if (yOffset > pdf.internal.pageSize.height - chartHeight - 15) {
           pdf.addPage();
           yOffset = contentPadding;
@@ -257,8 +280,9 @@ const ScenariosPdfExport = ({ scenarios, selectedScenarios, setSelectedScenarios
         }
         
         // Graphique Commodity Hedging Profile (au lieu du Payoff Diagram)
-        const fxHedgingElement = document.getElementById(`fx-hedging-chart-${scenario.id}`);
-        if (fxHedgingElement) {
+        const commodityHedgingElement = document.getElementById(`commodity-hedging-chart-${scenario.id}`);
+        if (commodityHedgingElement) {
+          console.log(`Found commodity hedging element for scenario ${scenario.id}`);
           const renderOptions = {
             scale: 1.8,
             useCORS: true,
@@ -266,10 +290,23 @@ const ScenariosPdfExport = ({ scenarios, selectedScenarios, setSelectedScenarios
             backgroundColor: '#ffffff'
           };
           
-          const canvas = await html2canvas(fxHedgingElement, renderOptions);
-          const imgData = canvas.toDataURL('image/png');
-          pdf.addImage(imgData, 'PNG', contentPadding, yOffset, usableWidth, chartHeight);
-          yOffset += chartHeight + 6;
+          try {
+            const canvas = await html2canvas(commodityHedgingElement, renderOptions);
+            const imgData = canvas.toDataURL('image/png');
+            pdf.addImage(imgData, 'PNG', contentPadding, yOffset, usableWidth, chartHeight);
+            yOffset += chartHeight + 6;
+            console.log(`Successfully rendered commodity hedging chart for scenario ${scenario.id}`);
+          } catch (chartError) {
+            console.error(`Error rendering commodity hedging chart for scenario ${scenario.id}:`, chartError);
+            pdf.setFontSize(8);
+            pdf.text('Error rendering commodity hedging chart', contentPadding, yOffset);
+            yOffset += 10;
+          }
+        } else {
+          console.warn(`Commodity hedging element not found for scenario ${scenario.id}`);
+          pdf.setFontSize(8);
+          pdf.text('Commodity hedging chart not available', contentPadding, yOffset);
+          yOffset += 10;
         }
       } catch (error) {
         console.error('Error rendering charts:', error);

@@ -41,6 +41,7 @@ interface UseCommodityDataReturn {
   calculateVarContributions: () => { [commodity: string]: number };
   syncWithHedgingInstruments: () => void;
   autoGenerateExposures: () => void;
+  clearAllData: () => void;
   
   // State
   isLoading: boolean;
@@ -554,6 +555,23 @@ export const useCommodityData = (): UseCommodityDataReturn => {
     }
   }, [updateMarketData]);
 
+  const clearAllData = useCallback(() => {
+    setIsLoading(true);
+    try {
+      serviceRef.current.clearAllData();
+      refreshAllData();
+      
+      // Dispatch custom event to notify other components
+      window.dispatchEvent(new CustomEvent('commodityDataCleared'));
+      
+      console.log('✅ All commodity data cleared successfully');
+    } catch (error) {
+      console.error('Error clearing commodity data:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [refreshAllData]);
+
   return {
     // Data
     marketData,
@@ -576,6 +594,7 @@ export const useCommodityData = (): UseCommodityDataReturn => {
     calculateVarContributions: () => serviceRef.current.calculateVarContributions(),
     syncWithHedgingInstruments,
     autoGenerateExposures,
+    clearAllData,
     
     // State
     isLoading,

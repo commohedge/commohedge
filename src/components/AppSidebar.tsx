@@ -95,12 +95,6 @@ const menuItems = [
     url: "/positions",
     icon: Activity,
     description: "Real-time position monitoring"
-  },
-  {
-    title: "Options Market Data",
-    url: "/options-market-data",
-    icon: Zap,
-    description: "Real-time options market data and analytics"
   }
 ];
 

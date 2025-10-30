@@ -322,40 +322,40 @@ const Dashboard = () => {
                   </div>
                 </div>
                 
-                <div className="flex items-center gap-4">
+        <div className="flex items-center gap-4">
                   <div className="px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-700 border border-blue-200">
                     Last Updated: {lastUpdate.toLocaleTimeString()}
-                  </div>
-                  <div className={`flex items-center gap-2 text-sm ${isLiveMode ? 'text-green-600' : 'text-gray-600'}`}>
-                    {isLiveMode ? <Play className="h-4 w-4" /> : <Pause className="h-4 w-4" />}
-                    {isLiveMode ? 'Live Mode' : 'Static Mode'}
-                  </div>
-                </div>
-              </div>
-              
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={updateMarketData}
-                  className="flex items-center gap-2"
-                >
-                  <RefreshCw className="h-4 w-4" />
-                  Refresh Data
-                </Button>
-                <Button
-                  variant={isLiveMode ? "destructive" : "default"}
-                  size="sm"
-                  onClick={() => setLiveMode(!isLiveMode)}
-                  className="flex items-center gap-2"
-                >
-                  {isLiveMode ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
-                  {isLiveMode ? 'Stop Live' : 'Start Live'}
-                </Button>
-              </div>
-            </div>
+          </div>
+          <div className={`flex items-center gap-2 text-sm ${isLiveMode ? 'text-green-600' : 'text-gray-600'}`}>
+            {isLiveMode ? <Play className="h-4 w-4" /> : <Pause className="h-4 w-4" />}
+            {isLiveMode ? 'Live Mode' : 'Static Mode'}
           </div>
         </div>
+              </div>
+              
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={updateMarketData}
+            className="flex items-center gap-2"
+          >
+            <RefreshCw className="h-4 w-4" />
+            Refresh Data
+          </Button>
+          <Button
+            variant={isLiveMode ? "destructive" : "default"}
+            size="sm"
+            onClick={() => setLiveMode(!isLiveMode)}
+            className="flex items-center gap-2"
+          >
+            {isLiveMode ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+            {isLiveMode ? 'Stop Live' : 'Start Live'}
+          </Button>
+              </div>
+            </div>
+        </div>
+      </div>
       {/* Key Metrics Cards */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card>
@@ -673,8 +673,8 @@ const Dashboard = () => {
                   <div className="text-sm text-indigo-400/80 font-medium">Corn</div>
                   <div className={`text-xs font-semibold ${marketOverviewData.CORN.change >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                     {marketOverviewData.CORN.change >= 0 ? '↗' : '↘'} {marketOverviewData.CORN.change >= 0 ? '+' : ''}{marketOverviewData.CORN.change.toFixed(2)}%
-                  </div>
-                </div>
+              </div>
+            </div>
               </div>
 
               <div className={`group relative p-4 rounded-xl bg-gradient-to-br ${getCurrencyCardClasses('yellow')} transition-all duration-300 hover:shadow-lg`}>
@@ -699,8 +699,8 @@ const Dashboard = () => {
                   <div className="text-sm text-teal-400/80 font-medium">Soybean</div>
                   <div className={`text-xs font-semibold ${marketOverviewData.SOYBEAN.change >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                     {marketOverviewData.SOYBEAN.change >= 0 ? '↗' : '↘'} {marketOverviewData.SOYBEAN.change >= 0 ? '+' : ''}{marketOverviewData.SOYBEAN.change.toFixed(2)}%
-                  </div>
-                </div>
+              </div>
+            </div>
               </div>
 
               <div className={`group relative p-4 rounded-xl bg-gradient-to-br ${getCurrencyCardClasses('pink')} transition-all duration-300 hover:shadow-lg`}>
@@ -725,8 +725,8 @@ const Dashboard = () => {
                   <div className="text-sm text-violet-400/80 font-medium">Sugar</div>
                   <div className={`text-xs font-semibold ${marketOverviewData.SUGAR.change >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                     {marketOverviewData.SUGAR.change >= 0 ? '↗' : '↘'} {marketOverviewData.SUGAR.change >= 0 ? '+' : ''}{marketOverviewData.SUGAR.change.toFixed(2)}%
-                  </div>
-                </div>
+              </div>
+            </div>
               </div>
 
               <div className={`group relative p-4 rounded-xl bg-gradient-to-br ${getCurrencyCardClasses('amber')} transition-all duration-300 hover:shadow-lg`}>

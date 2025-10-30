@@ -10,8 +10,6 @@ export interface CalculatorState {
       startDate: string;
       monthsToHedge: number;
       interestRate: number;
-      storageCost: number;
-      convenienceYield: number;
       totalVolume: number;
       baseVolume: number;
       quoteVolume: number;

@@ -36,54 +36,71 @@ const PositionMonitor = () => {
   const [refreshInterval, setRefreshInterval] = useState("5");
   const [lastUpdate, setLastUpdate] = useState(new Date());
 
-  // Sample real-time position data
+  // Sample real-time commodity position data
   const [positions, setPositions] = useState([
     {
       id: "POS-001",
-      currency: "EUR/USD",
-      position: 1500000,
-      marketRate: 1.0856,
-      entryRate: 1.0845,
-      unrealizedPnL: 16500,
-      dailyPnL: 3200,
+      commodity: "WTI",
+      position: 1000, // barrels
+      marketPrice: 75.50,
+      entryPrice: 74.20,
+      unrealizedPnL: 13000,
+      dailyPnL: 2500,
       exposure: "Long",
       hedge_status: "Partial",
-      hedge_ratio: 65,
-      last_trade: "10:34:22"
+      hedge_ratio: 70,
+      last_trade: "10:34:22",
+      unit: "BBL"
     },
     {
       id: "POS-002",
-      currency: "GBP/USD",
-      position: -750000,
-      marketRate: 1.2734,
-      entryRate: 1.2780,
-      unrealizedPnL: 3450,
-      dailyPnL: -1800,
+      commodity: "GOLD",
+      position: -500, // ounces
+      marketPrice: 2045.30,
+      entryPrice: 2050.80,
+      unrealizedPnL: 2750,
+      dailyPnL: -1200,
       exposure: "Short",
       hedge_status: "Full",
       hedge_ratio: 100,
-      last_trade: "10:33:45"
+      last_trade: "10:33:45",
+      unit: "OZ"
     },
     {
       id: "POS-003",
-      currency: "USD/JPY",
-      position: 300000,
-      marketRate: 161.85,
-      entryRate: 160.25,
-      unrealizedPnL: 2970,
-      dailyPnL: 850,
+      commodity: "CORN",
+      position: 2000, // bushels
+      marketPrice: 4.85,
+      entryPrice: 4.75,
+      unrealizedPnL: 200,
+      dailyPnL: 150,
       exposure: "Long",
       hedge_status: "None",
       hedge_ratio: 0,
-      last_trade: "10:32:18"
+      last_trade: "10:32:18",
+      unit: "BU"
+    },
+    {
+      id: "POS-004",
+      commodity: "NATGAS",
+      position: -10000, // MMBtu
+      marketPrice: 2.45,
+      entryPrice: 2.52,
+      unrealizedPnL: 7000,
+      dailyPnL: 1200,
+      exposure: "Short",
+      hedge_status: "Partial",
+      hedge_ratio: 60,
+      last_trade: "10:31:30",
+      unit: "MMBtu"
     }
   ]);
 
-  // Sample market data for charts
+  // Sample commodity market data for charts
   const marketData = [
-    { time: "10:00", eurUsd: 1.0845, gbpUsd: 1.2780, usdJpy: 160.25 },
-    { time: "10:15", eurUsd: 1.0850, gbpUsd: 1.2765, usdJpy: 160.80 },
-    { time: "10:30", eurUsd: 1.0856, gbpUsd: 1.2734, usdJpy: 161.85 },
+    { time: "10:00", wti: 74.20, gold: 2050.80, corn: 4.75, natgas: 2.52 },
+    { time: "10:15", wti: 74.85, gold: 2048.50, corn: 4.80, natgas: 2.48 },
+    { time: "10:30", wti: 75.50, gold: 2045.30, corn: 4.85, natgas: 2.45 },
   ];
 
   // Simulate real-time updates
@@ -94,7 +111,7 @@ const PositionMonitor = () => {
       setPositions(prevPositions =>
         prevPositions.map(pos => ({
           ...pos,
-          marketRate: pos.marketRate + (Math.random() - 0.5) * 0.001,
+          marketPrice: pos.marketPrice + (Math.random() - 0.5) * 0.1,
           unrealizedPnL: pos.unrealizedPnL + (Math.random() - 0.5) * 1000,
           dailyPnL: pos.dailyPnL + (Math.random() - 0.5) * 500,
           last_trade: new Date().toLocaleTimeString()
@@ -114,11 +131,15 @@ const PositionMonitor = () => {
     }).format(amount);
   };
 
-  const formatRate = (rate: number, currency: string) => {
-    if (currency.includes("JPY")) {
-      return rate.toFixed(2);
+  const formatPrice = (price: number, commodity: string) => {
+    if (commodity === "GOLD") {
+      return price.toFixed(2);
+    } else if (commodity === "CORN") {
+      return price.toFixed(2);
+    } else if (commodity === "NATGAS") {
+      return price.toFixed(2);
     }
-    return rate.toFixed(4);
+    return price.toFixed(2);
   };
 
   const getPnLColor = (value: number) => {
@@ -166,7 +187,7 @@ const PositionMonitor = () => {
                 Real-Time Position Monitor
               </CardTitle>
               <CardDescription>
-                Live monitoring of FX positions and market movements
+                Live monitoring of commodity positions and market movements
               </CardDescription>
             </div>
             <div className="flex items-center gap-4">
@@ -215,7 +236,7 @@ const PositionMonitor = () => {
             <div className="flex items-center gap-4">
               <div className="flex items-center gap-2">
                 <Clock className="h-4 w-4 text-muted-foreground" />
-                <span className="text-sm">Market Hours: 09:00 - 17:00 EST</span>
+                <span className="text-sm">Market Hours: 24/7 (Commodity Markets)</span>
               </div>
             </div>
           </div>
@@ -292,10 +313,10 @@ const PositionMonitor = () => {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Currency</TableHead>
+                  <TableHead>Commodity</TableHead>
                   <TableHead>Position</TableHead>
-                  <TableHead>Market Rate</TableHead>
-                  <TableHead>Entry Rate</TableHead>
+                  <TableHead>Market Price</TableHead>
+                  <TableHead>Entry Price</TableHead>
                   <TableHead>Unrealized P&L</TableHead>
                   <TableHead>Daily P&L</TableHead>
                   <TableHead>Hedge Status</TableHead>
@@ -307,22 +328,22 @@ const PositionMonitor = () => {
                   <TableRow key={position.id}>
                     <TableCell>
                       <Badge variant="outline" className="font-mono">
-                        {position.currency}
+                        {position.commodity}
                       </Badge>
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">
                         {getExposureIcon(position.exposure)}
                         <span className="font-mono">
-                          {formatCurrency(Math.abs(position.position))}
+                          {Math.abs(position.position).toLocaleString()} {position.unit}
                         </span>
                       </div>
                     </TableCell>
                     <TableCell className="font-mono">
-                      {formatRate(position.marketRate, position.currency)}
+                      ${formatPrice(position.marketPrice, position.commodity)}
                     </TableCell>
                     <TableCell className="font-mono">
-                      {formatRate(position.entryRate, position.currency)}
+                      ${formatPrice(position.entryPrice, position.commodity)}
                     </TableCell>
                     <TableCell>
                       <span className={`font-mono font-medium ${getPnLColor(position.unrealizedPnL)}`}>
@@ -357,7 +378,7 @@ const PositionMonitor = () => {
       <Card>
         <CardHeader>
           <CardTitle>Market Movements</CardTitle>
-          <CardDescription>Real-time FX rate movements</CardDescription>
+          <CardDescription>Real-time commodity price movements</CardDescription>
         </CardHeader>
         <CardContent>
           <ResponsiveContainer width="100%" height={300}>
@@ -366,9 +387,10 @@ const PositionMonitor = () => {
               <XAxis dataKey="time" />
               <YAxis />
               <Tooltip />
-              <Line type="monotone" dataKey="eurUsd" stroke="#8884d8" strokeWidth={2} name="EUR/USD" />
-              <Line type="monotone" dataKey="gbpUsd" stroke="#82ca9d" strokeWidth={2} name="GBP/USD" />
-              <Line type="monotone" dataKey="usdJpy" stroke="#ffc658" strokeWidth={2} name="USD/JPY" />
+              <Line type="monotone" dataKey="wti" stroke="#8884d8" strokeWidth={2} name="WTI Crude" />
+              <Line type="monotone" dataKey="gold" stroke="#ffd700" strokeWidth={2} name="Gold" />
+              <Line type="monotone" dataKey="corn" stroke="#82ca9d" strokeWidth={2} name="Corn" />
+              <Line type="monotone" dataKey="natgas" stroke="#ffc658" strokeWidth={2} name="Natural Gas" />
             </LineChart>
           </ResponsiveContainer>
         </CardContent>
@@ -389,7 +411,7 @@ const PositionMonitor = () => {
               <Zap className="h-4 w-4 text-yellow-600" />
               <div className="flex-1">
                 <p className="text-sm font-medium">Position Limit Warning</p>
-                <p className="text-xs text-muted-foreground">USD/JPY position approaching daily limit (85% utilized)</p>
+                <p className="text-xs text-muted-foreground">WTI position approaching daily limit (85% utilized)</p>
               </div>
               <Badge variant="outline" className="text-xs">
                 10:34:22
@@ -400,7 +422,7 @@ const PositionMonitor = () => {
               <AlertTriangle className="h-4 w-4 text-red-600" />
               <div className="flex-1">
                 <p className="text-sm font-medium">Hedge Effectiveness Alert</p>
-                <p className="text-xs text-muted-foreground">EUR/USD hedge effectiveness below 80% threshold</p>
+                <p className="text-xs text-muted-foreground">GOLD hedge effectiveness below 80% threshold</p>
               </div>
               <Badge variant="outline" className="text-xs">
                 10:32:15

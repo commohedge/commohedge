@@ -13,6 +13,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { useFinancialData } from "@/hooks/useFinancialData";
+import { useCommodityData } from "@/hooks/useCommodityData";
 import { toast } from "@/hooks/use-toast";
 import { 
   Settings as SettingsIcon, 
@@ -136,6 +137,7 @@ interface AppSettings {
 
 const Settings = () => {
   const { marketData, updateMarketData, isLiveMode, setLiveMode, exposures, deleteExposure, addExposure } = useFinancialData();
+  const { clearAllData: clearCommodityData } = useCommodityData();
   const { companySettings, updateCompanySettings, getCompanyNameParts, getCompanyLogo, setCompanyLogo, resetCompanyLogo, isLoaded, getCompanyLogo: getLogo, getCompanyNameParts: getNameParts } = useCompanySettings();
   
   // Function to apply zoom to the entire application
@@ -451,6 +453,14 @@ const Settings = () => {
         }
       }
 
+      // ✅ NOUVEAU : Supprimer également les données de commodités
+      try {
+        clearCommodityData();
+        console.log('✅ Commodity data cleared successfully');
+      } catch (error) {
+        console.error('Error clearing commodity data:', error);
+      }
+
       // Clear localStorage as backup
       localStorage.removeItem('fxExposures');
       localStorage.removeItem('fxExposuresBackup');
@@ -471,12 +481,12 @@ const Settings = () => {
       // Close dialog
       setShowDeleteDialog(false);
       
-      console.log(`✅ Suppression terminée: ${deletedCount}/${totalCount} expositions supprimées`);
+      console.log(`✅ Suppression terminée: ${deletedCount}/${totalCount} expositions FX supprimées + données commodités supprimées`);
       
       // Show success notification
       toast({
-        title: "✅ Toutes les expositions supprimées",
-        description: `${deletedCount} exposition(s) ont été supprimées avec succès`,
+        title: "✅ Toutes les données supprimées",
+        description: `${deletedCount} exposition(s) FX et toutes les expositions commodités ont été supprimées avec succès`,
       });
       
     } catch (error) {

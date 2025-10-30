@@ -91,9 +91,7 @@ const Pricers = () => {
   
   // Helper functions for commodity pricing
   const getRiskFreeRate = () => pricingInputs.interestRate / 100;
-  const getStorageCost = () => pricingInputs.storageCost / 100;
-  const getConvenienceYield = () => pricingInputs.convenienceYield / 100;
-  const calculateCostOfCarry = () => getRiskFreeRate() + getStorageCost() - getConvenienceYield();
+  const calculateCostOfCarry = () => getRiskFreeRate();
   
   // État principal
   const [selectedInstrument, setSelectedInstrument] = useState('call');
@@ -111,8 +109,6 @@ const Pricers = () => {
     maturityDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 1 an par défaut
     spotPrice: 75.50, // WTI default price
     interestRate: 5.0, // Risk-free rate (en pourcentage)
-    storageCost: 2.0, // Storage cost (en pourcentage)
-    convenienceYield: 1.0, // Convenience yield (en pourcentage)
     timeToMaturity: 1.0,
     volatility: 25.0, // Commodity volatility (en pourcentage)
     numSimulations: 1000 // ✅ 1000 comme Strategy Builder
@@ -797,7 +793,7 @@ const Pricers = () => {
                     </Select>
                     <div className="text-xs text-muted-foreground">
                       {underlyingPriceType === 'forward' 
-                        ? `Forward = ${pricingInputs.spotPrice} × exp((${pricingInputs.interestRate}% + ${pricingInputs.storageCost}% - ${pricingInputs.convenienceYield}%) × ${pricingInputs.timeToMaturity.toFixed(2)}) ≈ ${(pricingInputs.spotPrice * Math.exp(calculateCostOfCarry() * pricingInputs.timeToMaturity)).toFixed(4)}`
+                        ? `Forward = ${pricingInputs.spotPrice} × exp(${pricingInputs.interestRate}% × ${pricingInputs.timeToMaturity.toFixed(2)}) ≈ ${(pricingInputs.spotPrice * Math.exp(calculateCostOfCarry() * pricingInputs.timeToMaturity)).toFixed(4)}`
                         : `Spot = ${pricingInputs.spotPrice} (current market price)`
                       }
                     </div>
@@ -1004,33 +1000,6 @@ const Pricers = () => {
                   />
                 </div>
 
-                {/* Storage Cost */}
-                <div className="space-y-2">
-                  <Label>
-                    Storage Cost (%)
-                    <span className="ml-1 text-xs text-muted-foreground" title="Storage cost for holding the commodity">?</span>
-                  </Label>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    value={pricingInputs.storageCost}
-                    onChange={(e) => updatePricingInput('storageCost', parseFloat(e.target.value))}
-                  />
-                </div>
-
-                {/* Convenience Yield */}
-                <div className="space-y-2">
-                  <Label>
-                    Convenience Yield (%)
-                    <span className="ml-1 text-xs text-muted-foreground" title="Convenience yield from holding the commodity">?</span>
-                  </Label>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    value={pricingInputs.convenienceYield}
-                    onChange={(e) => updatePricingInput('convenienceYield', parseFloat(e.target.value))}
-                  />
-                </div>
 
                 {/* Barrière - visible par défaut pour les options avec barrières */}
                 {(selectedInstrument.includes('knockout') || selectedInstrument.includes('knockin') || selectedInstrument.includes('touch')) && (

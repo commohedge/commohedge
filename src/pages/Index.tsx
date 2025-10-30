@@ -3,7 +3,7 @@
  * 
  * This simulator has been adapted specifically for commodity options trading.
  * Key commodity-specific features:
- * - Black-76 pricing model for commodity options
+ * - Black-Scholes and Monte Carlo pricing models for vanilla options
  * - Cost of carry support (storage costs & convenience yields)
  * - Commodity forward pricing using cost of carry
  * - Commodity management (Energy, Metals, Agriculture, Livestock)
@@ -13,7 +13,7 @@
  * 
  * Calculation Models:
  * - Commodity Forward: S * exp(b * t) where b = r + storage - convenience
- * - Commodity Options: Black-76 model with cost of carry
+ * - Vanilla Options: Black-Scholes or Monte Carlo simulation
  * - Monte Carlo Drift: (b - 0.5 * σ²) for commodity price dynamics
  */
 
@@ -55,28 +55,6 @@ export const calculateFXForwardPrice = (S: number, r_d: number, r_f: number, t: 
   return S * Math.exp(b * t);
 };
 
-// Black-76 Commodity Option Pricing Model
-export const calculateBlack76Price = (type: string, S: number, K: number, r: number, b: number, t: number, sigma: number): number => {
-  const F = S * Math.exp(b * t);
-  const d1 = (Math.log(F / K) + (sigma * sigma / 2) * t) / (sigma * Math.sqrt(t));
-  const d2 = d1 - sigma * Math.sqrt(t);
-  
-  const discountFactor = Math.exp(-r * t);
-  
-  if (type === 'call') {
-    return discountFactor * (F * CND(d1) - K * CND(d2));
-  } else {
-    return discountFactor * (K * CND(-d2) - F * CND(-d1));
-  }
-};
-
-// Legacy: Use calculateBlack76Price for commodity options
-// For backwards compatibility, this wraps Black-76 with FX-style parameters
-export const calculateGarmanKohlhagenPrice = (type: string, S: number, K: number, r_d: number, r_f: number, t: number, sigma: number): number => {
-  const r = r_d; // Risk-free rate
-  const b = r_d - r_f; // Cost of carry (interest rate differential)
-  return calculateBlack76Price(type, S, K, r, b, t, sigma);
-};
 
 // Vanilla option Monte Carlo pricing for commodities
 export const calculateVanillaOptionMonteCarlo = (
@@ -673,9 +651,20 @@ export const calculateOptionPrice = (
   numSimulations: number = 1000
 ): number => {
   if (type === 'call' || type === 'put') {
-    return calculateGarmanKohlhagenPrice(type, S, K, r_d, r_f, t, sigma);
+    // Use Black-Scholes for vanilla options
+    const d1 = (Math.log(S/K) + (r_d - r_f + sigma*sigma/2)*t) / (sigma*Math.sqrt(t));
+    const d2 = d1 - sigma*Math.sqrt(t);
+    
+    const Nd1 = CND(d1);
+    const Nd2 = CND(d2);
+    
+    if (type === 'call') {
+      return S * Math.exp(-r_f * t) * Nd1 - K * Math.exp(-r_d * t) * Nd2;
+    } else { // put
+      return K * Math.exp(-r_d * t) * CND(-d2) - S * Math.exp(-r_f * t) * CND(-d1);
+    }
   } else if (type.includes('knockout') || type.includes('knockin')) {
-    return calculateBarrierOptionClosedForm(type, S, K, r_d, t, sigma, barrier || 0, secondBarrier, r_f);
+    return calculateBarrierOptionClosedForm(type, S, K, r_d, t, sigma, barrier || 0, secondBarrier, 0);
   } else {
     return calculateDigitalOptionPrice(type, S, K, r_d, t, sigma, barrier, secondBarrier, numSimulations, rebate || 1);
   }
@@ -705,10 +694,21 @@ export const calculateImpliedVolatility = (
   let price = 0;
   let diff = 0;
   let iteration = 0;
+  let d1 = 0;
 
-  while (iteration < maxIterations) {
-    // Calcul du prix avec la volatilité courante
-    price = calculateGarmanKohlhagenPrice(optionType, S, K, r_d, r_f, t, sigma);
+    while (iteration < maxIterations) {
+      // Calcul du prix avec la volatilité courante (Black-Scholes)
+      d1 = (Math.log(S/K) + (r_d - r_f + sigma*sigma/2)*t) / (sigma*Math.sqrt(t));
+      const d2 = d1 - sigma*Math.sqrt(t);
+      
+      const Nd1 = CND(d1);
+      const Nd2 = CND(d2);
+      
+      if (optionType === 'call') {
+        price = S * Math.exp(-r_f * t) * Nd1 - K * Math.exp(-r_d * t) * Nd2;
+      } else { // put
+        price = K * Math.exp(-r_d * t) * CND(-d2) - S * Math.exp(-r_f * t) * CND(-d1);
+      }
     
     // Différence entre le prix calculé et le prix observé
     diff = price - marketPrice;
@@ -719,7 +719,6 @@ export const calculateImpliedVolatility = (
     }
     
     // Calcul de la vega (dérivée du prix par rapport à la volatilité)
-    const d1 = (Math.log(S/K) + (r_d - r_f + sigma*sigma/2)*t) / (sigma*Math.sqrt(t));
     vega = S * Math.sqrt(t) * Math.exp(-r_f * t) * (1/Math.sqrt(2*Math.PI)) * Math.exp(-d1*d1/2);
     
     // Mise à jour de sigma selon la méthode de Newton-Raphson
@@ -755,7 +754,13 @@ export const calculateSwapPrice = (forwards: number[], times: number[], r: numbe
 export const calculateTimeToMaturity = (maturityDate: string, valuationDate: string): number => {
   const maturity = new Date(maturityDate + 'T24:00:00Z');
   const valuation = new Date(valuationDate + 'T00:00:00Z');
-  const diffTime = Math.abs(maturity.getTime() - valuation.getTime());
+  
+  // Si la valuation date est après la maturity date, l'option est expirée
+  if (valuation >= maturity) {
+    return 0;
+  }
+  
+  const diffTime = maturity.getTime() - valuation.getTime();
   return diffTime / (365.25 * 24 * 60 * 60 * 1000);
 };
 
@@ -880,7 +885,7 @@ import { Card, CardHeader, CardTitle, CardContent, CardDescription, CardFooter }
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { Plus, Trash2, Save, X, AlertTriangle, Table, PlusCircle, Trash, Upload, BarChart3, Calculator, Shield, Calendar } from 'lucide-react';
+import { Plus, Trash2, Save, X, AlertTriangle, Table, PlusCircle, Trash, Upload, BarChart3, Calculator, Shield, Calendar, ChevronDown } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Link } from 'react-router-dom';
 import { CalculatorState, CustomPeriod } from '@/types/CalculatorState';
@@ -916,8 +921,6 @@ interface FXStrategyParams {
   monthsToHedge: number;
   // Commodity parameters
   interestRate: number;        // Risk-free rate (r)
-  storageCost: number;         // Storage cost per year
-  convenienceYield: number;    // Convenience yield per year
   // Legacy FX parameters for backward compatibility
   domesticRate?: number;
   foreignRate?: number;
@@ -1068,9 +1071,7 @@ interface PriceRange {
  */
 const calculateCostOfCarry = (params: FXStrategyParams): number => {
   const r = params.interestRate / 100;
-  const storage = (params.storageCost || 0) / 100;
-  const convenience = (params.convenienceYield || 0) / 100;
-  return r + storage - convenience;
+  return r;
 };
 
 /**
@@ -1386,167 +1387,99 @@ const Index = () => {
     const defaultScenarios = {
       base: {
         name: "Base Case",
-        description: "Normal market conditions - typical FX volatility of 10-15%",
-        volatility: 0.12,
-        drift: 0.005,
+        description: "Normal market conditions",
+        volatility: 0.20,
+        drift: 0.01,
         priceShock: 0,
         forwardBasis: 0,
         isEditable: true,
         isHistorical: false
       },
       
-      // Historical Crisis Scenarios
-      gfc2008: {
-        name: "Global Financial Crisis (2008)",
-        description: "Based on 2008 crisis: extreme volatility, flight to USD/CHF/JPY safe havens",
-        volatility: 0.35,
-        drift: -0.015,
-        priceShock: -0.12,
-        forwardBasis: 0.008,
-        isEditable: true,
-        isHistorical: true
-      },
-      
-      blackWednesday: {
-        name: "Black Wednesday (1992)",
-        description: "ERM crisis: GBP devaluation, central bank intervention failure",
-        volatility: 0.45,
-        drift: -0.025,
-        priceShock: -0.15,
-        forwardBasis: 0.015,
-        isEditable: true,
-        isHistorical: true
-      },
-      
-      asianCrisis: {
-        name: "Asian Financial Crisis (1997-98)",
-        description: "EM currency collapse: massive capital outflows, currency pegs breaking",
-        volatility: 0.55,
-        drift: -0.035,
-        priceShock: -0.25,
-        forwardBasis: 0.025,
-        isEditable: true,
-        isHistorical: true
-      },
-      
-      brexit2016: {
-        name: "Brexit Vote (2016)",
-        description: "Political risk shock: sudden devaluation, risk-off sentiment",
-        volatility: 0.28,
-        drift: -0.012,
-        priceShock: -0.08,
-        forwardBasis: 0.005,
-        isEditable: true,
-        isHistorical: true
-      },
-      
-      covid2020: {
-        name: "COVID-19 Pandemic (2020)",
-        description: "Global health crisis: extreme volatility, central bank intervention",
-        volatility: 0.32,
-        drift: -0.008,
-        priceShock: -0.10,
-        forwardBasis: 0.003,
-        isEditable: true,
-        isHistorical: true
-      },
-      
-      swissFrancShock: {
-        name: "Swiss Franc Shock (2015)",
-        description: "SNB abandon peg: sudden CHF appreciation, market disruption",
+      highVol: {
+        name: "High Volatility",
+        description: "Double volatility scenario",
         volatility: 0.40,
-        drift: 0.010,
-        priceShock: 0.18,
-        forwardBasis: -0.008,
+        drift: 0.01,
+        priceShock: 0,
+        forwardBasis: 0,
         isEditable: true,
-        isHistorical: true
+        isHistorical: false
       },
       
-      // ECB/Fed Stress Test Scenarios
-      adverseECB: {
-        name: "ECB Adverse Scenario",
-        description: "Based on ECB stress testing: eurozone recession, banking stress",
+      crash: {
+        name: "Market Crash",
+        description: "High volatility, negative drift, price shock",
+        volatility: 0.50,
+        drift: -0.03,
+        priceShock: -0.20,
+        forwardBasis: 0,
+        isEditable: true,
+        isHistorical: false
+      },
+      
+      bull: {
+        name: "Bull Market",
+        description: "Low volatility, positive drift, upward shock",
+        volatility: 0.15,
+        drift: 0.02,
+        priceShock: 0.10,
+        forwardBasis: 0,
+        isEditable: true,
+        isHistorical: false
+      },
+      
+      contango: {
+        name: "Contango",
+        description: "Upward sloping forward curve",
         volatility: 0.25,
-        drift: -0.020,
-        priceShock: -0.09,
-        forwardBasis: 0.012,
+        drift: 0.005,
+        priceShock: 0,
+        forwardBasis: 0.05,
         isEditable: true,
         isHistorical: false
       },
       
-      fedSCAR: {
-        name: "Fed CCAR Adverse",
-        description: "Fed stress test: severe US recession, global spillover effects",
-        volatility: 0.30,
-        drift: -0.018,
-        priceShock: -0.11,
-        forwardBasis: 0.010,
+      backwardation: {
+        name: "Backwardation",
+        description: "Downward sloping forward curve",
+        volatility: 0.25,
+        drift: 0.005,
+        priceShock: 0,
+        forwardBasis: -0.05,
         isEditable: true,
         isHistorical: false
       },
       
-      // Contemporary Risk Scenarios  
-      centralBankDivergence: {
-        name: "Central Bank Policy Divergence",
-        description: "Extreme monetary policy divergence causing capital flow reversals",
-        volatility: 0.22,
-        drift: -0.010,
-        priceShock: -0.06,
-        forwardBasis: 0.018,
+      contangoReal: {
+        name: "Contango (Real Prices)",
+        description: "Contango with real price impact",
+        volatility: 0.25,
+        drift: 0.005,
+        priceShock: 0,
+        forwardBasis: 0.05,
+        realBasis: 0.05,
         isEditable: true,
         isHistorical: false
       },
       
-      emergingMarketCrisis: {
-        name: "Emerging Market Crisis",
-        description: "Major EM economy crisis with contagion to developed markets",
-        volatility: 0.38,
-        drift: -0.022,
-        priceShock: -0.14,
-        forwardBasis: 0.020,
-        isEditable: true,
-        isHistorical: false
-      },
-      
-      tradeWar: {
-        name: "Trade War Escalation",
-        description: "Severe trade tensions leading to currency manipulation concerns",
-        volatility: 0.26,
-        drift: -0.013,
-        priceShock: -0.07,
-        forwardBasis: 0.008,
-        isEditable: true,
-        isHistorical: false
-      },
-      
-      inflationShock: {
-        name: "Inflation Shock",
-        description: "Unexpected inflation surge forcing aggressive central bank action",
-        volatility: 0.24,
-        drift: 0.008,
-        priceShock: 0.05,
-        forwardBasis: 0.015,
-        isEditable: true,
-        isHistorical: false
-      },
-      
-      // Tail Risk Scenarios
-      reserveCurrencyCrisis: {
-        name: "Reserve Currency Crisis",
-        description: "Loss of confidence in major reserve currency (USD/EUR)",
-        volatility: 0.60,
-        drift: -0.040,
-        priceShock: -0.30,
-        forwardBasis: 0.035,
+      backwardationReal: {
+        name: "Backwardation (Real Prices)",
+        description: "Backwardation with real price impact",
+        volatility: 0.25,
+        drift: 0.005,
+        priceShock: 0,
+        forwardBasis: -0.05,
+        realBasis: -0.05,
         isEditable: true,
         isHistorical: false
       },
       
       custom: {
-        name: "Custom Scenario",
+        name: "Custom Case",
         description: "User-defined stress scenario",
-        volatility: 0.15,
-        drift: 0.005,
+        volatility: 0.20,
+        drift: 0.01,
         priceShock: 0,
         forwardBasis: 0,
         isCustom: true,
@@ -1560,7 +1493,7 @@ const Index = () => {
       const parsed = JSON.parse(savedState);
       // Check if we have all the new scenarios, if not, use defaults
       const savedScenarios = parsed.stressTestScenarios || {};
-      const expectedScenarios = ['base', 'gfc2008', 'blackWednesday', 'asianCrisis', 'brexit2016', 'covid2020', 'swissFrancShock', 'adverseECB', 'fedSCAR', 'centralBankDivergence', 'emergingMarketCrisis', 'tradeWar', 'inflationShock', 'reserveCurrencyCrisis', 'custom'];
+      const expectedScenarios = ['base', 'highVol', 'crash', 'bull', 'contango', 'backwardation', 'contangoReal', 'backwardationReal', 'custom'];
       
       const hasAllScenarios = expectedScenarios.every(key => savedScenarios[key]);
       
@@ -1582,9 +1515,9 @@ const Index = () => {
     const scenario = stressTestScenarios[activeStressTest];
     return {
       name: scenario.name,
-      type: scenario.isHistorical ? 'Historical' : 
-            ['adverseECB', 'fedSCAR'].includes(activeStressTest) ? 'Regulatory' : 
-            activeStressTest === 'reserveCurrencyCrisis' ? 'Tail Risk' : 'Contemporary',
+      type: scenario.isCustom ? 'Custom' : 
+            ['contango', 'backwardation', 'contangoReal', 'backwardationReal'].includes(activeStressTest) ? 'Market Structure' : 
+            ['crash', 'bull'].includes(activeStressTest) ? 'Market Direction' : 'Base',
       riskLevel: Math.abs(scenario.priceShock) > 0.15 ? 'High' : 
                  Math.abs(scenario.priceShock) > 0.05 ? 'Medium' : 'Low',
       severity: {
@@ -2163,12 +2096,7 @@ const Index = () => {
     
     // For standard options, use appropriate pricing model
     let price = 0;
-    if (optionPricingModel === 'garman-kohlhagen') {
-      // Use Garman-Kohlhagen for FX options
-      const r = getRiskFreeRate(params);
-      const b = calculateCostOfCarry(params);
-      price = calculateBlack76Price(type, S, K, r, b, t, effectiveSigma);
-    } else if (optionPricingModel === 'monte-carlo') {
+    if (optionPricingModel === 'monte-carlo') {
       // Use Monte Carlo for vanilla options
       price = calculateVanillaOptionMonteCarlo(
         type, 
@@ -2181,7 +2109,7 @@ const Index = () => {
         1000 // Number of simulations for vanilla options
       );
     } else {
-      // Use traditional Black-Scholes
+      // Use traditional Black-Scholes (default)
       const d1 = (Math.log(S/K) + (r + effectiveSigma**2/2)*t) / (effectiveSigma*Math.sqrt(t));
       const d2 = d1 - effectiveSigma*Math.sqrt(t);
       
@@ -2988,10 +2916,11 @@ const Index = () => {
         const monthKey = `${date.getFullYear()}-${date.getMonth() + 1}`;
       const forward = (() => {
         return manualForwards[monthKey] || 
-          calculateFXForwardPrice(
+          calculateCommodityForwardPrice(
             initialSpotPrice, 
-            params.domesticRate / 100, 
-            params.foreignRate / 100, 
+            params.interestRate / 100, 
+            0, // storage cost = 0
+            0, // convenience yield = 0
             t
           );
       })();
@@ -3004,10 +2933,11 @@ const Index = () => {
             months.map((_, idx) => {
                 const monthKey = `${_.getFullYear()}-${_.getMonth() + 1}`;
                 return manualForwards[monthKey] || 
-            calculateFXForwardPrice(
+            calculateCommodityForwardPrice(
               initialSpotPrice, 
-              params.domesticRate / 100, 
-              params.foreignRate / 100, 
+              params.interestRate / 100, 
+              0, // storage cost = 0
+              0, // convenience yield = 0
               timeToMaturities[idx]
             );
             }),
@@ -3046,24 +2976,41 @@ const Index = () => {
                 const balanceWithType = balanceWithOption.type.includes('put') ? 'put' : 'call';
                 const currentType = option.type.includes('put') ? 'put' : 'call';
                 
-                // Get the risk-free rate and cost of carry for commodities
-                // (Keep variable names for minimal code changes)
+                // Get the risk-free rate for commodities
                 const r_d = getRiskFreeRate(params);
-                const r_f = 0; // Not used in Black-76
                 
                 // Calculate the premium of the balancing option for this specific time to maturity
                 // This is important - we use the specific time to maturity for this period
                 const r = getRiskFreeRate(params);
                 const b = calculateCostOfCarry(params);
-                const balanceWithPrice = calculateBlack76Price(
-                  balanceWithType,
-                  forward,
-                  balanceWithStrike,
-                  r,
-                  b,
-                  t, // Use this period's time to maturity
-                  balanceWithVol
-                );
+                
+                // Use the selected pricing model for the balancing option
+                let balanceWithPrice = 0;
+                if (optionPricingModel === 'monte-carlo') {
+                  balanceWithPrice = calculateVanillaOptionMonteCarlo(
+                    balanceWithType,
+                    forward,
+                    balanceWithStrike,
+                    r,
+                    b,
+                    t,
+                    balanceWithVol,
+                    1000
+                  );
+                } else {
+                  // Use Black-Scholes (default)
+                  const d1 = (Math.log(forward/balanceWithStrike) + (r + balanceWithVol**2/2)*t) / (balanceWithVol*Math.sqrt(t));
+                  const d2 = d1 - balanceWithVol*Math.sqrt(t);
+                  
+                  const Nd1 = (1 + erf(d1/Math.sqrt(2)))/2;
+                  const Nd2 = (1 + erf(d2/Math.sqrt(2)))/2;
+                  
+                  if (balanceWithType === 'call') {
+                    balanceWithPrice = forward*Nd1 - balanceWithStrike*Math.exp(-r*t)*Nd2;
+                  } else { // put
+                    balanceWithPrice = balanceWithStrike*Math.exp(-r*t)*(1-Nd2) - forward*(1-Nd1);
+                  }
+                }
                 
                 // Find the strike that gives an equivalent premium for the current option
                 let low = forward * 0.5;    // Start with a wide range
@@ -3074,15 +3021,33 @@ const Index = () => {
                 // Use bisection method to find equilibrium strike
                 for (let iter = 0; iter < 50; iter++) {
                   mid = (low + high) / 2;
-                  price = calculateBlack76Price(
-                    currentType,
-                    forward,
-                    mid,
-                    r,
-                    b,
-                    t, // Use this period's time to maturity
-                    currentVol
-                  );
+                  
+                  // Use the selected pricing model for the current option
+                  if (optionPricingModel === 'monte-carlo') {
+                    price = calculateVanillaOptionMonteCarlo(
+                      currentType,
+                      forward,
+                      mid,
+                      r,
+                      b,
+                      t,
+                      currentVol,
+                      1000
+                    );
+                  } else {
+                    // Use Black-Scholes (default)
+                    const d1 = (Math.log(forward/mid) + (r + currentVol**2/2)*t) / (currentVol*Math.sqrt(t));
+                    const d2 = d1 - currentVol*Math.sqrt(t);
+                    
+                    const Nd1 = (1 + erf(d1/Math.sqrt(2)))/2;
+                    const Nd2 = (1 + erf(d2/Math.sqrt(2)))/2;
+                    
+                    if (currentType === 'call') {
+                      price = forward*Nd1 - mid*Math.exp(-r*t)*Nd2;
+                    } else { // put
+                      price = mid*Math.exp(-r*t)*(1-Nd2) - forward*(1-Nd1);
+                    }
+                  }
                   
                   // Check if we're close enough
                   if (Math.abs(price - balanceWithPrice) < 0.0001) {
@@ -3211,19 +3176,7 @@ const Index = () => {
               ? iv / 100
               : option.volatility / 100;
           // For standard options, use appropriate pricing model
-          if (optionPricingModel === 'black-76' || optionPricingModel === 'garman-kohlhagen') {
-            const r = getRiskFreeRate(params);
-            const b = calculateCostOfCarry(params);
-            price = calculateBlack76Price(
-              option.type,
-              params.spotPrice,
-              strike,
-              r,
-              b,
-              t,
-              effectiveSigma
-            );
-          } else if (optionPricingModel === 'monte-carlo') {
+          if (optionPricingModel === 'monte-carlo') {
             // Use Monte Carlo for vanilla options with cost of carry
             const r = getRiskFreeRate(params);
             const b = calculateCostOfCarry(params);
@@ -3238,22 +3191,18 @@ const Index = () => {
               1000 // Number of simulations for vanilla options
             );
           } else {
-            // Black-76 fallback
+            // Black-Scholes (default)
             const r = getRiskFreeRate(params);
-            const b = calculateCostOfCarry(params);
-            const F = params.spotPrice * Math.exp(b * t);
-            const d1 = (Math.log(F/strike) + (effectiveSigma**2/2)*t) / (effectiveSigma*Math.sqrt(t));
+            const d1 = (Math.log(params.spotPrice/strike) + (r + effectiveSigma**2/2)*t) / (effectiveSigma*Math.sqrt(t));
             const d2 = d1 - effectiveSigma*Math.sqrt(t);
             
             const Nd1 = (1 + erf(d1/Math.sqrt(2)))/2;
             const Nd2 = (1 + erf(d2/Math.sqrt(2)))/2;
             
-            const discountFactor = Math.exp(-r * t);
-            
             if (option.type === 'call') {
-              price = discountFactor * (F*Nd1 - strike*Nd2);
+              price = params.spotPrice*Nd1 - strike*Math.exp(-r*t)*Nd2;
             } else { // put
-              price = discountFactor * (strike*(1-Nd2) - F*(1-Nd1));
+              price = strike*Math.exp(-r*t)*(1-Nd2) - params.spotPrice*(1-Nd1);
             }
           }
         } else if (option.type.includes('knockout') || option.type.includes('knockin')) {
@@ -3645,33 +3594,40 @@ const Index = () => {
       
       for (let i = 0; i < params.monthsToHedge; i++) {
       const date = new Date(strategyStartDate);
-      date.getMonth() + i;
+      date.setMonth(date.getMonth() + i); // ✅ CORRECTION : Modifier la date pour chaque mois
       
       const monthKey = `${date.getFullYear()}-${date.getMonth() + 1}`;
         const timeInYears = i / 12;
+        
+        // Ajouter le mois au tableau pour utilisation ultérieure
+        months.push(new Date(date));
       
       // Calcul du forward price standard basé sur le taux d'intérêt
-      const baseForward = calculateCommodityForwardPrice(params.spotPrice, getRiskFreeRate(params), params.storageCost/100, params.convenienceYield/100, timeInYears);
+      const baseForward = calculateCommodityForwardPrice(params.spotPrice, getRiskFreeRate(params), 0, 0, timeInYears);
       
-      // Pour Contango et Backwardation standard, appliquer la base mensuelle aux forwards
-      if (scenario.forwardBasis !== undefined) {
-        // Pour Contango: augmentation mensuelle (ex: 1.05^mois)
-        // Pour Backwardation: diminution mensuelle (ex: 0.95^mois)
-        newForwards[monthKey] = baseForward * Math.pow(1 + scenario.forwardBasis, i);
-      } else {
-        // Si pas de base spécifiée, utiliser le forward standard
-        newForwards[monthKey] = baseForward;
-      }
-      
-      // Pour tous les scénarios, appliquer le choc de prix aux prix réels
+      // ✅ LOGIQUE CORRIGÉE : Distinguer les scénarios "Real Prices" des autres
     if (scenario.realBasis !== undefined) {
         // Pour Contango (Real Prices) et Backwardation (Real Prices)
+        // NE PAS toucher aux forwards - garder les forwards calculés normalement
+        // Seulement modifier les real prices
         newRealPrices[monthKey] = adjustedPrice * Math.pow(1 + scenario.realBasis, i);
+      } else if (scenario.forwardBasis !== undefined) {
+        // Pour Contango et Backwardation standard (sans "Real Prices")
+        // Modifier les forwards ET les real prices
+        newForwards[monthKey] = baseForward * Math.pow(1 + scenario.forwardBasis, i);
+        newRealPrices[monthKey] = adjustedPrice;
       } else {
-        // Pour les autres scénarios, appliquer uniquement le choc de prix
+        // Pour les autres scénarios (Base Case, High Vol, Crash, Bull, Custom)
+        // Appliquer uniquement le choc de prix aux real prices
         newRealPrices[monthKey] = adjustedPrice;
       }
     }
+    
+    // ✅ DEBUG : Vérifier que les scénarios s'appliquent à toutes les maturités
+    console.log(`[STRESS TEST] Applying scenario: ${scenario.name}`);
+    console.log(`[STRESS TEST] Scenario type: ${scenario.realBasis !== undefined ? 'Real Prices' : scenario.forwardBasis !== undefined ? 'Forward Basis' : 'Standard'}`);
+    console.log(`[STRESS TEST] Generated forwards for ${Object.keys(newForwards).length} maturities:`, newForwards);
+    console.log(`[STRESS TEST] Generated real prices for ${Object.keys(newRealPrices).length} maturities:`, newRealPrices);
     
     if (Object.keys(newForwards).length > 0) {
       setManualForwards(newForwards);
@@ -3693,6 +3649,28 @@ const Index = () => {
         [field]: value
       }
     }));
+  };
+
+  // Reset stress test to base case
+  const resetStressTest = () => {
+    setActiveStressTest('base');
+    
+    // Réinitialiser les forwards et real prices
+    setManualForwards({});
+    setRealPrices({});
+    
+    // Réinitialiser les paramètres de prix réels
+    setRealPriceParams(prev => ({
+      ...prev,
+      useSimulation: true,
+      volatility: 0.20,
+      drift: 0.01
+    }));
+    
+    // Recalculer avec les paramètres de base
+    calculateResults();
+    
+    console.log('[STRESS TEST] Reset to base case - all maturities cleared');
   };
 
   // Type guard for results
@@ -3778,11 +3756,22 @@ const Index = () => {
   }, [params.currencyPair.symbol, params.spotPrice]);
 
   const saveScenario = () => {
-    if (!results || !payoffData) return;
+    if (!results || !payoffData) {
+      toast({
+        title: "Error",
+        description: "No results to save. Please run calculations first.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Ask user for scenario name
+    const scenarioName = prompt("Enter scenario name:", `Stress Test - ${activeStressTest ? stressTestScenarios[activeStressTest]?.name : 'Base Case'} - ${new Date().toLocaleDateString()}`);
+    if (!scenarioName) return;
 
     const scenario: SavedScenario = {
       id: uuidv4(),
-      name: `Scenario ${new Date().toLocaleDateString()}`,
+      name: scenarioName,
       timestamp: Date.now(),
       params,
       strategy,
@@ -3800,7 +3789,15 @@ const Index = () => {
     savedScenarios.push(scenario);
     localStorage.setItem('optionScenarios', JSON.stringify(savedScenarios));
 
-    alert('Scenario saved successfully!');
+    toast({
+      title: "Success",
+      description: `Scenario "${scenarioName}" saved successfully!`,
+    });
+  };
+
+  const viewSavedScenarios = () => {
+    // Navigate to the saved scenarios page instead of showing an alert
+    window.location.href = '/saved';
   };
 
   const importToHedgingInstruments = () => {
@@ -3850,7 +3847,7 @@ const Index = () => {
           // Informations de marché du moment
           marketData: {
             spotPrice: params.spotPrice,
-            domesticRate: params.domesticRate,
+            domesticRate: params.interestRate, // ✅ CORRECTION : Utiliser interestRate comme Risk-Free Rate
             foreignRate: params.foreignRate,
             monthKey: monthKey,
             periodIndex: periodIndex
@@ -3963,7 +3960,7 @@ const Index = () => {
         monthsToHedge: params.monthsToHedge,
         baseVolume: params.totalVolume, // Backward compatibility
         quoteVolume: params.totalVolume * params.spotPrice, // Backward compatibility
-        domesticRate: params.domesticRate,
+        domesticRate: params.interestRate, // ✅ CORRECTION : Utiliser interestRate comme Risk-Free Rate pour les commodités
         foreignRate: params.foreignRate,
         volumeType: params.volumeType,
         useCustomPeriods: params.useCustomPeriods,
@@ -4199,8 +4196,6 @@ const Index = () => {
         startDate: new Date().toISOString().split('T')[0],
         monthsToHedge: 12,
         interestRate: 5.0,
-        storageCost: 2.0,
-        convenienceYield: 1.0,
         totalVolume: 1000000,
         baseVolume: 1000000, // Backward compatibility
         quoteVolume: 1000000 * CURRENCY_PAIRS[0].defaultSpotRate, // Backward compatibility
@@ -4453,10 +4448,11 @@ const Index = () => {
   // Fonction pour ajouter un forward FX
   const addForward = () => {
     // Calculer le taux forward théorique pour 1 an
-    const forwardRate = calculateFXForwardPrice(
+    const forwardRate = calculateCommodityForwardPrice(
       params.spotPrice, 
-      params.domesticRate / 100, 
-      params.foreignRate / 100, 
+      params.interestRate / 100, 
+      0, // storage cost = 0
+      0, // convenience yield = 0
       1.0 // 1 year
     );
 
@@ -6454,13 +6450,12 @@ const pricingFunctions = {
         </div>
       )}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid w-full grid-cols-6 mb-4">
-          <TabsTrigger value="parameters" className="py-2.5">Strategy Parameters</TabsTrigger>
-          <TabsTrigger value="stress" className="py-2.5">Stress Testing</TabsTrigger>
-          <TabsTrigger value="backtest" className="py-2.5">Historical Backtest</TabsTrigger>
-          <TabsTrigger value="riskmatrix" className="py-2.5">Risk Matrix Generator</TabsTrigger>
-          <TabsTrigger value="zerocost" className="py-2.5">Zero-Cost Commodity Strategies</TabsTrigger>
-          <TabsTrigger value="forexdashboard" className="py-2.5">Commodity Market</TabsTrigger>
+        <TabsList className="grid w-full grid-cols-5 mb-4">
+          <TabsTrigger value="parameters" className="py-2.5 text-sm">Strategy Parameters</TabsTrigger>
+          <TabsTrigger value="stress" className="py-2.5 text-sm">Stress Testing</TabsTrigger>
+          <TabsTrigger value="backtest" className="py-2.5 text-sm">Historical Backtest</TabsTrigger>
+          <TabsTrigger value="riskmatrix" className="py-2.5 text-sm">Risk Matrix</TabsTrigger>
+          <TabsTrigger value="zerocost" className="py-2.5 text-sm">Zero-Cost Strategies</TabsTrigger>
         </TabsList>
         
         <TabsContent value="parameters">
@@ -6750,44 +6745,6 @@ const pricingFunctions = {
                     />
                   </div>
                 </div>
-                <div className="compact-form-group">
-                  <label className="compact-label">Storage Cost (%) - Annual</label>
-                  <div className="flex items-center gap-2">
-                    <Slider 
-                      value={[params.storageCost]} 
-                      min={0} 
-                      max={20} 
-                      step={0.1}
-                      onValueChange={(value) => setParams({...params, storageCost: value[0]})}
-                      className="flex-1"
-                    />
-                    <Input
-                      type="number"
-                      value={params.storageCost}
-                      onChange={(e) => setParams({...params, storageCost: Number(e.target.value)})}
-                      className="compact-input w-16 text-center"
-                    />
-                  </div>
-                </div>
-                <div className="compact-form-group">
-                  <label className="compact-label">Convenience Yield (%) - Annual</label>
-                  <div className="flex items-center gap-2">
-                    <Slider 
-                      value={[params.convenienceYield]} 
-                      min={0} 
-                      max={15} 
-                      step={0.1}
-                      onValueChange={(value) => setParams({...params, convenienceYield: value[0]})}
-                      className="flex-1"
-                    />
-                    <Input
-                      type="number"
-                      value={params.convenienceYield}
-                      onChange={(e) => setParams({...params, convenienceYield: Number(e.target.value)})}
-                      className="compact-input w-16 text-center"
-                    />
-                  </div>
-                </div>
                 {/* Volume & Spot Rate - Compact Grid Layout */}
                 <div className="bg-muted/20 p-3 rounded-lg space-y-3">
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -7035,20 +6992,18 @@ const pricingFunctions = {
                       <label className="text-xs text-muted-foreground">Model Selection</label>
                   <Select 
                     value={optionPricingModel} 
-                    onValueChange={(value: string) => setOptionPricingModel(value as 'black-76' | 'black-scholes' | 'garman-kohlhagen' | 'monte-carlo')}
+                    onValueChange={(value: string) => setOptionPricingModel(value as 'black-scholes' | 'monte-carlo')}
                   >
                         <SelectTrigger className="h-8 text-xs">
                       <SelectValue placeholder="Select pricing model" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="black-76">Black-76 (Commodity Options) ⭐</SelectItem>
                       <SelectItem value="black-scholes">Black-Scholes</SelectItem>
-                      <SelectItem value="garman-kohlhagen">Garman-Kohlhagen (Legacy FX)</SelectItem>
                       <SelectItem value="monte-carlo">Monte Carlo Simulation</SelectItem>
                     </SelectContent>
                   </Select>
                       <p className="text-xs text-muted-foreground text-green-600">
-                        ✅ Black-76 model is recommended for commodity options with cost of carry
+                        ✅ Black-Scholes for standard options, Monte Carlo for complex scenarios
                   </p>
                     </div>
                 </div>
@@ -7451,11 +7406,19 @@ const pricingFunctions = {
           <Card className="mt-4">
             <CardHeader>
               <div className="flex items-center justify-between">
-                <CardTitle>FX Stress Test Scenarios</CardTitle>
+                <CardTitle>Stress Test Scenarios</CardTitle>
                 <div className="flex items-center gap-4">
                   <div className="text-sm text-muted-foreground">
-                    Based on historical events & regulatory stress tests
+                      Test your strategy under different market conditions
                   </div>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={resetStressTest}
+                        className="px-3 py-1 bg-green-600 hover:bg-green-700 text-white text-xs rounded transition-colors"
+                        title="Reset to Base Case scenario"
+                      >
+                        🏠 Reset to Base
+                      </button>
                   <button
                     onClick={() => {
                       // Clear localStorage and reload scenarios
@@ -7467,10 +7430,30 @@ const pricingFunctions = {
                   >
                     🔄 Reset Scenarios
                   </button>
+                    </div>
                 </div>
               </div>
             </CardHeader>
             <CardContent>
+              {/* Save Scenario Buttons */}
+              <div className="mb-4 flex gap-3">
+                <Button
+                  onClick={saveScenario}
+                  className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white"
+                  disabled={!results || !payoffData}
+                >
+                  <Save className="h-4 w-4" />
+                  Save Scenario
+                </Button>
+                <Button
+                  onClick={viewSavedScenarios}
+                  variant="outline"
+                  className="flex items-center gap-2"
+                >
+                  View Saved Scenarios
+                </Button>
+              </div>
+              
               {/* Scenarios count indicator */}
               <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
                 <div className="flex items-center justify-between text-sm">
@@ -7478,240 +7461,141 @@ const pricingFunctions = {
                     📊 {Object.keys(stressTestScenarios).length} scenarios available
                   </span>
                   <span className="text-blue-600">
-                    {Object.values(stressTestScenarios).filter(s => s.isHistorical).length} Historical | 
-                    {Object.values(stressTestScenarios).filter(s => ['adverseECB', 'fedSCAR'].includes(Object.keys(stressTestScenarios).find(k => stressTestScenarios[k] === s) || '')).length} Regulatory | 
-                    {Object.values(stressTestScenarios).filter(s => s.isCustom).length} Custom
+                    {Object.values(stressTestScenarios).filter(s => s.isCustom).length} Custom | 
+                    {Object.values(stressTestScenarios).filter(s => !s.isCustom).length} Predefined
                   </span>
                 </div>
               </div>
               
-              <div className="space-y-6">
-                {/* Group scenarios by category */}
-                {[
-                  { 
-                    title: "Base Scenario", 
-                    scenarios: Object.entries(stressTestScenarios).filter(([key]) => key === 'base'),
-                    color: "bg-gray-50 border-gray-200",
-                    icon: "⚪"
-                  },
-                  { 
-                    title: "Historical Crisis Events", 
-                    scenarios: Object.entries(stressTestScenarios).filter(([_, scenario]) => scenario.isHistorical),
-                    color: "bg-red-50 border-red-200",
-                    icon: "📊"
-                  },
-                  { 
-                    title: "Regulatory Stress Tests", 
-                    scenarios: Object.entries(stressTestScenarios).filter(([key]) => 
-                      ['adverseECB', 'fedSCAR'].includes(key)
-                    ),
-                    color: "bg-blue-50 border-blue-200",
-                    icon: "🏛️"
-                  },
-                  { 
-                    title: "Contemporary Risk Scenarios", 
-                    scenarios: Object.entries(stressTestScenarios).filter(([key]) => 
-                      ['centralBankDivergence', 'emergingMarketCrisis', 'tradeWar', 'inflationShock'].includes(key)
-                    ),
-                    color: "bg-yellow-50 border-yellow-200",
-                    icon: "⚡"
-                  },
-                  { 
-                    title: "Tail Risk Scenarios", 
-                    scenarios: Object.entries(stressTestScenarios).filter(([key]) => 
-                      key === 'reserveCurrencyCrisis'
-                    ),
-                    color: "bg-purple-50 border-purple-200",
-                    icon: "⚠️"
-                  },
-                  { 
-                    title: "Custom Scenarios", 
-                    scenarios: Object.entries(stressTestScenarios).filter(([_, scenario]) => scenario.isCustom),
-                    color: "bg-green-50 border-green-200",
-                    icon: "⚙️"
-                  }
-                ].map(({ title, scenarios, color, icon }) => 
-                  scenarios.length > 0 && (
-                    <div key={title} className={`p-4 rounded-lg border ${color}`}>
-                      <h4 className="font-medium mb-3 text-sm uppercase tracking-wide flex items-center gap-2">
-                        <span>{icon}</span>
-                        {title}
-                      </h4>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                        {scenarios.map(([key, scenario]) => (
+              {/* Active scenario indicator */}
+              {activeStressTest && stressTestScenarios[activeStressTest] && (
+                <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded-lg">
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium text-green-700">✓ Active Scenario:</span>
+                    <span className="text-green-800">{stressTestScenarios[activeStressTest].name}</span>
+                    <span className="text-green-600 text-sm">
+                      (Vol: {(stressTestScenarios[activeStressTest].volatility * 100).toFixed(1)}%, 
+                      Shock: {(stressTestScenarios[activeStressTest].priceShock * 100).toFixed(1)}%, 
+                      Drift: {(stressTestScenarios[activeStressTest].drift * 100).toFixed(1)}%)
+                    </span>
+                  </div>
+                </div>
+              )}
+              
+              {/* Display scenarios in 3x3 grid */}
+              <div className="grid grid-cols-3 gap-4">
+                {Object.entries(stressTestScenarios).map(([key, scenario]) => (
                           <Card key={key} className={`p-4 transition-all duration-200 ${activeStressTest === key ? 'ring-2 ring-blue-500 bg-blue-50' : 'bg-white hover:shadow-md'}`}>
                             <div className="space-y-3">
                               <div className="flex items-start justify-between">
                                 <div className="flex-1">
                                   <div className="flex items-center gap-2 mb-1">
                                     <h5 className="font-medium text-sm">{scenario.name}</h5>
-                                    {scenario.isHistorical && (
-                                      <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
-                                        Historical
-                                      </span>
-                                    )}
-                                    {['adverseECB', 'fedSCAR'].includes(key) && (
-                                      <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                                        Regulatory
+                            {scenario.isCustom && (
+                              <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                Custom
                                       </span>
                                     )}
                                   </div>
-                                  <p className="text-xs text-gray-600 leading-relaxed">{scenario.description}</p>
+                          <p className="text-xs text-muted-foreground mb-2">{scenario.description}</p>
                                 </div>
-                    <button
-                      onClick={() => toggleInputs(key)}
-                                  className="ml-2 p-1 rounded-full hover:bg-gray-100 transition-colors"
-                                  title="Toggle details"
-                    >
-                      <svg
-                        className={`w-4 h-4 transform transition-transform ${showInputs[key] ? 'rotate-180' : ''}`}
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                      </svg>
-                    </button>
                               </div>
                               
-                              {/* Quick metrics preview */}
+                      {/* Scenario parameters */}
+                      <div className="space-y-2">
                               <div className="grid grid-cols-2 gap-2 text-xs">
-                                <div className="p-2 bg-gray-50 rounded text-center">
-                                  <div className="font-medium text-gray-700">Vol</div>
-                                  <div className="font-semibold">{(scenario.volatility * 100).toFixed(1)}%</div>
+                          <div>
+                            <span className="text-muted-foreground">Volatility:</span>
+                            <span className="ml-1 font-medium">{(scenario.volatility * 100).toFixed(1)}%</span>
                                 </div>
-                                <div className="p-2 bg-gray-50 rounded text-center">
-                                  <div className="font-medium text-gray-700">Shock</div>
-                                  <div className={`font-semibold ${scenario.priceShock >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                    {scenario.priceShock >= 0 ? '+' : ''}{(scenario.priceShock * 100).toFixed(1)}%
+                          <div>
+                            <span className="text-muted-foreground">Drift:</span>
+                            <span className="ml-1 font-medium">{(scenario.drift * 100).toFixed(1)}%</span>
                                   </div>
+                          <div>
+                            <span className="text-muted-foreground">Price Shock:</span>
+                            <span className="ml-1 font-medium">{(scenario.priceShock * 100).toFixed(1)}%</span>
+                          </div>
+                          <div>
+                            <span className="text-muted-foreground">Forward Basis:</span>
+                            <span className="ml-1 font-medium">{(scenario.forwardBasis * 100).toFixed(1)}%</span>
+                          </div>
                                 </div>
                               </div>
 
-                              {/* Action button */}
+                      {/* Action buttons */}
+                      <div className="flex gap-2">
                               <Button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  applyStressTest(key);
-                                }}
                                 size="sm"
-                                className={`w-full ${
-                                  activeStressTest === key 
-                                    ? 'bg-blue-600 hover:bg-blue-700 text-white' 
-                                    : 'bg-gray-800 hover:bg-gray-900 text-white'
-                                }`}
-                              >
-                                {activeStressTest === key ? '✓ Active Scenario' : '🚀 Run Scenario'}
+                          variant={activeStressTest === key ? "default" : "outline"}
+                          onClick={() => applyStressTest(key)}
+                          className="flex-1 text-xs"
+                        >
+                          {activeStressTest === key ? "✓ Applied" : "Apply"}
                               </Button>
-
-                              {/* Detailed inputs */}
-                    {showInputs[key] && (
-                                <div className="mt-3 p-3 bg-gray-50 rounded-lg border-t">
-                                  <h6 className="font-medium mb-2 text-xs text-gray-700">⚙️ Customize Parameters</h6>
-                        <div className="space-y-2">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => toggleInputs(key)}
+                          className="text-xs"
+                        >
+                          <ChevronDown className={`h-3 w-3 transition-transform ${showInputs[key] ? 'rotate-180' : ''}`} />
+                        </Button>
+                      </div>
+                      
+                      {/* Editable inputs */}
+                      {showInputs[key] && scenario.isEditable && (
+                        <div className="space-y-2 pt-2 border-t">
+                          <div className="grid grid-cols-2 gap-2">
                           <div>
-                                      <label className="block text-xs font-medium mb-1 text-gray-700">Volatility (%)</label>
+                              <label className="text-xs text-muted-foreground">Volatility (%)</label>
                             <Input
-                                        className="h-7 text-xs"
                               type="number"
-                                        value={(scenario.volatility * 100).toFixed(1)}
-                              onChange={(e) => updateScenario(key, 'volatility', Number(e.target.value) / 100)}
-                              step="0.1"
-                                        min="0"
-                                        max="100"
+                                step="0.01"
+                                value={scenario.volatility * 100}
+                                onChange={(e) => updateScenario(key, 'volatility', parseFloat(e.target.value) / 100)}
+                                        className="h-7 text-xs"
                             />
                           </div>
                           <div>
-                                      <label className="block text-xs font-medium mb-1 text-gray-700">Drift (%)</label>
+                              <label className="text-xs text-muted-foreground">Drift (%)</label>
                             <Input
-                                        className="h-7 text-xs"
                               type="number"
-                                        value={(scenario.drift * 100).toFixed(1)}
-                              onChange={(e) => updateScenario(key, 'drift', Number(e.target.value) / 100)}
-                              step="0.1"
-                                        min="-10"
-                                        max="10"
+                                step="0.01"
+                                value={scenario.drift * 100}
+                                onChange={(e) => updateScenario(key, 'drift', parseFloat(e.target.value) / 100)}
+                                className="h-7 text-xs"
                             />
                           </div>
-                          <div>
-                                      <label className="block text-xs font-medium mb-1 text-gray-700">Price Shock (%)</label>
-                            <Input
-                                        className="h-7 text-xs"
-                              type="number"
-                                        value={(scenario.priceShock * 100).toFixed(1)}
-                              onChange={(e) => updateScenario(key, 'priceShock', Number(e.target.value) / 100)}
-                              step="0.1"
-                                        min="-50"
-                                        max="50"
-                            />
-                          </div>
-                          {scenario.forwardBasis !== undefined && (
                             <div>
-                                        <label className="block text-xs font-medium mb-1 text-gray-700">Forward Basis (%)</label>
+                              <label className="text-xs text-muted-foreground">Price Shock (%)</label>
                               <Input
-                                          className="h-7 text-xs"
                                 type="number"
-                                          value={((scenario.forwardBasis || 0) * 100).toFixed(1)}
-                                onChange={(e) => updateScenario(key, 'forwardBasis', Number(e.target.value) / 100)}
-                                step="0.1"
-                                          min="-5"
-                                          max="5"
+                                step="0.01"
+                                value={scenario.priceShock * 100}
+                                onChange={(e) => updateScenario(key, 'priceShock', parseFloat(e.target.value) / 100)}
+                                className="h-7 text-xs"
                               />
                             </div>
-                          )}
-                          {scenario.realBasis !== undefined && (
                             <div>
-                                        <label className="block text-xs font-medium mb-1 text-gray-700">Real Basis (%)</label>
+                              <label className="text-xs text-muted-foreground">Forward Basis (%)</label>
                               <Input
-                                          className="h-7 text-xs"
                                 type="number"
-                                          value={((scenario.realBasis || 0) * 100).toFixed(1)}
-                                onChange={(e) => updateScenario(key, 'realBasis', Number(e.target.value) / 100)}
-                                step="0.1"
-                                          min="-5"
-                                          max="5"
+                                step="0.01"
+                                value={scenario.forwardBasis * 100}
+                                onChange={(e) => updateScenario(key, 'forwardBasis', parseFloat(e.target.value) / 100)}
+                                className="h-7 text-xs"
                               />
                         </div>
-                          )}
-                        </div>
-                                  <div className="mt-3 flex gap-2">
-                        <Button
-                                      onClick={() => resetScenario(key)}
-                                      size="sm"
-                                      variant="outline"
-                                      className="text-xs"
-                                    >
-                                      🔄 Reset
-                        </Button>
                                   </div>
                       </div>
                     )}
                             </div>
                   </Card>
                 ))}
-                      </div>
-                    </div>
-                  )
-                )}
               </div>
             </CardContent>
           </Card>
-
-          <div className="flex gap-4 mt-6">
-            <Button onClick={calculateResults} className="flex-1">
-              Calculate Results
-            </Button>
-            {displayResults && (
-              <>
-                <Button onClick={saveScenario} className="flex items-center gap-2">
-                  <Save size={16} /> Save Scenario
-                </Button>
-                <Link to="/saved">
-                  <Button variant="outline">View Saved Scenarios</Button>
-                </Link>
-              </>
-            )}
-          </div>
         </TabsContent>
 
         <TabsContent value="backtest">
