@@ -168,9 +168,9 @@ const HedgingInstruments = () => {
     if (savedState) {
       const state = JSON.parse(savedState);
       // Chercher optionPricingModel dans les paramètres sauvegardés
-      return state.optionPricingModel || 'black-76';
+      return state.optionPricingModel || 'black-scholes';
     }
-    return 'black-76';
+    return 'black-scholes';
   });
   
   const [barrierPricingModel, setBarrierPricingModel] = useState<'monte-carlo' | 'closed-form'>(() => {

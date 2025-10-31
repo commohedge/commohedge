@@ -1618,7 +1618,7 @@ const Index = () => {
   const [riskMatrixResults, setRiskMatrixResults] = useState<RiskMatrixResult[]>([]);
 
   // Forex-specific states
-  const [optionPricingModel, setOptionPricingModel] = useState<'black-76' | 'black-scholes' | 'garman-kohlhagen' | 'monte-carlo'>('black-76');
+  const [optionPricingModel, setOptionPricingModel] = useState<'black-76' | 'black-scholes' | 'garman-kohlhagen' | 'monte-carlo'>('black-scholes');
   const [barrierPricingModel, setBarrierPricingModel] = useState<'monte-carlo' | 'closed-form'>('closed-form');
 
   // Ajouter cet état
@@ -6463,10 +6463,11 @@ const pricingFunctions = {
             <CardHeader className="pb-2 border-b">
               <CardTitle className="text-xl font-bold text-primary">Commodity Options Strategy Parameters</CardTitle>
             </CardHeader>
-            <CardContent className="pt-4">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="compact-form-group">
-                  <label className="compact-label">Commodity</label>
+            <CardContent className="pt-6">
+              {/* Section 1: Commodity & Dates */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                <div className="space-y-1.5">
+                  <label className="text-sm font-medium text-foreground">Commodity</label>
                   <div className="relative">
                   <Select 
                     value={params.currencyPair?.symbol || 'EUR/USD'} 
@@ -6485,7 +6486,7 @@ const pricingFunctions = {
                       }
                     }}
                   >
-                    <SelectTrigger className="compact-input">
+                    <SelectTrigger className="h-10">
                       <SelectValue placeholder="Select commodity" />
                     </SelectTrigger>
                     <SelectContent>
@@ -6689,27 +6690,36 @@ const pricingFunctions = {
                     )}
                   </div>
                 </div>
-                <div className="compact-form-group">
-                  <label className="compact-label">Strategy Start Date</label>
+                
+                <div className="space-y-1.5">
+                  <label className="text-sm font-medium text-foreground">Strategy Start Date</label>
                   <Input
                     type="date"
                     value={params.strategyStartDate}
                     onChange={(e) => setParams({...params, strategyStartDate: e.target.value})}
-                    className="compact-input"
+                    className="h-10"
                   />
                 </div>
-                <div className="compact-form-group">
-                  <label className="compact-label">Hedging Start Date</label>
+                
+                <div className="space-y-1.5">
+                  <label className="text-sm font-medium text-foreground">Hedging Start Date</label>
                   <Input
                     type="date"
                     value={params.startDate}
                     onChange={(e) => setParams({...params, startDate: e.target.value})}
-                    className="compact-input"
+                    className="h-10"
                   />
                 </div>
-                <div className="compact-form-group">
-                  <label className="compact-label">Months to Hedge</label>
-                  <div className="flex items-center gap-2">
+              </div>
+
+              {/* Section 2: Hedging Parameters */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6 p-4 bg-muted/30 rounded-lg border">
+                <div className="space-y-1.5">
+                  <label className="text-sm font-medium text-foreground flex items-center justify-between">
+                    <span>Months to Hedge</span>
+                    <span className="text-xs text-muted-foreground font-mono">{params.monthsToHedge} months</span>
+                  </label>
+                  <div className="flex items-center gap-3">
                     <Slider 
                       value={[params.monthsToHedge]} 
                       min={1} 
@@ -6718,17 +6728,23 @@ const pricingFunctions = {
                       onValueChange={(value) => setParams({...params, monthsToHedge: value[0]})}
                       className="flex-1"
                     />
-                  <Input
-                    type="number"
-                    value={params.monthsToHedge}
-                    onChange={(e) => setParams({...params, monthsToHedge: Number(e.target.value)})}
-                      className="compact-input w-16 text-center"
-                  />
+                    <Input
+                      type="number"
+                      value={params.monthsToHedge}
+                      onChange={(e) => setParams({...params, monthsToHedge: Number(e.target.value)})}
+                      className="w-20 h-9 text-center"
+                      min={1}
+                      max={36}
+                    />
+                  </div>
                 </div>
-                </div>
-                <div className="compact-form-group">
-                  <label className="compact-label">Risk-free Rate (r) %</label>
-                  <div className="flex items-center gap-2">
+                
+                <div className="space-y-1.5">
+                  <label className="text-sm font-medium text-foreground flex items-center justify-between">
+                    <span>Risk-free Rate (r) %</span>
+                    <span className="text-xs text-muted-foreground font-mono">{params.interestRate.toFixed(2)}%</span>
+                  </label>
+                  <div className="flex items-center gap-3">
                     <Slider 
                       value={[params.interestRate]} 
                       min={0} 
@@ -6741,118 +6757,116 @@ const pricingFunctions = {
                       type="number"
                       value={params.interestRate}
                       onChange={(e) => setParams({...params, interestRate: Number(e.target.value)})}
-                      className="compact-input w-16 text-center"
+                      className="w-20 h-9 text-center"
+                      min={0}
+                      max={15}
+                      step={0.1}
                     />
                   </div>
                 </div>
-                {/* Volume & Spot Rate - Compact Grid Layout */}
-                <div className="bg-muted/20 p-3 rounded-lg space-y-3">
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                    {/* Commodity Volume */}
-                    <div className="space-y-1">
-                      <label className="text-xs font-medium text-muted-foreground">
-                        Commodity Volume (Units)
-                    </label>
-                  <Input
-                    type="number"
-                      value={params.totalVolume}
-                      onChange={(e) => handleVolumeChange(Number(e.target.value))}
-                        className="h-8 text-xs"
-                      placeholder="Volume"
-                    />
-                  </div>
-                    
-
-                    {/* Position Type */}
-                    <div className="space-y-1">
-                      <label className="text-xs font-medium text-muted-foreground">
-                        Position Type
-                      </label>
-                      <Select
-                        value={params.volumeType}
-                        onValueChange={(value: 'long' | 'short') => 
-                          setParams(prev => ({ ...prev, volumeType: value }))
-                        }
-                      >
-                        <SelectTrigger className="h-8 text-xs">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="long">
-                            <div className="flex items-center gap-2">
-                              <span className="text-green-600">📈</span>
-                              <span>Long Position</span>
-                            </div>
-                          </SelectItem>
-                          <SelectItem value="short">
-                            <div className="flex items-center gap-2">
-                              <span className="text-red-600">📉</span>
-                              <span>Short Position</span>
-                            </div>
-                          </SelectItem>
-                        </SelectContent>
-                      </Select>
-                      {/* Help text */}
-                      <div className="text-xs text-muted-foreground">
-                        {params.volumeType === 'long' || params.volumeType === 'receivable' ? (
-                          <span className="text-green-600">
-                            📈 Long position: You own or will buy the commodity
-                          </span>
-                        ) : (
-                          <span className="text-red-600">
-                            📉 Short position: You need to deliver or sell the commodity
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                    
-                    {/* Spot Price */}
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium text-foreground">
-                        Spot Price
-                        {params.currencyPair?.symbol && (
-                          <span className="ml-2 text-xs text-muted-foreground font-mono">
-                            {params.currencyPair.symbol} (${params.spotPrice}/{params.currencyPair.base})
-                          </span>
-                        )}
-                      </label>
-                      <div className="flex items-center gap-2">
-                        <Input
-                          type="number"
-                          value={params.spotPrice}
-                          onChange={(e) => handleSpotPriceChange(Number(e.target.value))}
-                          className="h-10 text-base font-mono flex-1 min-w-[120px]"
-                          step="0.0001"
-                          placeholder={`${params.currencyPair?.defaultSpotRate || 1.0850}`}
-                        />
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            if (params.currencyPair) {
-                              setParams({...params, spotPrice: params.currencyPair.defaultSpotRate});
-                              setInitialSpotPrice(params.currencyPair.defaultSpotRate);
-                            }
-                          }}
-                          className="h-10 px-3 text-sm"
-                          title="Reset to default market rate"
-                        >
-                          Reset
-                        </Button>
-                      </div>
-                    </div>
               </div>
 
-                  {/* Auto-sync Status */}
-                  <div className="text-xs text-muted-foreground flex items-center gap-1 justify-center bg-primary/5 p-2 rounded border border-primary/10">
+              {/* Section 3: Volume, Position & Spot Price */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                {/* Commodity Volume */}
+                <div className="space-y-1.5">
+                  <label className="text-sm font-medium text-foreground">Commodity Volume (Units)</label>
+                  <Input
+                    type="number"
+                    value={params.totalVolume}
+                    onChange={(e) => handleVolumeChange(Number(e.target.value))}
+                    className="h-10"
+                    placeholder="Enter volume"
+                  />
+                </div>
+
+                {/* Position Type */}
+                <div className="space-y-1.5">
+                  <label className="text-sm font-medium text-foreground">Position Type</label>
+                  <Select
+                    value={params.volumeType}
+                    onValueChange={(value: 'long' | 'short') => 
+                      setParams(prev => ({ ...prev, volumeType: value }))
+                    }
+                  >
+                    <SelectTrigger className="h-10">
+                      <SelectValue placeholder="Select position type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="long">
+                        <div className="flex items-center gap-2">
+                          <span className="text-green-600">📈</span>
+                          <span>Long Position</span>
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="short">
+                        <div className="flex items-center gap-2">
+                          <span className="text-red-600">📉</span>
+                          <span>Short Position</span>
+                        </div>
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <div className="text-xs text-muted-foreground mt-1">
+                    {params.volumeType === 'long' || params.volumeType === 'receivable' ? (
+                      <span className="text-green-600 flex items-center gap-1">
+                        <span>📈</span>
+                        <span>You own or will buy the commodity</span>
+                      </span>
+                    ) : (
+                      <span className="text-red-600 flex items-center gap-1">
+                        <span>📉</span>
+                        <span>You need to deliver or sell the commodity</span>
+                      </span>
+                    )}
+                  </div>
+                </div>
+                
+                {/* Spot Price */}
+                <div className="space-y-1.5">
+                  <label className="text-sm font-medium text-foreground">
+                    Spot Price {params.currencyPair?.symbol && (
+                      <span className="ml-1 text-xs text-muted-foreground font-normal">
+                        ({params.currencyPair.symbol})
+                      </span>
+                    )}
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      type="number"
+                      value={params.spotPrice}
+                      onChange={(e) => handleSpotPriceChange(Number(e.target.value))}
+                      className="h-10 text-base font-mono flex-1"
+                      step="0.0001"
+                      placeholder={`${params.currencyPair?.defaultSpotRate || 1.0850}`}
+                    />
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        if (params.currencyPair) {
+                          setParams({...params, spotPrice: params.currencyPair.defaultSpotRate});
+                          setInitialSpotPrice(params.currencyPair.defaultSpotRate);
+                        }
+                      }}
+                      className="h-10 px-4 whitespace-nowrap"
+                      title="Reset to default market rate"
+                    >
+                      Reset
+                    </Button>
+                  </div>
+                  <div className="text-xs text-muted-foreground flex items-center gap-1 bg-primary/5 p-2 rounded border border-primary/10">
                     <span>💱</span>
-                    <span>Current spot price: <span className="font-mono font-medium">${params.spotPrice.toFixed(2)}</span></span>
+                    <span>Current: <span className="font-mono font-medium">${params.spotPrice.toFixed(2)}</span></span>
+                    {params.currencyPair?.base && (
+                      <span className="text-muted-foreground">/{params.currencyPair.base}</span>
+                    )}
                   </div>
                 </div>
               </div>
 
               {/* Custom Periods - Compact Toggle */}
-              <div className="mt-3">
+              <div className="mt-6">
                 <div className="bg-muted/20 p-3 rounded-lg">
                 <div className="flex items-center gap-2">
                   <Switch
@@ -7002,9 +7016,6 @@ const pricingFunctions = {
                       <SelectItem value="monte-carlo">Monte Carlo Simulation</SelectItem>
                     </SelectContent>
                   </Select>
-                      <p className="text-xs text-muted-foreground text-green-600">
-                        ✅ Black-Scholes for standard options, Monte Carlo for complex scenarios
-                  </p>
                     </div>
                 </div>
               </div>
@@ -7961,6 +7972,8 @@ const pricingFunctions = {
             setStrategy={setStrategy}
             calculatePayoff={calculatePayoff}
             monthsToHedge={params.monthsToHedge}
+            interestRate={params.interestRate}
+            optionPricingModel={optionPricingModel === 'monte-carlo' ? 'monte-carlo' : 'black-scholes'}
           />
         </TabsContent>
       </Tabs>

@@ -9,15 +9,22 @@ import { Plus } from 'lucide-react';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
+import { PricingService } from '@/services/PricingService'; // ✅ Utiliser PricingService
 
 interface ZeroCostStrategiesProps {
   spotPrice: number;
   addStrategyToSimulator: (strategy: StrategyComponent[], name: string, options?: { [key: string]: any }) => void;
   onSelect?: (strategy: string) => void;
   monthsToHedge?: number; // Number of months to hedge, for optimization
+  interestRate?: number; // ✅ AJOUT: Taux sans risque réel (en %)
+  optionPricingModel?: 'black-scholes' | 'monte-carlo'; // ✅ AJOUT: Modèle de pricing
 }
 
-// Black-Scholes formula for option pricing (simplified for use in this component)
+/**
+ * ✅ ALIGNÉ AVEC STRATEGY BUILDER
+ * Calcule le prix d'une option en utilisant FORWARD price (comme Strategy Builder)
+ * Pour commodities: cost of carry b = r (car r_f = 0)
+ */
 const calculateOptionPrice = (
   type: 'call' | 'put',
   S: number,       // Spot price
@@ -25,94 +32,99 @@ const calculateOptionPrice = (
   r: number,       // Risk-free rate (as decimal, e.g., 0.05 for 5%)
   t: number,       // Time to maturity in years
   sigma: number,   // Volatility (as decimal, e.g., 0.2 for 20%)
+  useMonteCarlo: boolean = false // ✅ Support Monte Carlo
 ): number => {
-  // Adjust the strike based on percentage if needed
-  const strike = K;
+  // ✅ Calculer forward price (comme Strategy Builder)
+  // Pour commodities: F = S * exp(r * t) car b = r (pas de dividend yield)
+  const forward = S * Math.exp(r * t);
   
-  // Calculate d1 and d2
-  const d1 = (Math.log(S / strike) + (r + sigma * sigma / 2) * t) / (sigma * Math.sqrt(t));
+  if (useMonteCarlo) {
+    // ✅ Utiliser Monte Carlo via PricingService (comme Strategy Builder)
+    return PricingService.calculateVanillaOptionMonteCarlo(
+      type,
+      S, // Spot pour Monte Carlo
+      K,
+      r, // r_d
+      0, // r_f = 0 pour commodities
+      t,
+      sigma,
+      1000 // Simulations
+    );
+  }
+  
+  // ✅ Black-Scholes avec FORWARD (comme Strategy Builder ligne 3009)
+  const d1 = (Math.log(forward / K) + (sigma * sigma / 2) * t) / (sigma * Math.sqrt(t));
   const d2 = d1 - sigma * Math.sqrt(t);
   
-  // Standard normal CDF function
-  const N = (x: number): number => {
-    // Approximation of the cumulative normal distribution
-    const a1 = 0.254829592;
-    const a2 = -0.284496736;
-    const a3 = 1.421413741;
-    const a4 = -1.453152027;
-    const a5 = 1.061405429;
-    const p = 0.3275911;
-    
-    let sign = 1;
-    if (x < 0) {
-      sign = -1;
-      x = -x;
-    }
-    
-    const t = 1 / (1 + p * x);
-    const y = 1 - (((((a5 * t + a4) * t) + a3) * t + a2) * t + a1) * t * Math.exp(-x * x / 2);
-    
-    return 0.5 * (1 + sign * y);
-  };
+  // Utiliser PricingService.erf pour cohérence
+  const Nd1 = (1 + PricingService.erf(d1 / Math.sqrt(2))) / 2;
+  const Nd2 = (1 + PricingService.erf(d2 / Math.sqrt(2))) / 2;
   
-  // Calculate option price based on type
+  // ✅ Utiliser FORWARD au lieu de SPOT (comme Strategy Builder)
   if (type === 'call') {
-    return S * N(d1) - strike * Math.exp(-r * t) * N(d2);
+    return forward * Nd1 - K * Math.exp(-r * t) * Nd2;
   } else { // put
-    return strike * Math.exp(-r * t) * N(-d2) - S * N(-d1);
+    return K * Math.exp(-r * t) * (1 - Nd2) - forward * (1 - Nd1);
   }
 };
 
-// Function to find the strike that balances the premiums for a zero-cost strategy
+/**
+ * ✅ ALIGNÉ AVEC STRATEGY BUILDER
+ * Trouve le strike qui équilibre les primes pour une stratégie zero-cost
+ * Utilise les paramètres réels au lieu de valeurs hardcodées
+ */
 const findEquilibriumStrike = (
   type: 'call' | 'put',
   oppositeType: 'call' | 'put',
   oppositeStrike: number,
   spotPrice: number,
   volatility: number,
+  interestRate: number, // ✅ Taux réel (en %)
+  timeToMaturity: number = 1, // ✅ TTM réel (en années, default 1)
+  useMonteCarlo: boolean = false, // ✅ Support Monte Carlo
   minStrike: number = 50,
   maxStrike: number = 150,
   tolerance: number = 0.001
 ): number => {
-  // Convert percentages to decimals
+  // ✅ Convertir en décimales avec paramètres réels
   const vol = volatility / 100;
-  const r = 0.05; // Assuming 5% risk-free rate
-  const t = 1; // Assuming 1 year to expiration
+  const r = interestRate / 100; // ✅ Utiliser taux réel
+  const t = timeToMaturity; // ✅ Utiliser TTM réel
   
-  // Calculate the price of the opposite option (fixed)
+  // Calculer le prix de l'option opposée (fixe)
   const oppositeStrikeValue = oppositeStrike / 100 * spotPrice;
-  const oppositePrice = calculateOptionPrice(oppositeType, spotPrice, oppositeStrikeValue, r, t, vol);
+  const oppositePrice = calculateOptionPrice(oppositeType, spotPrice, oppositeStrikeValue, r, t, vol, useMonteCarlo);
   
-  // Bisection method to find the strike that matches the price
+  // Méthode de bisection pour trouver le strike qui correspond au prix
   let low = minStrike / 100 * spotPrice;
   let high = maxStrike / 100 * spotPrice;
   let mid = 0;
   
   while (high - low > tolerance) {
     mid = (high + low) / 2;
-    const currentPrice = calculateOptionPrice(type, spotPrice, mid, r, t, vol);
+    const currentPrice = calculateOptionPrice(type, spotPrice, mid, r, t, vol, useMonteCarlo);
     
     if (Math.abs(currentPrice - oppositePrice) < tolerance) {
-      // Found a sufficiently close match
+      // Trouvé une correspondance suffisamment proche
       break;
     } else if (currentPrice > oppositePrice) {
-      // The current strike gives a higher premium - adjust based on option type
+      // Le strike actuel donne une prime plus élevée - ajuster selon le type d'option
       if (type === 'call') {
-        low = mid;
+        low = mid; // Strike plus élevé → prime plus faible pour call
       } else {
-        high = mid;
+        high = mid; // Strike plus bas → prime plus faible pour put
       }
     } else {
-      // The current strike gives a lower premium - adjust based on option type
+      // Le strike actuel donne une prime plus faible - ajuster selon le type d'option
       if (type === 'call') {
-        high = mid;
+        high = mid; // Strike plus bas → prime plus élevée pour call
       } else {
-        low = mid;
+        low = mid; // Strike plus élevé → prime plus élevée pour put
       }
     }
   }
   
-  // Convert back to percentage of spot
+  // Convertir en pourcentage du spot
   return (mid / spotPrice) * 100;
 };
 
@@ -120,7 +132,9 @@ const ZeroCostStrategies: React.FC<ZeroCostStrategiesProps> = ({
   spotPrice, 
   addStrategyToSimulator,
   onSelect,
-  monthsToHedge = 12 // Default to 12 months if not provided
+  monthsToHedge = 12, // Default to 12 months if not provided
+  interestRate = 5, // ✅ Default 5% si non fourni
+  optionPricingModel = 'black-scholes' // ✅ Default Black-Scholes
 }) => {
   const [selectedStrategy, setSelectedStrategy] = useState<string>('collar-put');
   const [customStrategy, setCustomStrategy] = useState<StrategyComponent[]>([]);
@@ -135,16 +149,21 @@ const ZeroCostStrategies: React.FC<ZeroCostStrategiesProps> = ({
   // Add state for per-period optimization
   const [optimizePerPeriod, setOptimizePerPeriod] = useState(false);
   
-  // Effect to auto-adjust strikes to maintain zero-cost when other parameters change
+  // ✅ Effect pour auto-ajuster les strikes avec paramètres réels
   useEffect(() => {
+    const useMonteCarlo = optionPricingModel === 'monte-carlo';
+    
     if (selectedStrategy === 'collar-put') {
-      // When put strike is fixed, calculate the call strike
+      // Quand put strike est fixe, calculer le call strike
       const newCallStrike = findEquilibriumStrike(
         'call',
         'put',
         customParams.putStrike,
         spotPrice,
-        customParams.volatility
+        customParams.volatility,
+        interestRate, // ✅ Taux réel
+        1, // TTM pour calcul initial (1 an)
+        useMonteCarlo // ✅ Support Monte Carlo
       );
       
       if (Math.abs(newCallStrike - customParams.callStrike) > 0.1) {
@@ -154,13 +173,16 @@ const ZeroCostStrategies: React.FC<ZeroCostStrategiesProps> = ({
         }));
       }
     } else if (selectedStrategy === 'collar-call') {
-      // When call strike is fixed, calculate the put strike
+      // Quand call strike est fixe, calculer le put strike
       const newPutStrike = findEquilibriumStrike(
         'put',
         'call',
         customParams.callStrike,
         spotPrice,
-        customParams.volatility
+        customParams.volatility,
+        interestRate, // ✅ Taux réel
+        1, // TTM pour calcul initial (1 an)
+        useMonteCarlo // ✅ Support Monte Carlo
       );
       
       if (Math.abs(newPutStrike - customParams.putStrike) > 0.1) {
@@ -170,8 +192,8 @@ const ZeroCostStrategies: React.FC<ZeroCostStrategiesProps> = ({
         }));
       }
     }
-    // Only run this effect when strategy or volatility changes
-  }, [selectedStrategy, customParams.volatility, spotPrice]);
+    // ✅ Recalculer quand les paramètres changent
+  }, [selectedStrategy, customParams.volatility, spotPrice, interestRate, optionPricingModel]);
 
   /**
    * Generates a Zero-Cost Collar strategy with fixed put.
@@ -180,14 +202,19 @@ const ZeroCostStrategies: React.FC<ZeroCostStrategiesProps> = ({
    * willing to give up potential profit beyond a certain level.
    */
   const generateZeroCostCollarPutFixed = () => {
+    const useMonteCarlo = optionPricingModel === 'monte-carlo';
+    
     if (!optimizePerPeriod) {
-      // Original implementation for global strike
+      // ✅ Utiliser paramètres réels
       const callStrike = findEquilibriumStrike(
         'call',
         'put',
         customParams.putStrike,
         spotPrice,
-        customParams.volatility
+        customParams.volatility,
+        interestRate,
+        1, // TTM initial (1 an)
+        useMonteCarlo
       );
       
       const putStrategy: StrategyComponent = {
@@ -227,7 +254,6 @@ const ZeroCostStrategies: React.FC<ZeroCostStrategiesProps> = ({
         // Add special marker for dynamic calculation
         dynamicStrike: {
           method: 'equilibrium',
-          balanceWith: 'put',
           balanceWithIndex: 0, // Index of the put option in the array
         }
       };
@@ -242,14 +268,19 @@ const ZeroCostStrategies: React.FC<ZeroCostStrategiesProps> = ({
    * This structure is used when a company has a maximum price at which it agrees to buy foreign currency.
    */
   const generateZeroCostCollarCallFixed = () => {
+    const useMonteCarlo = optionPricingModel === 'monte-carlo';
+    
     if (!optimizePerPeriod) {
-      // Original implementation for global strike
+      // ✅ Utiliser paramètres réels
       const putStrike = findEquilibriumStrike(
         'put',
         'call',
         customParams.callStrike,
         spotPrice,
-        customParams.volatility
+        customParams.volatility,
+        interestRate,
+        1, // TTM initial (1 an)
+        useMonteCarlo
       );
       
       const callStrategy: StrategyComponent = {
@@ -288,7 +319,6 @@ const ZeroCostStrategies: React.FC<ZeroCostStrategiesProps> = ({
         // Add special marker for dynamic calculation
         dynamicStrike: {
           method: 'equilibrium',
-          balanceWith: 'call',
           balanceWithIndex: 0, // Index of the call option in the array
         }
       };
@@ -305,14 +335,18 @@ const ZeroCostStrategies: React.FC<ZeroCostStrategiesProps> = ({
   const generateZeroCostSeagull = () => {
     // For this strategy, we need to find two strikes that balance with the long put
     // This is a simplification - in practice, would need more complex optimization
+    const useMonteCarlo = optionPricingModel === 'monte-carlo';
     
-    // First calculate a balanced call
+    // ✅ Utiliser paramètres réels
     const callStrike = findEquilibriumStrike(
       'call',
       'put',
       customParams.putStrike,
       spotPrice,
-      customParams.volatility
+      customParams.volatility,
+      interestRate,
+      1, // TTM initial (1 an)
+      useMonteCarlo
     );
     
     // For the short put, use a lower strike 
@@ -350,14 +384,19 @@ const ZeroCostStrategies: React.FC<ZeroCostStrategiesProps> = ({
    * Combination of buying a put and selling a call, with strikes determined to neutralize the premium.
    */
   const generateZeroCostRiskReversal = () => {
+    const useMonteCarlo = optionPricingModel === 'monte-carlo';
+    
     if (!optimizePerPeriod) {
-      // Original implementation for global strike
+      // ✅ Utiliser paramètres réels
       const callStrike = findEquilibriumStrike(
         'call',
         'put',
         customParams.putStrike,
         spotPrice,
-        customParams.volatility
+        customParams.volatility,
+        interestRate,
+        1, // TTM initial (1 an)
+        useMonteCarlo
       );
       
       const longPut: StrategyComponent = {
@@ -396,7 +435,6 @@ const ZeroCostStrategies: React.FC<ZeroCostStrategiesProps> = ({
         // Add special marker for dynamic calculation
         dynamicStrike: {
           method: 'equilibrium',
-          balanceWith: 'put',
           balanceWithIndex: 0, // Index of the put option in the array
         }
       };
@@ -428,14 +466,19 @@ const ZeroCostStrategies: React.FC<ZeroCostStrategiesProps> = ({
    * if the exchange rate reaches a certain level, thus reducing the initial cost.
    */
   const generateZeroCostKnockOutForward = () => {
+    const useMonteCarlo = optionPricingModel === 'monte-carlo';
+    
     if (!optimizePerPeriod) {
-      // Original implementation
+      // ✅ Utiliser paramètres réels avec ajustement pour effet barrière
       const callStrike = findEquilibriumStrike(
         'call',
         'put',
         customParams.putStrike,
         spotPrice,
-        customParams.volatility * 0.8 // Adjust for barrier effect
+        customParams.volatility * 0.8, // Adjust for barrier effect
+        interestRate,
+        1, // TTM initial (1 an)
+        useMonteCarlo
       );
       
       const knockoutPut: StrategyComponent = {
@@ -478,7 +521,6 @@ const ZeroCostStrategies: React.FC<ZeroCostStrategiesProps> = ({
         // Add special marker for dynamic calculation
         dynamicStrike: {
           method: 'equilibrium',
-          balanceWith: 'put-knockout',
           balanceWithIndex: 0, // Index of the put option in the array
           volatilityAdjustment: 0.8 // Adjust for barrier effect
         }
@@ -493,6 +535,11 @@ const ZeroCostStrategies: React.FC<ZeroCostStrategiesProps> = ({
    * Buying a call and selling a call at a higher strike.
    */
   const generateZeroCostCallSpread = () => {
+    const useMonteCarlo = optionPricingModel === 'monte-carlo';
+    const r = interestRate / 100;
+    const t = 1; // TTM initial
+    const vol = customParams.volatility / 100;
+    
     const longCall: StrategyComponent = {
       type: 'call',
       strike: customParams.putStrike, // Using put parameter for lower strike
@@ -501,10 +548,10 @@ const ZeroCostStrategies: React.FC<ZeroCostStrategiesProps> = ({
       quantity: customParams.callQuantity,
     };
     
-    // Calculate appropriate short call quantity to balance premium
+    // ✅ Calculer avec paramètres réels
     const shortCallQuantity = -customParams.callQuantity * 
-      (calculateOptionPrice('call', spotPrice, spotPrice * customParams.putStrike / 100, 0.05, 1, customParams.volatility / 100) /
-       calculateOptionPrice('call', spotPrice, spotPrice * customParams.callStrike / 100, 0.05, 1, customParams.volatility / 100));
+      (calculateOptionPrice('call', spotPrice, spotPrice * customParams.putStrike / 100, r, t, vol, useMonteCarlo) /
+       calculateOptionPrice('call', spotPrice, spotPrice * customParams.callStrike / 100, r, t, vol, useMonteCarlo));
     
     const shortCall: StrategyComponent = {
       type: 'call',
@@ -522,6 +569,11 @@ const ZeroCostStrategies: React.FC<ZeroCostStrategiesProps> = ({
    * Buying a put and selling a put at a lower strike.
    */
   const generateZeroCostPutSpread = () => {
+    const useMonteCarlo = optionPricingModel === 'monte-carlo';
+    const r = interestRate / 100;
+    const t = 1; // TTM initial
+    const vol = customParams.volatility / 100;
+    
     const longPut: StrategyComponent = {
       type: 'put',
       strike: customParams.callStrike, // Using call parameter for higher strike
@@ -530,10 +582,10 @@ const ZeroCostStrategies: React.FC<ZeroCostStrategiesProps> = ({
       quantity: customParams.putQuantity,
     };
     
-    // Calculate appropriate short put quantity to balance premium
+    // ✅ Calculer avec paramètres réels
     const shortPutQuantity = -customParams.putQuantity * 
-      (calculateOptionPrice('put', spotPrice, spotPrice * customParams.callStrike / 100, 0.05, 1, customParams.volatility / 100) /
-       calculateOptionPrice('put', spotPrice, spotPrice * customParams.putStrike / 100, 0.05, 1, customParams.volatility / 100));
+      (calculateOptionPrice('put', spotPrice, spotPrice * customParams.callStrike / 100, r, t, vol, useMonteCarlo) /
+       calculateOptionPrice('put', spotPrice, spotPrice * customParams.putStrike / 100, r, t, vol, useMonteCarlo));
     
     const shortPut: StrategyComponent = {
       type: 'put',
@@ -620,15 +672,16 @@ const ZeroCostStrategies: React.FC<ZeroCostStrategiesProps> = ({
     });
   };
   
-  // Display calculated prices to help user understand strategy costs
+  // ✅ Display calculated prices avec paramètres réels
   const getPremiumEstimate = (strategyType: string): { longPrice: number, shortPrice: number, netPremium: number } => {
     let longPrice = 0;
     let shortPrice = 0;
     
-    // Convert parameters for pricing
-    const r = 0.05; // Risk-free rate as decimal
-    const t = 1;    // 1 year to expiration
+    // ✅ Convertir paramètres avec valeurs réelles
+    const r = interestRate / 100; // ✅ Taux réel
+    const t = 1;    // 1 year to expiration (pour affichage initial)
     const vol = customParams.volatility / 100;
+    const useMonteCarlo = optionPricingModel === 'monte-carlo';
     
     if (strategyType === 'collar-put') {
       // Long put
@@ -636,7 +689,8 @@ const ZeroCostStrategies: React.FC<ZeroCostStrategiesProps> = ({
         'put',
         spotPrice,
         spotPrice * customParams.putStrike / 100,
-        r, t, vol
+        r, t, vol,
+        useMonteCarlo
       );
       
       // Short call with dynamically calculated strike
@@ -645,7 +699,8 @@ const ZeroCostStrategies: React.FC<ZeroCostStrategiesProps> = ({
         'call',
         spotPrice,
         spotPrice * callStrike / 100,
-        r, t, vol
+        r, t, vol,
+        useMonteCarlo
       );
     } 
     else if (strategyType === 'collar-call') {
@@ -654,7 +709,8 @@ const ZeroCostStrategies: React.FC<ZeroCostStrategiesProps> = ({
         'call',
         spotPrice,
         spotPrice * customParams.callStrike / 100,
-        r, t, vol
+        r, t, vol,
+        useMonteCarlo
       );
       
       // Long put with dynamically calculated strike
@@ -663,7 +719,8 @@ const ZeroCostStrategies: React.FC<ZeroCostStrategiesProps> = ({
         'put',
         spotPrice,
         spotPrice * putStrike / 100,
-        r, t, vol
+        r, t, vol,
+        useMonteCarlo
       );
     }
     // Other strategy types would have similar calculations

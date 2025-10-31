@@ -25,6 +25,9 @@ import StrategyBuilder from "./pages/StrategyBuilder";
 import Pricers from "./pages/Pricers";
 import Reports from "./pages/Reports";
 import CommodityMarket from "./pages/CommodityMarket";
+import MarketNews from "./pages/MarketNews";
+import EconomicCalendar from "./pages/EconomicCalendar";
+import AdvancedChart from "./pages/AdvancedChart";
 import UserManagement from "./pages/UserManagement";
 import Settings from "./pages/Settings";
 import DatabaseSync from "./pages/DatabaseSync";
@@ -86,6 +89,9 @@ const App = () => {
             <Route path="/positions" element={<ProtectedRoute><PositionMonitor /></ProtectedRoute>} />
             <Route path="/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
             <Route path="/commodity-market" element={<ProtectedRoute><CommodityMarket /></ProtectedRoute>} />
+            <Route path="/market-news" element={<ProtectedRoute><MarketNews /></ProtectedRoute>} />
+            <Route path="/economic-calendar" element={<ProtectedRoute><EconomicCalendar /></ProtectedRoute>} />
+            <Route path="/advanced-chart" element={<ProtectedRoute><AdvancedChart /></ProtectedRoute>} />
             <Route path="/users" element={<ProtectedRoute><UserManagement /></ProtectedRoute>} />
             <Route path="/database-sync" element={<ProtectedRoute><DatabaseSync /></ProtectedRoute>} />
             <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />

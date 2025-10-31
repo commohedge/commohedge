@@ -15,7 +15,10 @@ import {
   Activity,
   Calculator,
   Zap,
-  Database
+  Database,
+  Newspaper,
+  Calendar,
+  LineChart
 } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import {
@@ -38,21 +41,47 @@ import { ScrollArea } from "@/components/ui/ScrollArea";
 import { useAuth } from "@/hooks/useAuth";
 import { LogOut, User } from "lucide-react";
 import { SyncIndicator } from "./SyncIndicator";
+import { fetchCommoditiesData } from "@/services/commodityApi";
 import "@/styles/sidebar-zoom.css";
 
-const menuItems = [
-  {
-    title: "Dashboard",
-    url: "/dashboard",
-    icon: Home,
-    description: "Global overview and key metrics"
-  },
+// Dashboard - Standalone
+const dashboardItem = {
+  title: "Dashboard",
+  url: "/dashboard",
+  icon: Home,
+  description: "Global overview and key metrics"
+};
+
+// Market Data & News Group
+const marketDataItems = [
   {
     title: "Commodity Market",
     url: "/commodity-market",
     icon: Globe,
     description: "Real-time commodity market data and prices"
   },
+  {
+    title: "Market News",
+    url: "/market-news",
+    icon: Newspaper,
+    description: "Latest commodity market news and insights"
+  },
+  {
+    title: "Economic Calendar",
+    url: "/economic-calendar",
+    icon: Calendar,
+    description: "Track economic events impacting commodity markets"
+  },
+  {
+    title: "Advanced Chart",
+    url: "/advanced-chart",
+    icon: LineChart,
+    description: "Interactive trading chart with technical analysis"
+  }
+];
+
+// Risk Management Group
+const riskManagementItems = [
   {
     title: "Commodity Exposures",
     url: "/exposures",
@@ -77,7 +106,11 @@ const menuItems = [
     url: "/pricers",
     icon: Calculator,
     description: "Advanced pricing for options, swaps and forwards"
-  },
+  }
+];
+
+// Analysis & Monitoring Group
+const analysisItems = [
   {
     title: "Regression Analysis",
     url: "/regression-analysis",
@@ -149,24 +182,52 @@ export function AppSidebar() {
     return unsubscribe;
   }, []);
   
-  // Load market status data for commodities
+  // Load market status data for commodities from real API
   useEffect(() => {
-    const loadMarketStatusData = () => {
+    const loadMarketStatusData = async () => {
       try {
-        // For now, use static data. Later can integrate with real commodity price API
+        // Fetch real commodity data from API (same as Dashboard)
+        const [metalsData, energyData] = await Promise.all([
+          fetchCommoditiesData('metals'),
+          fetchCommoditiesData('energy')
+        ]);
+
+        // Combine all commodity data
+        const allCommodities = [...metalsData, ...energyData];
+
+        // Helper function to find commodity by keywords
+        const findCommodity = (keywords: string[]) => {
+          const lowered = keywords.map(k => k.toLowerCase());
+          return allCommodities.find(c => {
+            const s = (c.symbol || '').toLowerCase();
+            const n = (c.name || '').toLowerCase();
+            return lowered.some(k => s.includes(k) || n.includes(k));
+          });
+        };
+
+        // Helper function to get price with fallback
+        const getPrice = (keywords: string[], fallback: number) => {
+          const c = findCommodity(keywords);
+          return c?.price ?? fallback;
+        };
+
+        // Get WTI (Crude Oil) from energy data
+        const wtiPrice = getPrice(['wti', 'crude', 'oil', 'cl1!'], 75.50);
+        
+        // Get GOLD from metals data
+        const goldPrice = getPrice(['gold', 'au1!', 'or'], 1850.25);
+
         setMarketStatusData({
-          WTI: 75.50 + (Math.random() - 0.5) * 2, // Simulate price movement
-          GOLD: 1850.25 + (Math.random() - 0.5) * 20
+          WTI: wtiPrice,
+          GOLD: goldPrice
         });
       } catch (error) {
         console.error('Error loading market status data:', error);
-        setMarketStatusData({
-          WTI: 75.50,
-          GOLD: 1850.25
-        });
+        // Keep last known values on error
       }
     };
 
+    // Load immediately
     loadMarketStatusData();
     
     // Update every 30 seconds
@@ -214,14 +275,63 @@ export function AppSidebar() {
       
       <SidebarContent className="p-2 sidebar-content">
         <ScrollArea variant="sidebar" orientation="vertical" className="h-full">
-        {/* Core Functions */}
+        {/* Dashboard */}
+        <SidebarGroup>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <SidebarMenuButton 
+                  asChild 
+                  isActive={isActive(dashboardItem.url)}
+                  className="group relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all hover:bg-accent hover:text-accent-foreground sidebar-menu-button"
+                >
+                  <Link to={dashboardItem.url} className="flex items-center gap-3 w-full">
+                    <dashboardItem.icon className="h-4 w-4 shrink-0 sidebar-icon" />
+                    <span className="flex-1">{dashboardItem.title}</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        <SidebarSeparator className="my-4" />
+
+        {/* Market Data & News */}
         <SidebarGroup>
           <SidebarGroupLabel className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-2 mb-2 sidebar-group-label">
-            Core Functions
+            Market Data & News
           </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {menuItems.map((item) => (
+              {marketDataItems.map((item) => (
+                <SidebarMenuItem key={item.title}>
+                  <SidebarMenuButton 
+                    asChild 
+                    isActive={isActive(item.url)}
+                    className="group relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all hover:bg-accent hover:text-accent-foreground sidebar-menu-button"
+                  >
+                    <Link to={item.url} className="flex items-center gap-3 w-full">
+                      <item.icon className="h-4 w-4 shrink-0 sidebar-icon" />
+                      <span className="flex-1">{item.title}</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        <SidebarSeparator className="my-4" />
+
+        {/* Risk Management */}
+        <SidebarGroup>
+          <SidebarGroupLabel className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-2 mb-2 sidebar-group-label">
+            Risk Management
+          </SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {riskManagementItems.map((item) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton 
                     asChild 
@@ -236,6 +346,33 @@ export function AppSidebar() {
                           {item.badge}
                         </Badge>
                       )}
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        <SidebarSeparator className="my-4" />
+
+        {/* Analysis & Monitoring */}
+        <SidebarGroup>
+          <SidebarGroupLabel className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-2 mb-2 sidebar-group-label">
+            Analysis & Monitoring
+          </SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {analysisItems.map((item) => (
+                <SidebarMenuItem key={item.title}>
+                  <SidebarMenuButton 
+                    asChild 
+                    isActive={isActive(item.url)}
+                    className="group relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all hover:bg-accent hover:text-accent-foreground sidebar-menu-button"
+                  >
+                    <Link to={item.url} className="flex items-center gap-3 w-full">
+                      <item.icon className="h-4 w-4 shrink-0 sidebar-icon" />
+                      <span className="flex-1">{item.title}</span>
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>

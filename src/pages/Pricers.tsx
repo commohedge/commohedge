@@ -232,7 +232,7 @@ const Pricers = () => {
         // ✅ VANILLAS — STRICTEMENT COMME STRATEGY BUILDER (Index.tsx lignes 2097-2124)
         if (optionPricingModel === 'monte-carlo') {
           price = PricingService.calculateVanillaOptionMonteCarlo(
-            strategyComponent.type,
+          strategyComponent.type,
             S, // Spot comme Strategy Builder
             K,
             r,
@@ -568,7 +568,7 @@ const Pricers = () => {
           // ✅ VANILLAS — STRICTEMENT COMME STRATEGY BUILDER
           if (optionPricingModel === 'monte-carlo') {
             price = PricingService.calculateVanillaOptionMonteCarlo(
-              strategyComponent.type,
+            strategyComponent.type,
               S,
               K,
               r,
