@@ -83,7 +83,25 @@ export async function scrapeTradingViewSymbol(symbol: string): Promise<ScrapingR
     console.warn(`Vercel function failed for symbol ${symbol}, falling back:`, error);
     
     // Fallback vers la fonction générique ou API Ninja
-    const url = `https://www.tradingview.com/symbols/NYMEX-${symbol}/`;
+    // Pour les symboles Freight, essayer différentes URLs d'exchange
+    let url = `https://www.tradingview.com/symbols/${symbol}/`;
+    
+    // Si le symbole contient '!', essayer sans le '!' d'abord
+    if (symbol.includes('!')) {
+      const symbolWithoutExclamation = symbol.replace('!', '');
+      // Essayer différentes URLs d'exchange pour les symboles Freight
+      const exchangeUrls = [
+        `https://www.tradingview.com/symbols/${symbol}/`,
+        `https://www.tradingview.com/symbols/ICE-${symbolWithoutExclamation}/`,
+        `https://www.tradingview.com/symbols/CME-${symbolWithoutExclamation}/`,
+        `https://www.tradingview.com/symbols/NYMEX-${symbolWithoutExclamation}/`,
+        `https://www.tradingview.com/symbols/${symbolWithoutExclamation}/`
+      ];
+      
+      // Essayer la première URL (avec '!')
+      url = exchangeUrls[0];
+    }
+    
     return scrapePage(url);
   }
 }

@@ -454,9 +454,31 @@ export async function fetchCommoditiesData(category: CommodityCategory = 'metals
 
     // Special handling for freight
     if (category === 'freight') {
-      const freightData = await fetchFreightData();
-      saveToCache(category, freightData);
-      return freightData;
+      try {
+        const freightData = await fetchFreightData();
+        if (freightData && freightData.length > 0) {
+          saveToCache(category, freightData);
+          return freightData;
+        } else {
+          console.warn('[Freight] No data returned, trying cache...');
+          const cachedData = loadFromCache(category);
+          if (cachedData && cachedData.length > 0) {
+            console.log(`[Freight] Returning cached data: ${cachedData.length} items`);
+            return normalizeCommoditySymbols(cachedData) as any;
+          }
+          throw new Error('No freight data available and no cache found');
+        }
+      } catch (error) {
+        console.error('[Freight] Error fetching freight data:', error);
+        // Try to return cached data as fallback
+        const cachedData = loadFromCache(category);
+        if (cachedData && cachedData.length > 0) {
+          console.log(`[Freight] Returning cached data as fallback: ${cachedData.length} items`);
+          return normalizeCommoditySymbols(cachedData) as any;
+        }
+        // If no cache, throw the error
+        throw error;
+      }
     }
     
     // Special handling for bunker
@@ -493,10 +515,11 @@ export async function refreshCommoditiesData(category: CommodityCategory = 'meta
  */
 async function fetchFreightSymbolData(symbol: string, name: string, type: Commodity['type']): Promise<Commodity | null> {
   try {
+    console.log(`[Freight] Fetching data for ${symbol}...`);
     const data = await scrapeTradingViewSymbol(symbol);
     
     if (!data || !data.data) {
-      console.warn(`No data received for ${symbol}`);
+      console.warn(`[Freight] No data received for ${symbol}`);
       return null;
     }
 
@@ -509,29 +532,36 @@ async function fetchFreightSymbolData(symbol: string, name: string, type: Commod
     let percentChange = 0;
     let absoluteChange = 0;
     
-    // Search for price elements in different possible selectors
+    // Search for price elements in different possible selectors (updated for TradingView's current structure)
     const priceSelectors = [
       '.tv-symbol-price-quote__value',
       '[data-field="last_price"]',
       '.js-symbol-last',
       '.tv-symbol-header__price',
-      '[class*="price"]'
+      '[class*="price"]',
+      '[class*="last"]',
+      '.tv-symbol-price-quote__value--last',
+      '[data-symbol-last-price]',
+      '.js-symbol-price',
+      'span[class*="tv-symbol-price-quote"]'
     ];
     
     for (const selector of priceSelectors) {
-      const priceElement = root.querySelector(selector);
-      if (priceElement) {
+      const priceElements = root.querySelectorAll(selector);
+      for (const priceElement of priceElements) {
         const rawPriceText = priceElement.text.trim();
-        console.log(`Raw price text for ${symbol}: "${rawPriceText}"`);
+        if (!rawPriceText) continue;
+        
+        console.log(`[Freight] Raw price text for ${symbol}: "${rawPriceText}"`);
         
         // Parse prices correctly for TradingView format
         let priceText = rawPriceText;
         
         // Remove units and spaces
-        priceText = priceText.replace(/\s*(USD|usd|$|€|EUR|eur)\s*/gi, '');
+        priceText = priceText.replace(/\s*(USD|usd|$|€|EUR|eur|points?|pts?)\s*/gi, '');
         
-        // Remove all non-numeric characters except commas and dots
-        priceText = priceText.replace(/[^\d.,]/g, '');
+        // Remove all non-numeric characters except commas, dots, and minus signs
+        priceText = priceText.replace(/[^\d.,-]/g, '');
         
         // Handle TradingView number format
         if (priceText.includes(',') && priceText.includes('.')) {
@@ -554,23 +584,29 @@ async function fetchFreightSymbolData(symbol: string, name: string, type: Commod
           }
         }
         
-        console.log(`Processed price text for ${symbol}: "${priceText}"`);
-        price = parseFloat(priceText) || 0;
+        console.log(`[Freight] Processed price text for ${symbol}: "${priceText}"`);
+        const parsedPrice = parseFloat(priceText);
         
-        if (price > 0) {
-          console.log(`Successfully parsed price for ${symbol}: ${price}`);
+        if (!isNaN(parsedPrice) && parsedPrice > 0) {
+          price = parsedPrice;
+          console.log(`[Freight] Successfully parsed price for ${symbol}: ${price}`);
           break;
         }
       }
+      if (price > 0) break;
     }
     
-    // If no price found, search in general content
+    // If no price found, search in general content with more patterns
     if (price === 0) {
       const pricePatterns = [
-        /(\d+\.\d{1,4})\s*USD/i,
-        /(\d{1,3}(?:,\d{3})*\.\d{1,4})\s*USD/i,
+        /last[:\s]*(\d+\.\d{1,6})/i,
+        /price[:\s]*(\d+\.\d{1,6})/i,
+        /(\d+\.\d{1,6})\s*USD/i,
+        /(\d{1,3}(?:,\d{3})*\.\d{1,6})\s*USD/i,
         /(\d{1,3}(?:,\d{3})+)\s*USD/i,
-        /(\d+)\s*USD/i
+        /(\d+)\s*USD/i,
+        /"last_price":\s*(\d+\.?\d*)/i,
+        /data-field="last_price"[^>]*>([^<]+)/i
       ];
       
       for (const pattern of pricePatterns) {
@@ -598,9 +634,10 @@ async function fetchFreightSymbolData(symbol: string, name: string, type: Commod
             }
           }
           
-          price = parseFloat(matchedPrice) || 0;
-          if (price > 0) {
-            console.log(`Found price in content for ${symbol}: ${price}`);
+          const parsedPrice = parseFloat(matchedPrice);
+          if (!isNaN(parsedPrice) && parsedPrice > 0) {
+            price = parsedPrice;
+            console.log(`[Freight] Found price in content for ${symbol}: ${price}`);
             break;
           }
         }
@@ -609,7 +646,12 @@ async function fetchFreightSymbolData(symbol: string, name: string, type: Commod
     
     // Return null if no valid data
     if (price === 0) {
-      console.warn(`No valid price found for ${symbol}`);
+      console.warn(`[Freight] No valid price found for ${symbol}. HTML length: ${htmlContent.length}`);
+      // Log a sample of the HTML for debugging
+      if (htmlContent.length > 0) {
+        const sample = htmlContent.substring(0, 500);
+        console.log(`[Freight] HTML sample for ${symbol}:`, sample);
+      }
       return null;
     }
     
@@ -627,7 +669,7 @@ async function fetchFreightSymbolData(symbol: string, name: string, type: Commod
     };
     
   } catch (error) {
-    console.error(`Error fetching ${symbol}:`, error);
+    console.error(`[Freight] Error fetching ${symbol}:`, error);
     return null;
   }
 }
@@ -636,14 +678,16 @@ async function fetchFreightSymbolData(symbol: string, name: string, type: Commod
  * Retrieves all freight data in parallel
  */
 async function fetchFreightData(): Promise<Commodity[]> {
-  console.log('Fetching freight data from individual symbol pages...');
+  console.log(`[Freight] Fetching freight data from individual symbol pages... (${FREIGHT_SYMBOLS.length} symbols)`);
   
-  // Limit to 5 symbols in parallel to avoid API overload
-  const batchSize = 5;
+  // Limit to 3 symbols in parallel to avoid API overload (reduced from 5)
+  const batchSize = 3;
   const results: Commodity[] = [];
+  const errors: Array<{ symbol: string; error: string }> = [];
   
   for (let i = 0; i < FREIGHT_SYMBOLS.length; i += batchSize) {
     const batch = FREIGHT_SYMBOLS.slice(i, i + batchSize);
+    console.log(`[Freight] Processing batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(FREIGHT_SYMBOLS.length / batchSize)}: ${batch.map(b => b.symbol).join(', ')}`);
     
     const batchPromises = batch.map(({ symbol, name, type }) => 
       fetchFreightSymbolData(symbol, name, type)
@@ -652,21 +696,37 @@ async function fetchFreightData(): Promise<Commodity[]> {
     const batchResults = await Promise.allSettled(batchPromises);
     
     batchResults.forEach((result, index) => {
+      const { symbol } = batch[index];
       if (result.status === 'fulfilled' && result.value) {
         results.push(result.value);
+        console.log(`[Freight] ✅ Successfully fetched ${symbol}`);
       } else {
-        console.warn(`Failed to fetch ${batch[index].symbol}:`, result.status === 'rejected' ? result.reason : 'No data');
+        const errorMsg = result.status === 'rejected' 
+          ? result.reason?.message || String(result.reason)
+          : 'No data returned';
+        errors.push({ symbol, error: errorMsg });
+        console.warn(`[Freight] ❌ Failed to fetch ${symbol}:`, errorMsg);
       }
     });
     
     // Small delay between batches to respect API limits
     if (i + batchSize < FREIGHT_SYMBOLS.length) {
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      await new Promise(resolve => setTimeout(resolve, 1500)); // Increased delay
     }
   }
   
-  console.log(`Successfully fetched ${results.length} freight commodities`);
-  return results;
+  console.log(`[Freight] Successfully fetched ${results.length}/${FREIGHT_SYMBOLS.length} freight commodities`);
+  if (errors.length > 0) {
+    console.warn(`[Freight] Errors encountered:`, errors);
+  }
+  
+  // If we got some results, return them even if not all succeeded
+  if (results.length > 0) {
+    return results;
+  }
+  
+  // If no results at all, throw an error to trigger fallback or cache
+  throw new Error(`Failed to fetch any freight data. ${errors.length} errors encountered.`);
 }
 
 /**
@@ -987,4 +1047,5 @@ function createBunkerCommodity(
     category: 'bunker'
   };
 }
+
 
