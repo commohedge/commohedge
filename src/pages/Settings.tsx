@@ -109,8 +109,8 @@ interface AppSettings {
     exportFormat: string;
   };
 
-  // FX Exposures settings
-  fxExposures: {
+  // Commodity Exposures settings
+  commodityExposures: {
     autoDetection: boolean;
     defaultMaturity: string;
     riskClassification: string;
@@ -147,7 +147,7 @@ const Settings = () => {
   };
   const [settings, setSettings] = useState<AppSettings>({
     company: {
-      name: "FX hedging - Risk Management Platform",
+      name: "Commodity Risk Management Platform",
       currency: "USD",
       timezone: "Europe/Paris",
       fiscalYearStart: "01-01"
@@ -164,7 +164,7 @@ const Settings = () => {
       }
     },
     pricing: {
-      defaultModel: "garman-kohlhagen",
+      defaultModel: "black-scholes",
       useRealTimeData: true,
       volatilityModel: "garch",
       interestRateSource: "bloomberg",
@@ -197,7 +197,7 @@ const Settings = () => {
       dataRetention: 365,
       exportFormat: "xlsx"
     },
-    fxExposures: {
+    commodityExposures: {
       autoDetection: true,
       defaultMaturity: "1M",
       riskClassification: "medium",
@@ -228,7 +228,7 @@ const Settings = () => {
   const [showCleanupDialog, setShowCleanupDialog] = useState(false);
   const [deletionStats, setDeletionStats] = useState<{total: number, deleted: number} | null>(null);
   const logo = getCompanyLogo();
-  const companyName = companySettings?.name || "FX hedging - Risk Management Platform";
+  const companyName = companySettings?.name || "Commodity Risk Management Platform";
   const [pendingLogo, setPendingLogo] = useState<string | null>(null);
   const [logoMarkedForRemoval, setLogoMarkedForRemoval] = useState(false);
   const [pendingCompanyName, setPendingCompanyName] = useState<string | null>(null);
@@ -432,7 +432,7 @@ const Settings = () => {
     setPendingCompanyName(null);
   };
 
-  // Function to delete all FX exposures
+  // Function to delete all exposures
   const deleteAllExposures = async () => {
     setIsDeleting(true);
     try {
@@ -462,15 +462,15 @@ const Settings = () => {
       }
 
       // Clear localStorage as backup
-      localStorage.removeItem('fxExposures');
-      localStorage.removeItem('fxExposuresBackup');
-      localStorage.removeItem('fxExposuresLastModified');
+      localStorage.removeItem('commodityExposures');
+      localStorage.removeItem('commodityExposuresBackup');
+      localStorage.removeItem('commodityExposuresLastModified');
       localStorage.removeItem('marketData');
       localStorage.removeItem('riskMetrics');
       localStorage.removeItem('currencyExposures');
       
       // Also clear from session storage if used
-      sessionStorage.removeItem('fxExposures');
+      sessionStorage.removeItem('commodityExposures');
       
       // Update stats
       setDeletionStats({ total: totalCount, deleted: deletedCount });
@@ -481,16 +481,16 @@ const Settings = () => {
       // Close dialog
       setShowDeleteDialog(false);
       
-      console.log(`✅ Suppression terminée: ${deletedCount}/${totalCount} expositions FX supprimées + données commodités supprimées`);
+      console.log(`✅ Suppression terminée: ${deletedCount}/${totalCount} expositions supprimées`);
       
       // Show success notification
       toast({
         title: "✅ Toutes les données supprimées",
-        description: `${deletedCount} exposition(s) FX et toutes les expositions commodités ont été supprimées avec succès`,
+        description: `Toutes les expositions commodités ont été supprimées avec succès`,
       });
       
     } catch (error) {
-      console.error('Error deleting FX exposures:', error);
+      console.error('Error deleting exposures:', error);
       toast({
         title: "❌ Erreur",
         description: "Erreur lors de la suppression des expositions",
@@ -538,7 +538,7 @@ const Settings = () => {
       }
       
       // Update localStorage timestamp
-      localStorage.setItem('fxExposuresLastModified', new Date().toISOString());
+      localStorage.setItem('commodityExposuresLastModified', new Date().toISOString());
       
       setDeletionStats({ total: totalCount, deleted: deletedCount });
       
@@ -564,7 +564,7 @@ const Settings = () => {
       }
       
     } catch (error) {
-      console.error('Error cleaning up FX exposures:', error);
+      console.error('Error cleaning up exposures:', error);
       toast({
         title: "❌ Erreur",
         description: "Erreur lors du nettoyage des expositions",
@@ -575,107 +575,8 @@ const Settings = () => {
     }
   };
 
-  // Function to create test exposures for demonstration
-  const createTestExposures = async () => {
-    try {
-      const testExposures = [
-        {
-          currency: 'EUR',
-          amount: 1000000,
-          maturity: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days from now
-          type: 'receivable' as const,
-          description: 'Test EUR Receivable - FX hedging',
-          subsidiary: 'FX hedging',
-          hedgeRatio: 0,
-          hedgedAmount: 0
-        },
-        {
-          currency: 'GBP',
-          amount: -750000,
-          maturity: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000), // 60 days from now
-          type: 'payable' as const,
-          description: 'Test GBP Payable - FX hedging',
-          subsidiary: 'FX hedging',
-          hedgeRatio: 50,
-          hedgedAmount: -375000
-        },
-        {
-          currency: 'JPY',
-          amount: 150000000,
-          maturity: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000), // 90 days from now
-          type: 'receivable' as const,
-          description: 'Test JPY Receivable - FX hedging',
-          subsidiary: 'FX hedging',
-          hedgeRatio: 100,
-          hedgedAmount: 150000000
-        },
-        {
-          currency: 'EUR',
-          amount: -500000,
-          maturity: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000), // 10 days ago (expired)
-          type: 'payable' as const,
-          description: 'Expired EUR Payable - FX hedging',
-          subsidiary: 'FX hedging',
-          hedgeRatio: 0,
-          hedgedAmount: 0
-        },
-        {
-          currency: 'INVALID',
-          amount: 0, // Invalid amount
-          maturity: new Date(Date.now() + 45 * 24 * 60 * 60 * 1000),
-          type: 'receivable' as const,
-          description: 'Invalid Test Exposure',
-          subsidiary: 'FX hedging',
-          hedgeRatio: 0,
-          hedgedAmount: 0
-        },
-        {
-          currency: 'MAD',
-          amount: 10000000,
-          maturity: new Date(Date.now() + 120 * 24 * 60 * 60 * 1000), // 120 days from now
-          type: 'receivable' as const,
-          description: 'Test MAD Receivable - FX hedging Morocco',
-          subsidiary: 'FX hedging Morocco',
-          hedgeRatio: 75,
-          hedgedAmount: 7500000
-        }
-      ];
-
-      let createdCount = 0;
-      
-      // Add each exposure using the service
-      for (const exposure of testExposures) {
-        try {
-          await addExposure(exposure);
-          createdCount++;
-        } catch (error) {
-          console.error('Error creating test exposure:', error);
-        }
-      }
-      
-      // Update localStorage timestamp
-      localStorage.setItem('fxExposuresLastModified', new Date().toISOString());
-      
-      // Force component re-render by updating a state
-      setDeletionStats(null);
-      
-      console.log(`✅ Création terminée: ${createdCount}/${testExposures.length} expositions créées`);
-      
-      // Show success notification
-      toast({
-        title: "✅ Expositions de test créées",
-        description: `${createdCount} exposition(s) de test créée(s) avec succès`,
-      });
-      
-    } catch (error) {
-      console.error('Error creating test exposures:', error);
-      toast({
-        title: "❌ Erreur",
-        description: "Erreur lors de la création des expositions de test",
-        variant: "destructive"
-      });
-    }
-  };
+  // Function to create test exposures for demonstration (removed - FX specific, not applicable to commodities)
+  // Commodity test data should be created through the Strategy Builder or Commodity Exposures page
 
   return (
     <Layout 
@@ -692,7 +593,7 @@ const Settings = () => {
             Application Settings
           </h1>
           <p className="text-muted-foreground">
-            General configuration for FX Risk Manager system
+            General configuration for Commodity Risk Management system
           </p>
         </div>
         <div className="flex gap-2">
@@ -745,7 +646,7 @@ const Settings = () => {
           <TabsTrigger value="interface">Interface</TabsTrigger>
           <TabsTrigger value="notifications">Alerts</TabsTrigger>
           <TabsTrigger value="data">Data</TabsTrigger>
-          <TabsTrigger value="fxexposures">FX Exposures</TabsTrigger>
+          <TabsTrigger value="commodityexposures">Commodity Exposures</TabsTrigger>
           <TabsTrigger value="hedging">Hedging</TabsTrigger>
           <TabsTrigger value="diagnostic">Diagnostic</TabsTrigger>
         </TabsList>
@@ -1092,9 +993,9 @@ const Settings = () => {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="garman-kohlhagen">Garman-Kohlhagen</SelectItem>
                       <SelectItem value="black-scholes">Black-Scholes</SelectItem>
                       <SelectItem value="monte-carlo">Monte Carlo</SelectItem>
+                      <SelectItem value="binomial">Binomial Tree</SelectItem>
                       <SelectItem value="closed-form">Closed Form</SelectItem>
                     </SelectContent>
                   </Select>
@@ -1676,10 +1577,10 @@ const Settings = () => {
                     <div className="flex items-start space-x-3">
                       <AlertCircle className="h-5 w-5 text-orange-600 mt-0.5" />
                       <div className="flex-1">
-                        <h5 className="font-medium text-orange-800">Quick Access to FX Data Operations</h5>
+                        <h5 className="font-medium text-orange-800">Quick Access to Commodity Data Operations</h5>
                         <p className="text-sm text-orange-700">
-                          Manage FX exposures and related data directly from the Data Management section. 
-                          These operations affect the same data as the FX Exposures tab.
+                          Manage commodity exposures and related data directly from the Data Management section. 
+                          These operations affect the same data as the Commodity Exposures tab.
                         </p>
                       </div>
                     </div>
@@ -1692,17 +1593,9 @@ const Settings = () => {
                         disabled={isDeleting}
                       >
                         <Eraser className="h-4 w-4 mr-2" />
-                        Clean FX Data
+                        Clean Commodity Data
                       </Button>
                       
-                      <Button 
-                        variant="outline" 
-                        className="w-full text-blue-600 border-blue-200 hover:bg-blue-50" 
-                        onClick={createTestExposures}
-                      >
-                        <Database className="h-4 w-4 mr-2" />
-                        Create Test Data
-                      </Button>
                       
                       <Button 
                         variant="destructive" 
@@ -1711,17 +1604,17 @@ const Settings = () => {
                         disabled={isDeleting}
                       >
                         <Trash2 className="h-4 w-4 mr-2" />
-                        Clear All FX Data
+                        Clear All Commodity Data
                       </Button>
                     </div>
 
                     <div className="grid gap-4 md:grid-cols-4 text-xs">
                       <div className="p-2 border rounded">
-                        <div className="font-medium text-muted-foreground">FX Exposures</div>
+                        <div className="font-medium text-muted-foreground">Commodity Exposures</div>
                         <div className="text-sm font-bold">
                           {(() => {
                             try {
-                              const exposuresData = localStorage.getItem('fxExposures');
+                              const exposuresData = localStorage.getItem('commodityExposures');
                               const exposures = exposuresData ? JSON.parse(exposuresData) : [];
                               return exposures.length || 0;
                             } catch {
@@ -1775,15 +1668,15 @@ const Settings = () => {
           </Card>
         </TabsContent>
 
-        <TabsContent value="fxexposures">
+        <TabsContent value="commodityexposures">
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <TrendingUp className="h-5 w-5" />
-                FX Exposures Configuration
+                Commodity Exposures Configuration
               </CardTitle>
               <CardDescription>
-                Setup and configuration for foreign exchange exposures management
+                Setup and configuration for commodity exposures management
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
@@ -1791,16 +1684,16 @@ const Settings = () => {
                 <div className="flex items-center space-x-2">
                   <Switch
                     id="auto-detection"
-                    checked={settings.fxExposures.autoDetection}
-                    onCheckedChange={(checked) => updateSettings('fxExposures', { autoDetection: checked })}
+                    checked={settings.commodityExposures.autoDetection}
+                    onCheckedChange={(checked) => updateSettings('commodityExposures', { autoDetection: checked })}
                   />
-                  <Label htmlFor="auto-detection">Auto-detect FX Exposures</Label>
+                  <Label htmlFor="auto-detection">Auto-detect Commodity Exposures</Label>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="default-maturity">Default Maturity</Label>
                   <Select
-                    value={settings.fxExposures.defaultMaturity}
-                    onValueChange={(value) => updateSettings('fxExposures', { defaultMaturity: value })}
+                    value={settings.commodityExposures.defaultMaturity}
+                    onValueChange={(value) => updateSettings('commodityExposures', { defaultMaturity: value })}
                   >
                     <SelectTrigger>
                       <SelectValue />
@@ -1817,8 +1710,8 @@ const Settings = () => {
                 <div className="space-y-2">
                   <Label htmlFor="risk-classification">Risk Classification</Label>
                   <Select
-                    value={settings.fxExposures.riskClassification}
-                    onValueChange={(value) => updateSettings('fxExposures', { riskClassification: value })}
+                    value={settings.commodityExposures.riskClassification}
+                    onValueChange={(value) => updateSettings('commodityExposures', { riskClassification: value })}
                   >
                     <SelectTrigger>
                       <SelectValue />
@@ -1834,8 +1727,8 @@ const Settings = () => {
                 <div className="space-y-2">
                   <Label htmlFor="consolidation-level">Consolidation Level</Label>
                   <Select
-                    value={settings.fxExposures.consolidationLevel}
-                    onValueChange={(value) => updateSettings('fxExposures', { consolidationLevel: value })}
+                    value={settings.commodityExposures.consolidationLevel}
+                    onValueChange={(value) => updateSettings('commodityExposures', { consolidationLevel: value })}
                   >
                     <SelectTrigger>
                       <SelectValue />
@@ -1853,8 +1746,8 @@ const Settings = () => {
                   <Input
                     id="exposure-threshold"
                     type="number"
-                    value={settings.fxExposures.exposureThreshold}
-                    onChange={(e) => updateSettings('fxExposures', { exposureThreshold: parseInt(e.target.value) })}
+                    value={settings.commodityExposures.exposureThreshold}
+                    onChange={(e) => updateSettings('commodityExposures', { exposureThreshold: parseInt(e.target.value) })}
                     min="1000"
                     step="1000"
                   />
@@ -1862,8 +1755,8 @@ const Settings = () => {
                 <div className="space-y-2">
                   <Label htmlFor="reporting-currency">Reporting Currency</Label>
                   <Select
-                    value={settings.fxExposures.reportingCurrency}
-                    onValueChange={(value) => updateSettings('fxExposures', { reportingCurrency: value })}
+                    value={settings.commodityExposures.reportingCurrency}
+                    onValueChange={(value) => updateSettings('commodityExposures', { reportingCurrency: value })}
                   >
                     <SelectTrigger>
                       <SelectValue />
@@ -1884,8 +1777,8 @@ const Settings = () => {
                 <div className="flex items-center space-x-2">
                   <Switch
                     id="include-pending"
-                    checked={settings.fxExposures.includePendingTransactions}
-                    onCheckedChange={(checked) => updateSettings('fxExposures', { includePendingTransactions: checked })}
+                    checked={settings.commodityExposures.includePendingTransactions}
+                    onCheckedChange={(checked) => updateSettings('commodityExposures', { includePendingTransactions: checked })}
                   />
                   <Label htmlFor="include-pending">Include Pending Transactions</Label>
                 </div>
@@ -1896,7 +1789,7 @@ const Settings = () => {
               <div className="space-y-4">
                 <h4 className="text-lg font-medium">Maturity Buckets</h4>
                 <div className="grid gap-2 md:grid-cols-3">
-                  {settings.fxExposures.maturityBuckets.map((bucket, index) => (
+                  {settings.commodityExposures.maturityBuckets.map((bucket, index) => (
                     <div key={index} className="p-3 border rounded-lg">
                       <Badge variant="secondary">{bucket}</Badge>
                     </div>
@@ -1925,7 +1818,7 @@ const Settings = () => {
                       <div className="flex-1">
                         <h5 className="font-medium text-destructive">Warning</h5>
                         <p className="text-sm text-muted-foreground">
-                          These operations will permanently modify or delete FX exposure data. 
+                          These operations will permanently modify or delete commodity exposure data. 
                           Make sure to backup your data before proceeding.
                         </p>
                       </div>
@@ -1943,10 +1836,10 @@ const Settings = () => {
                           <AlertDialogHeader>
                             <AlertDialogTitle className="flex items-center gap-2">
                               <Eraser className="h-5 w-5" />
-                              Clean Up FX Exposures
+                              Clean Up Commodity Exposures
                             </AlertDialogTitle>
                             <AlertDialogDescription>
-                              This will remove expired and invalid FX exposures from the system. 
+                              This will remove expired and invalid commodity exposures from the system. 
                               The following exposures will be cleaned up:
                               <ul className="list-disc list-inside mt-2 space-y-1">
                                 <li>Exposures with maturity dates in the past</li>
@@ -1992,14 +1885,14 @@ const Settings = () => {
                           <AlertDialogHeader>
                             <AlertDialogTitle className="flex items-center gap-2 text-destructive">
                               <Trash2 className="h-5 w-5" />
-                              Delete All FX Exposures
+                              Delete All Commodity Exposures
                             </AlertDialogTitle>
                             <AlertDialogDescription>
                               <strong className="text-destructive">This is a permanent action!</strong>
                               <br /><br />
-                              You are about to delete ALL FX exposures from the system. This includes:
+                              You are about to delete ALL commodity exposures from the system. This includes:
                               <ul className="list-disc list-inside mt-2 space-y-1">
-                                <li>All current FX exposures</li>
+                                <li>All current commodity exposures</li>
                                 <li>Historical exposure data</li>
                                 <li>Associated backup files</li>
                                 <li>Cached exposure calculations</li>
@@ -2047,17 +1940,6 @@ const Settings = () => {
                       </Alert>
                     )}
 
-                    <div className="flex justify-center">
-                      <Button 
-                        variant="outline" 
-                        size="sm" 
-                        onClick={createTestExposures}
-                        className="text-blue-600 border-blue-200 hover:bg-blue-50"
-                      >
-                        <Database className="h-4 w-4 mr-2" />
-                        Create Test Exposures
-                      </Button>
-                    </div>
 
                     <div className="grid gap-4 md:grid-cols-3 text-sm">
                       <div className="p-3 border rounded-lg">
@@ -2065,7 +1947,7 @@ const Settings = () => {
                         <div className="text-lg font-bold">
                           {(() => {
                             try {
-                              const exposuresData = localStorage.getItem('fxExposures');
+                              const exposuresData = localStorage.getItem('commodityExposures');
                               const exposures = exposuresData ? JSON.parse(exposuresData) : [];
                               return exposures.length || 0;
                             } catch {
@@ -2079,7 +1961,7 @@ const Settings = () => {
                         <div className="text-lg font-bold">
                           {(() => {
                             try {
-                              const exposuresData = localStorage.getItem('fxExposures');
+                              const exposuresData = localStorage.getItem('commodityExposures');
                               const sizeKB = exposuresData ? (exposuresData.length / 1024).toFixed(1) : '0';
                               return `${sizeKB} KB`;
                             } catch {
@@ -2093,7 +1975,7 @@ const Settings = () => {
                         <div className="text-lg font-bold">
                           {(() => {
                             try {
-                              const lastModified = localStorage.getItem('fxExposuresLastModified');
+                              const lastModified = localStorage.getItem('commodityExposuresLastModified');
                               return lastModified ? new Date(lastModified).toLocaleDateString('en-US') : 'Never';
                             } catch {
                               return 'Never';
@@ -2132,12 +2014,13 @@ const Settings = () => {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="forward">FX Forward</SelectItem>
-                      <SelectItem value="swap">FX Swap</SelectItem>
-                      <SelectItem value="option">FX Option</SelectItem>
-                      <SelectItem value="collar">FX Collar</SelectItem>
-                      <SelectItem value="ndf">Non-Deliverable Forward</SelectItem>
+                      <SelectItem value="forward">Forward</SelectItem>
+                      <SelectItem value="swap">Swap</SelectItem>
+                      <SelectItem value="option">Option</SelectItem>
+                      <SelectItem value="collar">Collar</SelectItem>
                       <SelectItem value="barrier">Barrier Option</SelectItem>
+                      <SelectItem value="vanilla-call">Vanilla Call</SelectItem>
+                      <SelectItem value="vanilla-put">Vanilla Put</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>

@@ -1,12 +1,14 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import CommodityDataService, { 
+import CommodityDataService from '../services/CommodityDataService';
+import StrategyImportService from '../services/StrategyImportService';
+import {
   CommodityMarketData, 
   CommodityExposureData, 
   CommodityHedgingInstrument, 
   CommodityRiskMetrics, 
-  AggregatedCommodityExposure 
-} from '../services/CommodityDataService';
-import StrategyImportService from '../services/StrategyImportService';
+  CommodityExposure,
+  CommodityUnit
+} from '@/types/Commodity';
 
 interface UseCommodityDataReturn {
   // Data
@@ -14,7 +16,7 @@ interface UseCommodityDataReturn {
   exposures: CommodityExposureData[];
   instruments: CommodityHedgingInstrument[];
   riskMetrics: CommodityRiskMetrics;
-  commodityExposures: AggregatedCommodityExposure[];
+  commodityExposures: CommodityExposure[];
   
   // Actions
   addExposure: (exposure: Omit<CommodityExposureData, 'id'>) => void;
@@ -70,7 +72,7 @@ export const useCommodityData = (): UseCommodityDataReturn => {
   const [riskMetrics, setRiskMetrics] = useState<CommodityRiskMetrics>(() => 
     serviceRef.current.calculateRiskMetrics()
   );
-  const [commodityExposures, setCommodityExposures] = useState<AggregatedCommodityExposure[]>(() => 
+  const [commodityExposures, setCommodityExposures] = useState<CommodityExposure[]>(() => 
     serviceRef.current.getCommodityExposures()
   );
 
@@ -153,6 +155,132 @@ export const useCommodityData = (): UseCommodityDataReturn => {
     return () => clearInterval(interval);
   }, [isLiveMode]);
 
+  // Helper function to get commodity name and unit
+  const getCommodityInfo = useCallback((commoditySymbol: string): { name: string; unit: CommodityUnit; contractSize: number } => {
+    // Map des unités de CURRENCY_PAIRS vers CommodityUnit
+    const unitMapping: { [key: string]: CommodityUnit } = {
+      'BBL': 'barrel',
+      'bbl': 'barrel',
+      'MMBTU': 'MMBtu',
+      'MMBtu': 'MMBtu',
+      'GAL': 'gallon',
+      'gal': 'gallon',
+      'OZ': 'troy ounce',
+      'oz': 'troy ounce',
+      'LB': 'pound',
+      'lb': 'pound',
+      'MT': 'metric ton',
+      'mt': 'metric ton',
+      'BU': 'bushel',
+      'bu': 'bushel',
+    };
+    
+    // Map des contract sizes standards par unité
+    const contractSizeMap: { [key: string]: number } = {
+      'barrel': 1000,
+      'MMBtu': 10000,
+      'gallon': 42000, // 1000 barrels = 42000 gallons
+      'troy ounce': 100,
+      'pound': 25000,
+      'metric ton': 25,
+      'bushel': 5000,
+    };
+    
+    // Commodity map avec toutes les commodities et leurs unités correctes
+    const commodityMap: { [key: string]: { name: string; unit: CommodityUnit; contractSize: number } } = {
+      // Energy
+      'WTI': { name: 'WTI Crude Oil', unit: 'barrel', contractSize: 1000 },
+      'BRENT': { name: 'Brent Crude Oil', unit: 'barrel', contractSize: 1000 },
+      'NATGAS': { name: 'Natural Gas', unit: 'MMBtu', contractSize: 10000 },
+      'HEATING': { name: 'Heating Oil', unit: 'gallon', contractSize: 42000 },
+      'RBOB': { name: 'Gasoline RBOB', unit: 'gallon', contractSize: 42000 },
+      
+      // Precious Metals
+      'GOLD': { name: 'Gold', unit: 'troy ounce', contractSize: 100 },
+      'SILVER': { name: 'Silver', unit: 'troy ounce', contractSize: 5000 },
+      'PLATINUM': { name: 'Platinum', unit: 'troy ounce', contractSize: 50 },
+      'PALLADIUM': { name: 'Palladium', unit: 'troy ounce', contractSize: 100 },
+      
+      // Base Metals
+      'COPPER': { name: 'Copper', unit: 'pound', contractSize: 25000 },
+      'ALUMINUM': { name: 'Aluminum', unit: 'metric ton', contractSize: 25 },
+      'ZINC': { name: 'Zinc', unit: 'metric ton', contractSize: 25 },
+      'NICKEL': { name: 'Nickel', unit: 'metric ton', contractSize: 6 },
+      
+      // Agriculture
+      'CORN': { name: 'Corn', unit: 'bushel', contractSize: 5000 },
+      'WHEAT': { name: 'Wheat', unit: 'bushel', contractSize: 5000 },
+      'SOYBEAN': { name: 'Soybean', unit: 'bushel', contractSize: 5000 },
+      'COFFEE': { name: 'Coffee', unit: 'pound', contractSize: 37500 },
+      'SUGAR': { name: 'Sugar', unit: 'pound', contractSize: 112000 },
+      'COTTON': { name: 'Cotton', unit: 'pound', contractSize: 50000 },
+      
+      // Livestock
+      'CATTLE': { name: 'Live Cattle', unit: 'pound', contractSize: 40000 },
+      'HOGS': { name: 'Lean Hogs', unit: 'pound', contractSize: 40000 },
+    };
+    
+    // Vérifier d'abord dans le map direct
+    if (commodityMap[commoditySymbol]) {
+      return commodityMap[commoditySymbol];
+    }
+    
+    // ✅ Vérifier dans les commodities personnalisées depuis localStorage
+    try {
+      const savedCustomPairs = localStorage.getItem('customCurrencyPairs');
+      if (savedCustomPairs) {
+        const customPairs: Array<{ symbol: string; name: string; base: string; quote: string }> = JSON.parse(savedCustomPairs);
+        const customCommodity = customPairs.find(pair => pair.symbol === commoditySymbol || pair.symbol.toUpperCase() === commoditySymbol.toUpperCase());
+        if (customCommodity) {
+          // Convertir l'unité depuis le champ 'base' vers CommodityUnit
+          const baseUnit = customCommodity.base.toUpperCase();
+          const mappedUnit = unitMapping[baseUnit] || 'barrel'; // Fallback sur barrel si unité inconnue
+          const contractSize = contractSizeMap[mappedUnit] || 1000;
+          
+          return {
+            name: customCommodity.name,
+            unit: mappedUnit as CommodityUnit,
+            contractSize: contractSize
+          };
+        }
+      }
+    } catch (error) {
+      console.warn(`[getCommodityInfo] Error reading custom commodities from localStorage:`, error);
+    }
+    
+    // Fallback: essayer de trouver dans CURRENCY_PAIRS (import dynamique si nécessaire)
+    // Pour l'instant, utiliser un fallback intelligent basé sur le symbole
+    const symbolUpper = commoditySymbol.toUpperCase();
+    
+    // Détection basée sur le nom du symbole
+    if (symbolUpper.includes('GOLD') || symbolUpper.includes('SILVER') || symbolUpper.includes('PLATINUM') || symbolUpper.includes('PALLADIUM')) {
+      return { name: commoditySymbol, unit: 'troy ounce', contractSize: 100 };
+    }
+    if (symbolUpper.includes('OIL') || symbolUpper.includes('CRUDE') || symbolUpper === 'WTI' || symbolUpper === 'BRENT') {
+      return { name: commoditySymbol, unit: 'barrel', contractSize: 1000 };
+    }
+    if (symbolUpper.includes('GAS') || symbolUpper === 'NATGAS') {
+      return { name: commoditySymbol, unit: 'MMBtu', contractSize: 10000 };
+    }
+    if (symbolUpper.includes('CORN') || symbolUpper.includes('WHEAT') || symbolUpper.includes('SOY') || symbolUpper.includes('BEAN')) {
+      return { name: commoditySymbol, unit: 'bushel', contractSize: 5000 };
+    }
+    if (symbolUpper.includes('COPPER') || symbolUpper.includes('COFFEE') || symbolUpper.includes('SUGAR') || symbolUpper.includes('COTTON')) {
+      return { name: commoditySymbol, unit: 'pound', contractSize: 25000 };
+    }
+    if (symbolUpper.includes('ALUMINUM') || symbolUpper.includes('ZINC') || symbolUpper.includes('NICKEL')) {
+      return { name: commoditySymbol, unit: 'metric ton', contractSize: 25 };
+    }
+    
+    // Dernier fallback: utiliser 'barrel' mais avec un warning
+    console.warn(`[getCommodityInfo] Unknown commodity symbol: ${commoditySymbol}, using default unit 'barrel'. Please add this commodity manually with its correct unit.`);
+    return { 
+      name: commoditySymbol, 
+      unit: 'barrel', 
+      contractSize: 1000 
+    };
+  }, []);
+
   const syncWithHedgingInstruments = useCallback(() => {
     try {
       // Get hedging instruments from StrategyImportService
@@ -163,17 +291,25 @@ export const useCommodityData = (): UseCommodityDataReturn => {
       
       // Convert and add hedging instruments to CommodityDataService
       hedgingInstruments.forEach(hedgingInstrument => {
+        const commodityInfo = getCommodityInfo(hedgingInstrument.currency);
+        
         // Convert StrategyImportService HedgingInstrument to CommodityDataService HedgingInstrument
         const commodityInstrument: Omit<CommodityHedgingInstrument, 'id' | 'mtm'> = {
           type: mapInstrumentType(hedgingInstrument.type),
           commodity: hedgingInstrument.currency, // Mapper currency → commodity
+          commodityName: commodityInfo.name,
           notional: hedgingInstrument.notional,
+          unit: commodityInfo.unit,
+          contractSize: commodityInfo.contractSize,
           strike: hedgingInstrument.strike,
           premium: hedgingInstrument.premium,
           maturity: new Date(hedgingInstrument.maturity),
           counterparty: hedgingInstrument.counterparty || 'Strategy Import',
           hedgeAccounting: hedgingInstrument.hedge_accounting || false,
-          effectivenessRatio: hedgingInstrument.hedgeQuantity || hedgingInstrument.effectiveness_ratio || 95
+          effectivenessRatio: hedgingInstrument.hedgeQuantity || hedgingInstrument.effectiveness_ratio || 95,
+          physicalDelivery: false, // Default to cash settlement
+          settlementCurrency: 'USD', // Default to USD for commodities
+          volumeType: hedgingInstrument.volumeType // ✅ Transmettre le volumeType pour distinguer long de short
         };
         
         serviceRef.current.addInstrument(commodityInstrument);
@@ -181,7 +317,7 @@ export const useCommodityData = (): UseCommodityDataReturn => {
     } catch (error) {
       console.error('Error syncing with hedging instruments:', error);
     }
-  }, []);
+  }, [getCommodityInfo]);
 
   // Auto-generate exposures based on hedging instruments
   const autoGenerateExposures = useCallback(() => {
@@ -239,12 +375,30 @@ export const useCommodityData = (): UseCommodityDataReturn => {
             newCommodityMaturityPairs.add(commodityMaturityPair);
           }
           
-          const originalInstrument = originalInstruments.find(orig => 
-            orig.currency === instrument.commodity && 
-            Math.abs(orig.notional - instrument.notional) < 0.01
-          );
+          // Find original instrument matching by commodity, notional, maturity, AND volumeType
+          const originalInstrument = originalInstruments.find(orig => {
+            const origMaturity = new Date(orig.maturity).toISOString().split('T')[0];
+            const instMaturity = instrument.maturity.toISOString().split('T')[0];
+            return orig.currency === instrument.commodity && 
+                   Math.abs(orig.notional - instrument.notional) < 0.01 &&
+                   origMaturity === instMaturity &&
+                   orig.volumeType === instrument.volumeType; // Match by volumeType to distinguish long from short
+          }) || originalInstruments.find(orig => {
+            // Fallback: match without volumeType if exact match not found
+            const origMaturity = new Date(orig.maturity).toISOString().split('T')[0];
+            const instMaturity = instrument.maturity.toISOString().split('T')[0];
+            return orig.currency === instrument.commodity && 
+                   Math.abs(orig.notional - instrument.notional) < 0.01 &&
+                   origMaturity === instMaturity;
+          });
           if (originalInstrument) {
-            commodityGroups[commodity].originalInstruments.push(originalInstrument);
+            // Only add if not already in the array (avoid duplicates)
+            const exists = commodityGroups[commodity].originalInstruments.some(
+              orig => orig.id === originalInstrument.id
+            );
+            if (!exists) {
+              commodityGroups[commodity].originalInstruments.push(originalInstrument);
+            }
           }
         });
         
@@ -253,26 +407,104 @@ export const useCommodityData = (): UseCommodityDataReturn => {
         let newCommoditiesDetected = Array.from(newCommodities);
         let newMaturitiesDetected = Array.from(newMaturities);
         
-        // Create exposures grouped by commodity and maturity
+        // Create exposures grouped by commodity, maturity, AND type
         Object.entries(commodityGroups).forEach(([commodity, instrumentGroup]) => {
           const instruments = instrumentGroup.commodityInstruments;
           const originalInstruments = instrumentGroup.originalInstruments;
           
-          // Group by maturity within each commodity
-          const maturityGroups: { [maturity: string]: CommodityHedgingInstrument[] } = {};
+          // Group by maturity AND volumeType within each commodity
+          // This ensures that long and short positions from different strategies are kept separate
+          const maturityTypeGroups: { [key: string]: { 
+            instruments: CommodityHedgingInstrument[], 
+            originalInstruments: any[],
+            positionType: 'long' | 'short'
+          } } = {};
+          
           instruments.forEach(instrument => {
             const maturityStr = instrument.maturity.toISOString().split('T')[0];
-            if (!maturityGroups[maturityStr]) {
-              maturityGroups[maturityStr] = [];
+            
+            // Find the original instrument for additional metadata
+            const originalInstrument = originalInstruments.find(orig => {
+              const origMaturity = new Date(orig.maturity).toISOString().split('T')[0];
+              return origMaturity === maturityStr && 
+                     Math.abs(orig.notional - instrument.notional) < 0.01 &&
+                     orig.volumeType === instrument.volumeType; // Match by volumeType too
+            }) || originalInstruments.find(orig => {
+              const origMaturity = new Date(orig.maturity).toISOString().split('T')[0];
+              return origMaturity === maturityStr && 
+                     Math.abs(orig.notional - instrument.notional) < 0.01;
+            });
+            
+            // Determine position type from the instrument's volumeType (now directly available)
+            let positionType: 'long' | 'short' = 'long'; // default
+            
+            // ✅ PRIORITÉ 1: Utiliser volumeType directement depuis l'instrument (maintenant disponible)
+            if (instrument.volumeType) {
+              if (instrument.volumeType === 'long' || instrument.volumeType === 'short') {
+                positionType = instrument.volumeType;
+              } else if (instrument.volumeType === 'payable') {
+                positionType = 'short';
+              } else if (instrument.volumeType === 'receivable') {
+                positionType = 'long';
+              }
+            } else if (originalInstrument && originalInstrument.volumeType) {
+              // ✅ PRIORITÉ 2: Fallback sur originalInstrument si volumeType manquant dans l'instrument
+              if (originalInstrument.volumeType === 'long' || originalInstrument.volumeType === 'short') {
+                positionType = originalInstrument.volumeType;
+              } else if (originalInstrument.volumeType === 'payable') {
+                positionType = 'short';
+              } else if (originalInstrument.volumeType === 'receivable') {
+                positionType = 'long';
+              }
+            } else {
+              // ✅ PRIORITÉ 3: Fallback sur le type d'instrument
+              const hasLongInstruments = instrument.type === 'vanilla-call' || 
+                                        instrument.type === 'forward' || 
+                                        instrument.type === 'collar';
+              positionType = hasLongInstruments ? 'long' : 'short';
             }
-            maturityGroups[maturityStr].push(instrument);
+            
+            console.log(`[GROUPING] ${commodity}-${maturityStr}: Instrument ${instrument.id} -> positionType=${positionType} (volumeType=${instrument.volumeType || 'N/A'})`);
+            
+            // Create a unique key for commodity-maturity-type combination
+            const groupKey = `${maturityStr}-${positionType}`;
+            
+            if (!maturityTypeGroups[groupKey]) {
+              maturityTypeGroups[groupKey] = {
+                instruments: [],
+                originalInstruments: [],
+                positionType: positionType
+              };
+            }
+            
+            maturityTypeGroups[groupKey].instruments.push(instrument);
+            if (originalInstrument) {
+              // Only add if not already in the array (avoid duplicates)
+              const exists = maturityTypeGroups[groupKey].originalInstruments.some(
+                orig => orig.id === originalInstrument.id
+              );
+              if (!exists) {
+                maturityTypeGroups[groupKey].originalInstruments.push(originalInstrument);
+              }
+            }
           });
           
-          // Create an exposure for each commodity-maturity combination that doesn't exist
-          Object.entries(maturityGroups).forEach(([maturityStr, maturityInstruments]) => {
+          // Create an exposure for each commodity-maturity-type combination that doesn't exist
+          Object.entries(maturityTypeGroups).forEach(([groupKey, groupData]) => {
+            const maturityInstruments = groupData.instruments;
+            const groupOriginalInstruments = groupData.originalInstruments;
+            const positionType = groupData.positionType; // Already determined during grouping
+            // Extract maturity from key: groupKey is "YYYY-MM-DD-long" or "YYYY-MM-DD-short"
+            const maturityStr = groupKey.replace(/-long$|-short$/, '');
+            
+            console.log(`[COMMODITY EXPOSURE] Processing ${commodity}-${maturityStr}-${positionType} with ${maturityInstruments.length} instrument(s)`);
+            console.log(`[COMMODITY EXPOSURE] Instruments volumeTypes: ${maturityInstruments.map(inst => inst.volumeType || 'N/A').join(', ')}`);
+            
+            // Find existing exposure by commodity, maturity, AND type (to distinguish long from short)
             const existingExposure = currentExposures.find(exp => 
               exp.commodity === commodity && 
-              exp.maturity.toISOString().split('T')[0] === maturityStr
+              exp.maturity.toISOString().split('T')[0] === maturityStr &&
+              exp.type === positionType
             );
             
             const totalNotional = maturityInstruments.reduce((sum, inst) => sum + inst.notional, 0);
@@ -280,8 +512,8 @@ export const useCommodityData = (): UseCommodityDataReturn => {
             
             let maxHedgeQuantity = 95;
             
-            if (originalInstruments.length > 0) {
-              const maturityOriginalInstruments = originalInstruments.filter(orig => {
+            if (groupOriginalInstruments.length > 0) {
+              const maturityOriginalInstruments = groupOriginalInstruments.filter(orig => {
                 const origMaturity = new Date(orig.maturity).toISOString().split('T')[0];
                 return origMaturity === maturityStr;
               });
@@ -294,7 +526,7 @@ export const useCommodityData = (): UseCommodityDataReturn => {
                   return quantity;
                 }));
               } else {
-                maxHedgeQuantity = Math.max(...originalInstruments.map(inst => {
+                maxHedgeQuantity = Math.max(...groupOriginalInstruments.map(inst => {
                   const quantity = inst.hedgeQuantity !== undefined ? 
                     inst.hedgeQuantity : 
                     (inst.quantity !== undefined ? Math.abs(inst.quantity) : 95);
@@ -305,8 +537,8 @@ export const useCommodityData = (): UseCommodityDataReturn => {
             
             let underlyingExposureVolume = 0;
             
-            if (originalInstruments.length > 0) {
-              const maturityOriginalInstruments = originalInstruments.filter(orig => {
+            if (groupOriginalInstruments.length > 0) {
+              const maturityOriginalInstruments = groupOriginalInstruments.filter(orig => {
                 const origMaturity = new Date(orig.maturity).toISOString().split('T')[0];
                 return origMaturity === maturityStr;
               });
@@ -326,64 +558,65 @@ export const useCommodityData = (): UseCommodityDataReturn => {
               underlyingExposureVolume = totalNotional;
             }
             
-            // Determine if this should be long or short position
-            let positionType: 'long' | 'short';
-            const explicitTypes = originalInstruments
-              .filter(orig => new Date(orig.maturity).toISOString().split('T')[0] === maturityStr)
-              .map(orig => orig.volumeType)
-              .filter((t): t is 'receivable' | 'payable' => t === 'receivable' || t === 'payable');
-            if (explicitTypes.length > 0) {
-              // Map receivable → long, payable → short
-              const allPayable = explicitTypes.every(t => t === 'payable');
-              positionType = allPayable ? 'short' : 'long';
-            } else {
-              const globalType = originalInstruments
-                .map(orig => orig.volumeType)
-                .find((t): t is 'receivable' | 'payable' => t === 'receivable' || t === 'payable');
-              if (globalType) {
-                positionType = globalType === 'payable' ? 'short' : 'long';
-              } else {
-                const hasLongInstruments = maturityInstruments.some(inst => 
-                  inst.type === 'vanilla-call' || inst.type === 'forward' || inst.type === 'collar'
-                );
-                positionType = hasLongInstruments ? 'long' : 'short';
-              }
-            }
-            
+            // positionType is already determined above (lines 304-356)
+            // Now calculate the exposure values using the determined positionType
             const totalHedgingNotional = maturityInstruments.reduce((sum, inst) => sum + Math.abs(inst.notional), 0);
             const exposureAmount = positionType === 'long' ? totalHedgingNotional : -totalHedgingNotional;
             
             const hedgedAmount = totalHedgingNotional;
             const finalHedgedAmount = positionType === 'long' ? hedgedAmount : -hedgedAmount;
             
+            // Get market data for price per unit
+            const marketData = serviceRef.current.getMarketData();
+            const spotPrice = marketData.spotPrices[commodity] || 0;
+            const pricePerUnit = spotPrice > 0 ? spotPrice : 0;
+            const quantity = pricePerUnit > 0 ? Math.abs(underlyingExposureVolume / pricePerUnit) : Math.abs(underlyingExposureVolume);
+            const totalValue = Math.abs(underlyingExposureVolume);
+            const hedgedQuantity = pricePerUnit > 0 ? Math.abs(totalHedgingNotional / pricePerUnit) : Math.abs(totalHedgingNotional);
+            
+            // Get the correct unit for this commodity
+            const commodityInfo = getCommodityInfo(commodity);
+            
             if (!existingExposure) {
               const autoExposure: Omit<CommodityExposureData, 'id'> = {
                 commodity: commodity,
-                amount: exposureAmount,
+                commodityName: commodity,
+                quantity: quantity,
+                unit: commodityInfo.unit, // ✅ Use correct unit from getCommodityInfo
                 type: positionType,
+                pricePerUnit: pricePerUnit,
+                totalValue: totalValue,
                 maturity: maturityDate,
                 description: `Auto-generated from ${maturityInstruments.length} hedging instrument(s) - Maturity: ${maturityStr} - Total Notional: ${totalHedgingNotional.toLocaleString()}`,
                 subsidiary: 'Auto-Generated',
                 hedgeRatio: maxHedgeQuantity,
-                hedgedAmount: finalHedgedAmount
+                hedgedQuantity: hedgedQuantity
               };
               
               serviceRef.current.addExposure(autoExposure);
               expositionsCreated++;
-              console.log(`Created auto-exposure for ${commodity} (${maturityStr}): ${exposureAmount}`);
+              console.log(`Created auto-exposure for ${commodity} (${maturityStr}): ${positionType} - Total Value: ${totalValue} - Hedged Quantity: ${hedgedQuantity}`);
             } else {
+              // Get the correct unit for this commodity
+              const commodityInfo = getCommodityInfo(commodity);
+              
               const updatedExposure = {
-                amount: exposureAmount,
+                commodity: commodity,
+                commodityName: commodity,
+                quantity: quantity,
+                unit: commodityInfo.unit, // ✅ Use correct unit from getCommodityInfo
                 type: positionType,
+                pricePerUnit: pricePerUnit,
+                totalValue: totalValue,
                 description: `Auto-updated from ${maturityInstruments.length} hedging instrument(s) - Maturity: ${maturityStr} - Total Notional: ${totalHedgingNotional.toLocaleString()}`,
                 hedgeRatio: maxHedgeQuantity,
-                hedgedAmount: finalHedgedAmount
+                hedgedQuantity: hedgedQuantity
               };
               
               const updateSuccess = serviceRef.current.updateExposure(existingExposure.id, updatedExposure);
               if (updateSuccess) {
                 expositionsUpdated++;
-                console.log(`Updated existing exposure for ${commodity} (${maturityStr}): ${exposureAmount} - Hedge Ratio: ${maxHedgeQuantity}%`);
+                console.log(`Updated existing exposure for ${commodity} (${maturityStr}): ${positionType} - Total Value: ${totalValue} - Hedge Ratio: ${maxHedgeQuantity}%`);
               }
             }
           });

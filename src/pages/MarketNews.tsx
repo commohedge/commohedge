@@ -1,5 +1,5 @@
 import { Layout } from "@/components/Layout";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import TradingViewWidget from "@/components/TradingViewWidget";
 import { Newspaper } from "lucide-react";
 
@@ -18,17 +18,11 @@ export default function MarketNews() {
             <Newspaper className="h-8 w-8 text-primary" />
             Market News
           </h1>
-          <p className="text-muted-foreground mt-2">
-            Stay informed with the latest commodity market news and insights from TradingView
-          </p>
         </div>
 
         <Card className="shadow-md">
           <CardHeader className="pb-2 border-b">
-            <CardTitle className="text-xl font-bold text-primary">Commodity Market News</CardTitle>
-            <CardDescription>
-              Real-time news feed covering energy, metals, agriculture, and other commodity markets
-            </CardDescription>
+            <CardTitle className="text-xl font-bold text-primary">Market News</CardTitle>
           </CardHeader>
           <CardContent className="pt-6 w-full overflow-hidden">
             <TradingViewWidget />

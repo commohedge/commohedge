@@ -6637,8 +6637,13 @@ const pricingFunctions = {
                                     <Input id="name" name="name" placeholder="WTI Crude Oil" className="col-span-3" />
                                   </div>
                                   <div className="grid grid-cols-4 items-center gap-4">
-                                    <Label htmlFor="base" className="text-right">Unit</Label>
-                                    <Input id="base" name="base" placeholder="BBL, OZ, MT" className="col-span-3" />
+                                    <Label htmlFor="base" className="text-right">Unit of Measure</Label>
+                                    <div className="col-span-3">
+                                      <Input id="base" name="base" placeholder="BBL, OZ, MT, BU, LB, MMBtu" className="w-full" />
+                                      <p className="text-xs text-muted-foreground mt-1">
+                                        Standard market unit (e.g., BBL for oil, OZ for gold, BU for grains)
+                                      </p>
+                                    </div>
                                   </div>
                                   <div className="grid grid-cols-4 items-center gap-4">
                                     <Label htmlFor="quote" className="text-right">Currency</Label>

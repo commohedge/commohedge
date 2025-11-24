@@ -621,6 +621,114 @@ class CommodityDataService {
       default: return 0;
     }
   }
+
+  /**
+   * Génère des scénarios de stress pour les commodities
+   */
+  generateStressScenarios(): Array<{
+    name: string;
+    description: string;
+    shocks: { [commodity: string]: number };
+    impact: number;
+  }> {
+    const scenarios = [];
+    const commodityExposures = this.getCommodityExposures();
+    
+    // Scénario 1: Choc pétrolier (+30% WTI, +25% BRENT)
+    const oilShock: { [commodity: string]: number } = {};
+    const oilImpact = commodityExposures
+      .filter(exp => exp.commodity === 'WTI' || exp.commodity === 'BRENT')
+      .reduce((sum, exp) => {
+        const shock = exp.commodity === 'WTI' ? 0.30 : 0.25;
+        oilShock[exp.commodity] = shock;
+        return sum + Math.abs(exp.totalValue) * shock;
+      }, 0);
+    
+    if (Object.keys(oilShock).length > 0) {
+      scenarios.push({
+        name: 'Oil Price Shock',
+        description: 'Significant increase in crude oil prices due to supply disruption',
+        shocks: oilShock,
+        impact: oilImpact
+      });
+    }
+
+    // Scénario 2: Choc métaux précieux (+20% GOLD, +15% SILVER)
+    const metalsShock: { [commodity: string]: number } = {};
+    const metalsImpact = commodityExposures
+      .filter(exp => exp.commodity === 'GOLD' || exp.commodity === 'SILVER')
+      .reduce((sum, exp) => {
+        const shock = exp.commodity === 'GOLD' ? 0.20 : 0.15;
+        metalsShock[exp.commodity] = shock;
+        return sum + Math.abs(exp.totalValue) * shock;
+      }, 0);
+    
+    if (Object.keys(metalsShock).length > 0) {
+      scenarios.push({
+        name: 'Precious Metals Rally',
+        description: 'Flight to safety driving up precious metals prices',
+        shocks: metalsShock,
+        impact: metalsImpact
+      });
+    }
+
+    // Scénario 3: Choc agricole (-15% CORN, -10% WHEAT)
+    const agriShock: { [commodity: string]: number } = {};
+    const agriImpact = commodityExposures
+      .filter(exp => exp.commodity === 'CORN' || exp.commodity === 'WHEAT' || exp.commodity === 'SOYBEAN')
+      .reduce((sum, exp) => {
+        const shock = exp.commodity === 'CORN' ? -0.15 : exp.commodity === 'WHEAT' ? -0.10 : -0.12;
+        agriShock[exp.commodity] = shock;
+        return sum + Math.abs(exp.totalValue) * Math.abs(shock);
+      }, 0);
+    
+    if (Object.keys(agriShock).length > 0) {
+      scenarios.push({
+        name: 'Agricultural Price Decline',
+        description: 'Bumper harvest leading to oversupply and price decline',
+        shocks: agriShock,
+        impact: agriImpact
+      });
+    }
+
+    // Scénario 4: Choc généralisé (toutes les commodities +10%)
+    const generalShock: { [commodity: string]: number } = {};
+    const generalImpact = commodityExposures.reduce((sum, exp) => {
+      generalShock[exp.commodity] = 0.10;
+      return sum + Math.abs(exp.totalValue) * 0.10;
+    }, 0);
+    
+    if (commodityExposures.length > 0) {
+      scenarios.push({
+        name: 'Broad Commodity Rally',
+        description: 'General increase in commodity prices across all categories',
+        shocks: generalShock,
+        impact: generalImpact
+      });
+    }
+
+    return scenarios;
+  }
+
+  /**
+   * Calcule les contributions au VaR par commodity
+   */
+  calculateVarContributions(): { [commodity: string]: number } {
+    const contributions: { [commodity: string]: number } = {};
+    const commodityExposures = this.getCommodityExposures();
+    const totalVaR = this.calculateRiskMetrics().var95;
+    
+    if (totalVaR === 0) return contributions;
+
+    // Calculer la contribution de chaque commodity au VaR total
+    commodityExposures.forEach(exp => {
+      const commodityVaR = exp.var95;
+      const contribution = totalVaR > 0 ? (commodityVaR / totalVaR) * 100 : 0;
+      contributions[exp.commodity] = contribution;
+    });
+
+    return contributions;
+  }
 }
 
 export default CommodityDataService;

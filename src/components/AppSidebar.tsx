@@ -8,7 +8,6 @@ import {
   TrendingUp,
   FileText,
   Shield,
-  AlertTriangle,
   Target,
   Users,
   Briefcase,
@@ -41,7 +40,6 @@ import { ScrollArea } from "@/components/ui/ScrollArea";
 import { useAuth } from "@/hooks/useAuth";
 import { LogOut, User } from "lucide-react";
 import { SyncIndicator } from "./SyncIndicator";
-import { fetchCommoditiesData } from "@/services/commodityApi";
 import "@/styles/sidebar-zoom.css";
 
 // Dashboard - Standalone
@@ -169,70 +167,11 @@ export function AppSidebar() {
   // Utilise le cache mémoire pour le nom dès le premier render
   const [companyName, setCompanyName] = useState(getCompanyNameSync());
   
-  // State for market status data (Commodity prices)
-  const [marketStatusData, setMarketStatusData] = useState({
-    WTI: 75.50,
-    GOLD: 1850.25
-  });
-  
   useEffect(() => {
     const unsubscribe = companySettingsEmitter.subscribe(() => {
       setCompanyName(getCompanyNameSync());
     });
     return unsubscribe;
-  }, []);
-  
-  // Load market status data for commodities from real API
-  useEffect(() => {
-    const loadMarketStatusData = async () => {
-      try {
-        // Fetch real commodity data from API (same as Dashboard)
-        const [metalsData, energyData] = await Promise.all([
-          fetchCommoditiesData('metals'),
-          fetchCommoditiesData('energy')
-        ]);
-
-        // Combine all commodity data
-        const allCommodities = [...metalsData, ...energyData];
-
-        // Helper function to find commodity by keywords
-        const findCommodity = (keywords: string[]) => {
-          const lowered = keywords.map(k => k.toLowerCase());
-          return allCommodities.find(c => {
-            const s = (c.symbol || '').toLowerCase();
-            const n = (c.name || '').toLowerCase();
-            return lowered.some(k => s.includes(k) || n.includes(k));
-          });
-        };
-
-        // Helper function to get price with fallback
-        const getPrice = (keywords: string[], fallback: number) => {
-          const c = findCommodity(keywords);
-          return c?.price ?? fallback;
-        };
-
-        // Get WTI (Crude Oil) from energy data
-        const wtiPrice = getPrice(['wti', 'crude', 'oil', 'cl1!'], 75.50);
-        
-        // Get GOLD from metals data
-        const goldPrice = getPrice(['gold', 'au1!', 'or'], 1850.25);
-
-        setMarketStatusData({
-          WTI: wtiPrice,
-          GOLD: goldPrice
-        });
-      } catch (error) {
-        console.error('Error loading market status data:', error);
-        // Keep last known values on error
-      }
-    };
-
-    // Load immediately
-    loadMarketStatusData();
-    
-    // Update every 30 seconds
-    const interval = setInterval(loadMarketStatusData, 30000);
-    return () => clearInterval(interval);
   }, []);
   
   // Découpe le nom pour l'affichage
@@ -435,35 +374,6 @@ export function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
 
-        {/* Risk Alerts */}
-        <SidebarGroup className="mt-6">
-          <SidebarGroupLabel className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-2 mb-2 sidebar-group-label">
-            Risk Alerts
-          </SidebarGroupLabel>
-          <SidebarGroupContent>
-            <div className="space-y-2">
-              <div className="p-3 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800/30 rounded-lg">
-                <div className="flex items-center space-x-2">
-                  <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-medium text-amber-800 dark:text-amber-200">High Volatility</p>
-                    <p className="text-xs text-amber-600 dark:text-amber-400 truncate">WTI above threshold</p>
-                  </div>
-                </div>
-              </div>
-              
-              <div className="p-3 bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800/30 rounded-lg">
-                <div className="flex items-center space-x-2">
-                  <AlertTriangle className="h-4 w-4 text-red-600 dark:text-red-400" />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-medium text-red-800 dark:text-red-200">Exposure Limit</p>
-                    <p className="text-xs text-red-600 dark:text-red-400 truncate">Gold exposure at 95%</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </SidebarGroupContent>
-        </SidebarGroup>
         </ScrollArea>
       </SidebarContent>
 
@@ -501,37 +411,6 @@ export function AppSidebar() {
             <div className="flex items-center justify-between text-xs text-muted-foreground sidebar-group-label">
               <span className="font-semibold">Synchronisation</span>
               <SyncIndicator />
-            </div>
-          </div>
-
-          {/* Market Status */}
-          <div className="space-y-2">
-            <div className="flex items-center justify-between text-xs text-muted-foreground sidebar-group-label">
-              <span className="font-semibold">Market Status</span>
-              <div className="flex items-center gap-1.5">
-                <div className="h-2 w-2 bg-emerald-500 rounded-full animate-pulse shadow-sm shadow-emerald-500/50"></div>
-                <span className="text-emerald-500 dark:text-emerald-400 font-medium">Live</span>
-              </div>
-            </div>
-            
-            <div className="grid grid-cols-2 gap-2 text-xs">
-              {/* WTI Crude Oil Card */}
-              <div className="relative overflow-hidden bg-gradient-to-br from-orange-900/40 to-orange-800/30 border border-orange-500/30 rounded-lg p-2 market-status-card hover:border-orange-400/50 hover:shadow-lg hover:shadow-orange-500/20 transition-all duration-300 group">
-                <div className="absolute inset-0 bg-gradient-to-br from-orange-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-                <div className="relative">
-                  <div className="text-orange-300/80 market-status-label text-[10px] font-semibold uppercase tracking-wide">WTI Oil</div>
-                  <div className="font-mono font-bold text-sm market-status-content text-orange-100 group-hover:text-white transition-colors">${marketStatusData.WTI.toFixed(2)}</div>
-                </div>
-              </div>
-              
-              {/* Gold Card */}
-              <div className="relative overflow-hidden bg-gradient-to-br from-yellow-900/40 to-yellow-800/30 border border-yellow-500/30 rounded-lg p-2 market-status-card hover:border-yellow-400/50 hover:shadow-lg hover:shadow-yellow-500/20 transition-all duration-300 group">
-                <div className="absolute inset-0 bg-gradient-to-br from-yellow-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-                <div className="relative">
-                  <div className="text-yellow-300/80 market-status-label text-[10px] font-semibold uppercase tracking-wide">Gold</div>
-                  <div className="font-mono font-bold text-sm market-status-content text-yellow-100 group-hover:text-white transition-colors">${marketStatusData.GOLD.toFixed(2)}</div>
-                </div>
-              </div>
             </div>
           </div>
         </div>

@@ -182,23 +182,59 @@ const Exposures = () => {
 
   // Convert exposures to display format with proper calculations
   const displayExposures = exposures.map(exp => {
-    const isReceivable = exp.type === 'receivable';
-    const displayAmount = isReceivable ? Math.abs(exp.amount) : -Math.abs(exp.amount);
-    const hedgeRatio = exp.amount !== 0 ? Math.abs(exp.hedgedAmount / exp.amount) * 100 : 0;
+    const isLong = exp.type === 'long';
+    const totalValue = Math.abs(exp.totalValue || 0);
+    // Calculer la valeur hedgée : si hedgedQuantity est disponible, utiliser pricePerUnit, sinon utiliser hedgedAmount
+    const hedgedQuantity = Math.abs(exp.hedgedQuantity || 0);
+    const pricePerUnit = exp.pricePerUnit || 0;
+    const hedgedValue = hedgedQuantity > 0 && pricePerUnit > 0 
+      ? hedgedQuantity * pricePerUnit 
+      : Math.abs(exp.hedgedAmount || (totalValue * (exp.hedgeRatio || 0) / 100));
+    const hedgeRatio = totalValue > 0 ? (hedgedValue / totalValue) * 100 : 0;
+    
+    // Déterminer l'unité pour l'affichage (mapping vers abréviations standards)
+    const unitMap: { [key: string]: string } = {
+      'barrel': 'BBL',
+      'bbl': 'BBL',
+      'troy ounce': 'OZ',
+      'troy_ounce': 'OZ',
+      'oz': 'OZ',
+      'bushel': 'BU',
+      'bu': 'BU',
+      'pound': 'LB',
+      'lb': 'LB',
+      'metric ton': 'MT',  // ✅ Gérer "metric ton" (avec espace)
+      'metric_ton': 'MT',  // ✅ Gérer "metric_ton" (avec underscore)
+      'MT': 'MT',
+      'ton': 'MT',
+      'mmbtu': 'MMBtu',
+      'MMBtu': 'MMBtu',
+      'gallon': 'GAL',
+      'gal': 'GAL'
+    };
+    const displayUnit = unitMap[exp.unit] || exp.unit.toUpperCase();
+    
+    // Volume = totalValue (volume exact du Strategy Builder)
+    const volume = totalValue;
+    // Hedged Volume = Volume * (Hedge Ratio / 100)
+    const hedgedVolume = volume * (hedgeRatio / 100);
     
     return {
     id: exp.id,
     date: new Date().toISOString().split('T')[0],
-    currency: exp.currency,
-      type: isReceivable ? 'Receivable' : 'Payable',
-      amount: displayAmount,
-    description: exp.description,
+    commodity: exp.commodity || exp.commodityName || '',
+      type: isLong ? 'Long' : 'Short',
+      amount: totalValue, // Garde pour compatibilité avec le code existant
+      volume: volume, // Volume exact du Strategy Builder (underlyingExposureVolume)
+      volumeUnit: displayUnit, // Unité du volume
+    description: exp.description || '',
     subsidiary: exp.subsidiary || 'Main Office',
     maturity: exp.maturity.toISOString().split('T')[0],
     status: 'active',
-    hedged: exp.hedgedAmount,
+    hedged: hedgedValue, // Garde pour compatibilité (valeur en USD)
+    hedgedVolume: hedgedVolume, // Volume hedgé = Volume * (Hedge Ratio / 100)
       hedgeRatio: Math.round(hedgeRatio),
-      unhedgedAmount: exp.amount - exp.hedgedAmount,
+      unhedgedAmount: totalValue - hedgedValue,
       originalExposure: exp
     };
   });
@@ -206,20 +242,21 @@ const Exposures = () => {
   // ✅ DÉCLARATION PRÉALABLE : Expositions filtrées (nécessaire pour aggregatedData)
   const filteredExposures = displayExposures.filter(exposure => {
     const matchesSearch = exposure.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         exposure.currency.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         exposure.commodity.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          exposure.subsidiary.toLowerCase().includes(searchTerm.toLowerCase());
     
     const matchesTab = selectedTab === "all" || 
-                      (selectedTab === "receivables" && exposure.type === 'Receivable') ||
-                      (selectedTab === "payables" && exposure.type === 'Payable') ||
+                      (selectedTab === "receivables" && exposure.type === 'Long') ||
+                      (selectedTab === "payables" && exposure.type === 'Short') ||
                       (selectedTab === "unhedged" && exposure.hedgeRatio === 0);
     
     return matchesSearch && matchesTab;
   });
 
-  // ✅ OPTIMISATION : Calculs d'agrégation memoized
+  // ✅ OPTIMISATION : Calculs d'agrégation memoized avec séparation par unité de mesure
   const aggregatedData = useMemo(() => {
-    const currencyMap = new Map<string, {
+    // Structure pour grouper par commodity-unit
+    const currencyUnitMap = new Map<string, Map<string, {
       totalAmount: number;
       totalReceivables: number;
       totalPayables: number;
@@ -228,9 +265,10 @@ const Exposures = () => {
       count: number;
       avgHedgeRatio: number;
       exposures: typeof displayExposures;
-    }>();
+    }>>();
 
-    const maturityMap = new Map<string, {
+    // Structure pour grouper par maturity-unit
+    const maturityUnitMap = new Map<string, Map<string, {
       totalAmount: number;
       totalReceivables: number;
       totalPayables: number;
@@ -240,7 +278,7 @@ const Exposures = () => {
       avgHedgeRatio: number;
       exposures: typeof displayExposures;
       maturityRange: string;
-    }>();
+    }>>();
 
     // Fonction pour déterminer la période de maturité
     const getMaturityRange = (maturityDate: string) => {
@@ -257,13 +295,19 @@ const Exposures = () => {
 
     // Traitement optimisé des expositions filtrées
     filteredExposures.forEach(exposure => {
-      const absAmount = Math.abs(exposure.amount);
-      const hedgedAmount = Math.abs(exposure.hedged);
-      const unhedgedAmount = absAmount - hedgedAmount;
+      const unit = exposure.volumeUnit || 'BBL';
+      const volume = Math.abs(exposure.volume || 0);
+      const hedgedVol = Math.abs(exposure.hedgedVolume || 0);
+      const unhedgedVol = volume - hedgedVol;
 
-      // Agrégation par devise
-      const currencyKey = exposure.currency;
-      const currencyData = currencyMap.get(currencyKey) || {
+      // Agrégation par commodity-unit
+      const commodityKey = exposure.commodity || 'UNKNOWN';
+      if (!currencyUnitMap.has(commodityKey)) {
+        currencyUnitMap.set(commodityKey, new Map());
+      }
+      const commodityUnitData = currencyUnitMap.get(commodityKey)!;
+      
+      const commodityData = commodityUnitData.get(unit) || {
         totalAmount: 0,
         totalReceivables: 0,
         totalPayables: 0,
@@ -274,27 +318,32 @@ const Exposures = () => {
         exposures: []
       };
 
-      currencyData.totalAmount += absAmount;
-      currencyData.totalHedged += hedgedAmount;
-      currencyData.totalUnhedged += unhedgedAmount;
-      currencyData.count += 1;
-      currencyData.exposures.push(exposure);
+      commodityData.totalAmount += volume;
+      commodityData.totalHedged += hedgedVol;
+      commodityData.totalUnhedged += unhedgedVol;
+      commodityData.count += 1;
+      commodityData.exposures.push(exposure);
 
-      if (exposure.type === 'Receivable') {
-        currencyData.totalReceivables += absAmount;
+      if (exposure.type === 'Long') {
+        commodityData.totalReceivables += hedgedVol;
       } else {
-        currencyData.totalPayables += absAmount;
+        commodityData.totalPayables += hedgedVol;
       }
 
       // Calcul du ratio de couverture moyen pondéré
-      currencyData.avgHedgeRatio = currencyData.totalAmount > 0 ? 
-        (currencyData.totalHedged / currencyData.totalAmount) * 100 : 0;
+      commodityData.avgHedgeRatio = commodityData.totalAmount > 0 ? 
+        (commodityData.totalHedged / commodityData.totalAmount) * 100 : 0;
 
-      currencyMap.set(currencyKey, currencyData);
+      commodityUnitData.set(unit, commodityData);
 
-      // Agrégation par maturité
+      // Agrégation par maturity-unit
       const maturityRange = getMaturityRange(exposure.maturity);
-      const maturityData = maturityMap.get(maturityRange) || {
+      if (!maturityUnitMap.has(maturityRange)) {
+        maturityUnitMap.set(maturityRange, new Map());
+      }
+      const maturityUnitData = maturityUnitMap.get(maturityRange)!;
+      
+      const maturityData = maturityUnitData.get(unit) || {
         totalAmount: 0,
         totalReceivables: 0,
         totalPayables: 0,
@@ -306,36 +355,94 @@ const Exposures = () => {
         maturityRange
       };
 
-      maturityData.totalAmount += absAmount;
-      maturityData.totalHedged += hedgedAmount;
-      maturityData.totalUnhedged += unhedgedAmount;
+      maturityData.totalAmount += volume;
+      maturityData.totalHedged += hedgedVol;
+      maturityData.totalUnhedged += unhedgedVol;
       maturityData.count += 1;
       maturityData.exposures.push(exposure);
 
-      if (exposure.type === 'Receivable') {
-        maturityData.totalReceivables += absAmount;
+      if (exposure.type === 'Long') {
+        maturityData.totalReceivables += hedgedVol;
       } else {
-        maturityData.totalPayables += absAmount;
+        maturityData.totalPayables += hedgedVol;
       }
 
       maturityData.avgHedgeRatio = maturityData.totalAmount > 0 ? 
         (maturityData.totalHedged / maturityData.totalAmount) * 100 : 0;
 
-      maturityMap.set(maturityRange, maturityData);
+      maturityUnitData.set(unit, maturityData);
+    });
+
+    // Convertir en structure plate avec unité incluse
+    const byCurrency: Array<{
+      currency: string;
+      commodity: string;
+      unit: string;
+      totalAmount: number;
+      totalReceivables: number;
+      totalPayables: number;
+      totalHedged: number;
+      totalUnhedged: number;
+      count: number;
+      avgHedgeRatio: number;
+      exposures: typeof displayExposures;
+    }> = [];
+    
+    currencyUnitMap.forEach((unitMap, commodity) => {
+      unitMap.forEach((data, unit) => {
+        byCurrency.push({
+          currency: commodity,
+          commodity: commodity,
+          unit: unit,
+          ...data
+        });
+      });
+    });
+
+    const byMaturity: Array<{
+      maturityRange: string;
+      unit: string;
+      totalAmount: number;
+      totalReceivables: number;
+      totalPayables: number;
+      totalHedged: number;
+      totalUnhedged: number;
+      count: number;
+      avgHedgeRatio: number;
+      exposures: typeof displayExposures;
+    }> = [];
+    
+    maturityUnitMap.forEach((unitMap, maturityRange) => {
+      unitMap.forEach((data, unit) => {
+        byMaturity.push({
+          maturityRange: maturityRange,
+          unit: unit,
+          ...data
+        });
+      });
     });
 
     return {
-      byCurrency: Array.from(currencyMap.entries()).map(([currency, data]) => ({
-        currency,
-        ...data
-      })).sort((a, b) => b.totalAmount - a.totalAmount),
+      byCurrency: byCurrency.sort((a, b) => {
+        // Trier d'abord par commodity, puis par unit, puis par volume
+        if (a.commodity !== b.commodity) {
+          return a.commodity.localeCompare(b.commodity);
+        }
+        if (a.unit !== b.unit) {
+          return a.unit.localeCompare(b.unit);
+        }
+        return b.totalAmount - a.totalAmount;
+      }),
       
-      byMaturity: Array.from(maturityMap.entries()).map(([range, data]) => ({
-        ...data
-      })).sort((a, b) => {
-        // Tri par ordre chronologique des échéances
+      byMaturity: byMaturity.sort((a, b) => {
+        // Trier d'abord par ordre chronologique, puis par unit, puis par volume
         const order = ['≤ 30 days', '31-90 days', '91-180 days', '181-365 days', '> 1 year'];
-        return order.indexOf(a.maturityRange) - order.indexOf(b.maturityRange);
+        const orderDiff = order.indexOf(a.maturityRange) - order.indexOf(b.maturityRange);
+        if (orderDiff !== 0) return orderDiff;
+        if (a.unit !== b.unit) {
+          return a.unit.localeCompare(b.unit);
+        }
+        return b.totalAmount - a.totalAmount;
       })
     };
   }, [filteredExposures]);
@@ -349,27 +456,39 @@ const Exposures = () => {
     return `${symbol}${absAmount.toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
   };
 
-  // ✅ NOUVEAU : Calculer les totaux par devise
-  const currencyTotals = useMemo(() => {
-    const totals: { [currency: string]: { receivables: number; payables: number; total: number } } = {};
-    
-    exposures.forEach(exp => {
-      if (!totals[exp.currency]) {
-        totals[exp.currency] = { receivables: 0, payables: 0, total: 0 };
-      }
-      
-      const absAmount = Math.abs(exp.amount);
-      totals[exp.currency].total += absAmount;
-      
-      if (exp.type === 'receivable') {
-        totals[exp.currency].receivables += absAmount;
+  // ✅ Calculer les totaux séparés par unité de mesure (ne pas additionner des unités différentes)
+  const totalsByUnit = useMemo(() => {
+    const unitTotals = new Map<string, {
+      totalReceivables: number;
+      totalPayables: number;
+      totalHedged: number;
+    }>();
+
+    displayExposures.forEach(exp => {
+      const unit = exp.volumeUnit || 'BBL';
+      const totals = unitTotals.get(unit) || {
+        totalReceivables: 0,
+        totalPayables: 0,
+        totalHedged: 0
+      };
+
+      const hedgedVol = Math.abs(exp.hedgedVolume || 0);
+      totals.totalHedged += hedgedVol;
+
+      if (exp.type === 'Long') {
+        totals.totalReceivables += hedgedVol;
       } else {
-        totals[exp.currency].payables += absAmount;
+        totals.totalPayables += hedgedVol;
       }
+
+      unitTotals.set(unit, totals);
     });
-    
-    return totals;
-  }, [exposures]);
+
+    return Array.from(unitTotals.entries()).map(([unit, totals]) => ({
+      unit,
+      ...totals
+    })).sort((a, b) => b.totalHedged - a.totalHedged); // Trier par volume total décroissant
+  }, [displayExposures]);
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -403,8 +522,8 @@ const Exposures = () => {
     totalHedged: riskMetrics.hedgedAmount,
     overallHedgeRatio: riskMetrics.hedgeRatio,
     unhedgedRisk: riskMetrics.unhedgedRisk,
-    receivablesCount: displayExposures.filter(e => e.type === 'Receivable').length,
-    payablesCount: displayExposures.filter(e => e.type === 'Payable').length,
+    receivablesCount: displayExposures.filter(e => e.type === 'Long').length,
+    payablesCount: displayExposures.filter(e => e.type === 'Short').length,
     unhedgedCount: displayExposures.filter(e => e.hedgeRatio === 0).length,
     nearMaturityCount: displayExposures.filter(e => {
       const maturityDate = new Date(e.maturity);
@@ -415,9 +534,9 @@ const Exposures = () => {
 
   const resetForm = () => {
     setNewExposure({
-      currency: "",
+      commodity: "",
       amount: 0,
-      type: "receivable",
+      type: "long",
       description: "",
       subsidiary: "",
       hedgeRatio: 0,
@@ -427,7 +546,7 @@ const Exposures = () => {
   };
 
   const validateForm = (data: ExposureFormData): string | null => {
-    if (!data.currency) return "Currency is required";
+    if (!data.commodity) return "Commodity is required";
     if (!data.amount || data.amount <= 0) return "Amount must be greater than 0";
     if (!data.description.trim()) return "Description is required";
     if (data.hedgeRatio < 0 || data.hedgeRatio > 100) return "Hedge ratio must be between 0 and 100";
@@ -449,14 +568,18 @@ const Exposures = () => {
       const maturityDate = new Date(Date.now() + newExposure.maturityDays * 24 * 60 * 60 * 1000);
       
       addExposure({
-        currency: newExposure.currency,
-        amount: newExposure.type === 'payable' ? -Math.abs(newExposure.amount) : Math.abs(newExposure.amount),
+        commodity: newExposure.commodity,
+        commodityName: newExposure.commodity,
+        quantity: Math.abs(newExposure.amount),
+        unit: 'barrel' as const, // Default, can be improved
         type: newExposure.type,
+        pricePerUnit: 0, // Will be set from market data
+        totalValue: Math.abs(newExposure.amount),
         maturity: maturityDate,
         description: newExposure.description,
         subsidiary: newExposure.subsidiary || 'Main Office',
         hedgeRatio: newExposure.hedgeRatio,
-        hedgedAmount: newExposure.hedgedAmount
+        hedgedQuantity: newExposure.hedgedAmount
       });
       
       toast({
@@ -489,9 +612,9 @@ const Exposures = () => {
     if (exposure) {
       const maturityDays = Math.ceil((new Date(exposure.maturity).getTime() - Date.now()) / (24 * 60 * 60 * 1000));
       setNewExposure({
-        currency: exposure.currency,
+        commodity: exposure.commodity,
         amount: Math.abs(exposure.amount),
-        type: exposure.type === 'Receivable' ? 'receivable' : 'payable',
+        type: exposure.type === 'Long' ? 'long' : 'short',
         description: exposure.description,
         subsidiary: exposure.subsidiary,
         hedgeRatio: exposure.hedgeRatio,
@@ -520,14 +643,16 @@ const Exposures = () => {
       const maturityDate = new Date(Date.now() + newExposure.maturityDays * 24 * 60 * 60 * 1000);
       
       const success = updateExposure(editingExposure, {
-        currency: newExposure.currency,
-        amount: newExposure.type === 'payable' ? -Math.abs(newExposure.amount) : Math.abs(newExposure.amount),
+        commodity: newExposure.commodity,
+        commodityName: newExposure.commodity,
+        quantity: Math.abs(newExposure.amount) / 1000, // Approximate, assuming price around 1000
+        totalValue: Math.abs(newExposure.amount),
         type: newExposure.type,
         maturity: maturityDate,
         description: newExposure.description,
         subsidiary: newExposure.subsidiary || 'Main Office',
         hedgeRatio: newExposure.hedgeRatio,
-        hedgedAmount: newExposure.hedgedAmount
+        hedgedQuantity: Math.abs(newExposure.hedgedAmount) / 1000 // Approximate
       });
       
       if (success) {
@@ -608,25 +733,25 @@ const Exposures = () => {
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `fx-exposures-${new Date().toISOString().split('T')[0]}.csv`;
+    a.download = `commodity-exposures-${new Date().toISOString().split('T')[0]}.csv`;
     a.click();
     window.URL.revokeObjectURL(url);
 
     toast({
       title: "Export Complete",
-      description: "FX exposures exported to CSV file",
+      description: "Commodity exposures exported to CSV file",
     });
   };
 
   return (
-    <Layout title="FX Exposures" breadcrumbs={[{ label: "FX Exposures" }]}>
+    <Layout title="Commodity Exposures" breadcrumbs={[{ label: "Commodity Exposures" }]}>
       <div className="space-y-6">
         {/* Header with Actions */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
-            <h1 className="text-3xl font-bold text-foreground">FX Exposures</h1>
+            <h1 className="text-3xl font-bold text-foreground">Commodity Exposures</h1>
             <p className="text-muted-foreground mt-1">
-              Manage and monitor your foreign exchange exposures and hedging strategies
+              Manage and monitor your commodity exposures and hedging strategies
             </p>
           </div>
           <div className="flex gap-2">
@@ -765,18 +890,19 @@ const Exposures = () => {
         <Card>
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-muted-foreground">Total Receivables</p>
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-muted-foreground">Long Positions (Hedged)</p>
                   <div className="space-y-1">
-                    {Object.entries(currencyTotals).map(([currency, totals]) => (
-                      totals.receivables > 0 && (
-                        <p key={currency} className="text-lg font-bold text-green-600">
-                          {formatCurrency(totals.receivables, currency)}
-                        </p>
-                      )
-                    ))}
-                    {Object.values(currencyTotals).every(totals => totals.receivables === 0) && (
-                      <p className="text-2xl font-bold text-gray-400">$0</p>
+                    {totalsByUnit.length > 0 ? (
+                      totalsByUnit
+                        .filter(t => t.totalReceivables > 0)
+                        .map((totals, idx) => (
+                          <p key={idx} className="text-2xl font-bold text-green-600">
+                            {totals.totalReceivables.toLocaleString('en-US', { maximumFractionDigits: 2 })} {totals.unit}
+                          </p>
+                        ))
+                    ) : (
+                      <p className="text-2xl font-bold text-green-600">0</p>
                     )}
                   </div>
                 </div>
@@ -790,18 +916,19 @@ const Exposures = () => {
         <Card>
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-muted-foreground">Total Payables</p>
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-muted-foreground">Short Positions (Hedged)</p>
                   <div className="space-y-1">
-                    {Object.entries(currencyTotals).map(([currency, totals]) => (
-                      totals.payables > 0 && (
-                        <p key={currency} className="text-lg font-bold text-red-600">
-                          {formatCurrency(totals.payables, currency)}
-                        </p>
-                      )
-                    ))}
-                    {Object.values(currencyTotals).every(totals => totals.payables === 0) && (
-                      <p className="text-2xl font-bold text-gray-400">$0</p>
+                    {totalsByUnit.length > 0 ? (
+                      totalsByUnit
+                        .filter(t => t.totalPayables > 0)
+                        .map((totals, idx) => (
+                          <p key={idx} className="text-2xl font-bold text-red-600">
+                            {totals.totalPayables.toLocaleString('en-US', { maximumFractionDigits: 2 })} {totals.unit}
+                          </p>
+                        ))
+                    ) : (
+                      <p className="text-2xl font-bold text-red-600">0</p>
                     )}
                   </div>
                 </div>
@@ -815,17 +942,24 @@ const Exposures = () => {
         <Card>
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-muted-foreground">Avg Hedge Ratio</p>
-                  <p className="text-2xl font-bold">
-                    {exposures.length > 0 
-                      ? `${Math.round(exposures.reduce((sum, exp) => sum + exp.hedgeRatio, 0) / exposures.length)}%`
-                      : '0%'
-                    }
-                  </p>
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-muted-foreground">Total Hedged Volume</p>
+                  <div className="space-y-1">
+                    {totalsByUnit.length > 0 ? (
+                      totalsByUnit
+                        .filter(t => t.totalHedged > 0)
+                        .map((totals, idx) => (
+                          <p key={idx} className="text-2xl font-bold text-blue-600">
+                            {totals.totalHedged.toLocaleString('en-US', { maximumFractionDigits: 2 })} {totals.unit}
+                          </p>
+                        ))
+                    ) : (
+                      <p className="text-2xl font-bold text-blue-600">0</p>
+                    )}
+                  </div>
                 </div>
-                <div className="h-8 w-8 bg-purple-100 dark:bg-purple-900 rounded-full flex items-center justify-center">
-                  <Shield className="h-4 w-4 text-purple-600 dark:text-purple-400" />
+                <div className="h-8 w-8 bg-blue-100 dark:bg-blue-900 rounded-full flex items-center justify-center">
+                  <Shield className="h-4 w-4 text-blue-600 dark:text-blue-400" />
                 </div>
               </div>
           </CardContent>
@@ -841,9 +975,9 @@ const Exposures = () => {
                 <div className="h-16 w-16 bg-blue-100 dark:bg-blue-900 rounded-full flex items-center justify-center mx-auto mb-4">
                   <Globe className="h-8 w-8 text-blue-600 dark:text-blue-400" />
             </div>
-                <h3 className="text-xl font-semibold mb-2">No FX Exposures Found</h3>
+                <h3 className="text-xl font-semibold mb-2">No Commodity Exposures Found</h3>
                 <p className="text-muted-foreground mb-6">
-                  Get started by adding your first FX exposure or importing hedging strategies from the Strategy Builder.
+                  Get started by adding your first commodity exposure or importing hedging strategies from the Strategy Builder.
                 </p>
                 
                 <div className="space-y-4">
@@ -931,15 +1065,15 @@ const Exposures = () => {
                   </Badge>
                 </TabsTrigger>
                 <TabsTrigger value="receivables" className="flex items-center gap-2">
-                  Receivables
+                  Long
                   <Badge variant="secondary" className="ml-1">
-                    {exposures.filter(exp => exp.type === 'receivable').length}
+                    {exposures.filter(exp => exp.type === 'long').length}
                   </Badge>
                 </TabsTrigger>
                 <TabsTrigger value="payables" className="flex items-center gap-2">
-                  Payables
+                  Short
                   <Badge variant="secondary" className="ml-1">
-                    {exposures.filter(exp => exp.type === 'payable').length}
+                    {exposures.filter(exp => exp.type === 'short').length}
                   </Badge>
                 </TabsTrigger>
                 <TabsTrigger value="unhedged" className="flex items-center gap-2">
@@ -956,8 +1090,8 @@ const Exposures = () => {
                     <CardTitle className="flex items-center justify-between">
                       <span>
                         {selectedTab === 'all' && 'All Exposures'}
-                        {selectedTab === 'receivables' && 'Receivables'}
-                        {selectedTab === 'payables' && 'Payables'}
+                        {selectedTab === 'receivables' && 'Long Exposures'}
+                        {selectedTab === 'payables' && 'Short Exposures'}
                         {selectedTab === 'unhedged' && 'Unhedged Exposures'}
                       </span>
                       <div className="flex items-center gap-2">
@@ -1002,56 +1136,59 @@ const Exposures = () => {
                   <CardContent>
                     {/* ✅ AFFICHAGE CONDITIONNEL : Vue détaillée, par devise ou par maturité */}
                     {selectedTab === 'all' && groupBy === 'currency' ? (
-                      /* Vue agrégée par devise */
+                      /* Vue agrégée par commodity */
                       <div className="space-y-4">
                         <div className="text-sm text-muted-foreground mb-4">
-                          Exposures grouped by currency • {aggregatedData.byCurrency.length} currencies
+                          Exposures grouped by commodity • {aggregatedData.byCurrency.length} commodities
                         </div>
                         <div className="overflow-x-auto">
                           <Table>
                             <TableHeader>
                               <TableRow>
-                                <TableHead>Currency</TableHead>
-                                <TableHead>Total Amount</TableHead>
-                                <TableHead>Receivables</TableHead>
-                                <TableHead>Payables</TableHead>
-                                <TableHead>Hedged Amount</TableHead>
-                                <TableHead>Unhedged Amount</TableHead>
+                                <TableHead>Commodity</TableHead>
+                                <TableHead>Total Volume</TableHead>
+                                <TableHead>Long Positions</TableHead>
+                                <TableHead>Short Positions</TableHead>
+                                <TableHead>Hedged Volume</TableHead>
+                                <TableHead>Unhedged Volume</TableHead>
                                 <TableHead>Avg Hedge Ratio</TableHead>
                                 <TableHead>Count</TableHead>
                               </TableRow>
                             </TableHeader>
                             <TableBody>
-                              {aggregatedData.byCurrency.map((currencyData) => (
-                                <TableRow key={currencyData.currency} className="hover:bg-muted/50">
+                              {aggregatedData.byCurrency.map((commodityData, idx) => (
+                                <TableRow key={`${commodityData.commodity || commodityData.currency}-${commodityData.unit}-${idx}`} className="hover:bg-muted/50">
                                   <TableCell>
-                                    <Badge variant="outline" className="font-mono font-bold">
-                                      {currencyData.currency}
-                                    </Badge>
+                                    <div className="flex flex-col gap-1">
+                                      <Badge variant="outline" className="font-mono font-bold">
+                                        {commodityData.commodity || commodityData.currency}
+                                      </Badge>
+                                      <span className="text-xs text-muted-foreground">{commodityData.unit}</span>
+                                    </div>
                                   </TableCell>
                                   <TableCell className="font-mono font-semibold">
-                                    {formatCurrency(currencyData.totalAmount, currencyData.currency)}
+                                    {commodityData.totalAmount.toLocaleString('en-US', { maximumFractionDigits: 2 })} {commodityData.unit}
                                   </TableCell>
                                   <TableCell className="font-mono text-green-600">
-                                    {formatCurrency(currencyData.totalReceivables, currencyData.currency)}
+                                    {commodityData.totalReceivables.toLocaleString('en-US', { maximumFractionDigits: 2 })} {commodityData.unit}
                                   </TableCell>
                                   <TableCell className="font-mono text-red-600">
-                                    {formatCurrency(currencyData.totalPayables, currencyData.currency)}
+                                    {commodityData.totalPayables.toLocaleString('en-US', { maximumFractionDigits: 2 })} {commodityData.unit}
                                   </TableCell>
                                   <TableCell className="font-mono text-blue-600">
-                                    {formatCurrency(currencyData.totalHedged, currencyData.currency)}
+                                    {commodityData.totalHedged.toLocaleString('en-US', { maximumFractionDigits: 2 })} {commodityData.unit}
                                   </TableCell>
                                   <TableCell className="font-mono text-orange-600">
-                                    {formatCurrency(currencyData.totalUnhedged, currencyData.currency)}
+                                    {commodityData.totalUnhedged.toLocaleString('en-US', { maximumFractionDigits: 2 })} {commodityData.unit}
                                   </TableCell>
                                   <TableCell>
                                     <div className="flex items-center gap-2">
-                                      <span className="font-mono">{Math.round(currencyData.avgHedgeRatio)}%</span>
-                                      {getHedgeRatioBadge(currencyData.avgHedgeRatio)}
+                                      <span className="font-mono">{Math.round(commodityData.avgHedgeRatio)}%</span>
+                                      {getHedgeRatioBadge(commodityData.avgHedgeRatio)}
                                     </div>
                                   </TableCell>
                                   <TableCell>
-                                    <Badge variant="secondary">{currencyData.count}</Badge>
+                                    <Badge variant="secondary">{commodityData.count}</Badge>
                                   </TableCell>
                                 </TableRow>
                               ))}
@@ -1070,46 +1207,49 @@ const Exposures = () => {
                             <TableHeader>
                               <TableRow>
                                 <TableHead>Maturity Range</TableHead>
-                                <TableHead>Total Amount</TableHead>
-                                <TableHead>Receivables</TableHead>
-                                <TableHead>Payables</TableHead>
-                                <TableHead>Hedged Amount</TableHead>
-                                <TableHead>Unhedged Amount</TableHead>
+                                <TableHead>Total Volume</TableHead>
+                                <TableHead>Long Positions</TableHead>
+                                <TableHead>Short Positions</TableHead>
+                                <TableHead>Hedged Volume</TableHead>
+                                <TableHead>Unhedged Volume</TableHead>
                                 <TableHead>Avg Hedge Ratio</TableHead>
                                 <TableHead>Count</TableHead>
                               </TableRow>
                             </TableHeader>
                             <TableBody>
-                              {aggregatedData.byMaturity.map((maturityData) => (
-                                <TableRow key={maturityData.maturityRange} className="hover:bg-muted/50">
+                              {aggregatedData.byMaturity.map((maturityData, idx) => (
+                                <TableRow key={`${maturityData.maturityRange}-${maturityData.unit}-${idx}`} className="hover:bg-muted/50">
                                   <TableCell>
-                                    <Badge 
-                                      variant="outline" 
-                                      className={`font-mono font-bold ${
-                                        maturityData.maturityRange === '≤ 30 days' ? 'border-red-200 text-red-700' :
-                                        maturityData.maturityRange === '31-90 days' ? 'border-orange-200 text-orange-700' :
-                                        maturityData.maturityRange === '91-180 days' ? 'border-yellow-200 text-yellow-700' :
-                                        maturityData.maturityRange === '181-365 days' ? 'border-blue-200 text-blue-700' :
-                                        'border-green-200 text-green-700'
-                                      }`}
-                                    >
-                                      {maturityData.maturityRange}
-                                    </Badge>
+                                    <div className="flex flex-col gap-1">
+                                      <Badge 
+                                        variant="outline" 
+                                        className={`font-mono font-bold ${
+                                          maturityData.maturityRange === '≤ 30 days' ? 'border-red-200 text-red-700' :
+                                          maturityData.maturityRange === '31-90 days' ? 'border-orange-200 text-orange-700' :
+                                          maturityData.maturityRange === '91-180 days' ? 'border-yellow-200 text-yellow-700' :
+                                          maturityData.maturityRange === '181-365 days' ? 'border-blue-200 text-blue-700' :
+                                          'border-green-200 text-green-700'
+                                        }`}
+                                      >
+                                        {maturityData.maturityRange}
+                                      </Badge>
+                                      <span className="text-xs text-muted-foreground">{maturityData.unit}</span>
+                                    </div>
                                   </TableCell>
                                   <TableCell className="font-mono font-semibold">
-                                    ${maturityData.totalAmount.toLocaleString('en-US', { maximumFractionDigits: 0 })}
+                                    {maturityData.totalAmount.toLocaleString('en-US', { maximumFractionDigits: 2 })} {maturityData.unit}
                                   </TableCell>
                                   <TableCell className="font-mono text-green-600">
-                                    ${maturityData.totalReceivables.toLocaleString('en-US', { maximumFractionDigits: 0 })}
+                                    {maturityData.totalReceivables.toLocaleString('en-US', { maximumFractionDigits: 2 })} {maturityData.unit}
                                   </TableCell>
                                   <TableCell className="font-mono text-red-600">
-                                    ${maturityData.totalPayables.toLocaleString('en-US', { maximumFractionDigits: 0 })}
+                                    {maturityData.totalPayables.toLocaleString('en-US', { maximumFractionDigits: 2 })} {maturityData.unit}
                                   </TableCell>
                                   <TableCell className="font-mono text-blue-600">
-                                    ${maturityData.totalHedged.toLocaleString('en-US', { maximumFractionDigits: 0 })}
+                                    {maturityData.totalHedged.toLocaleString('en-US', { maximumFractionDigits: 2 })} {maturityData.unit}
                                   </TableCell>
                                   <TableCell className="font-mono text-orange-600">
-                                    ${maturityData.totalUnhedged.toLocaleString('en-US', { maximumFractionDigits: 0 })}
+                                    {maturityData.totalUnhedged.toLocaleString('en-US', { maximumFractionDigits: 2 })} {maturityData.unit}
                                   </TableCell>
                                   <TableCell>
                                     <div className="flex items-center gap-2">
@@ -1132,14 +1272,14 @@ const Exposures = () => {
                         <Table>
                           <TableHeader>
                             <TableRow>
-                              <TableHead>Currency</TableHead>
-                              <TableHead>Amount</TableHead>
+                              <TableHead>Commodity</TableHead>
+                              <TableHead>Volume</TableHead>
                               <TableHead>Type</TableHead>
                               <TableHead>Maturity</TableHead>
                               <TableHead>Description</TableHead>
                               <TableHead>Subsidiary</TableHead>
                               <TableHead>Hedge Ratio</TableHead>
-                              <TableHead>Hedged Amount</TableHead>
+                              <TableHead>Hedged Volume</TableHead>
                               <TableHead>Status</TableHead>
                               <TableHead className="text-right">Actions</TableHead>
                             </TableRow>
@@ -1149,18 +1289,18 @@ const Exposures = () => {
                               <TableRow key={exposure.id}>
                                 <TableCell>
                                   <Badge variant="outline" className="font-mono">
-                                    {exposure.currency}
+                                    {exposure.commodity || '-'}
                                   </Badge>
                                 </TableCell>
                                 <TableCell className="font-mono">
-                                  {formatCurrency(exposure.amount, exposure.currency)}
+                                  {exposure.volume.toLocaleString('en-US', { maximumFractionDigits: 2 })} {exposure.volumeUnit}
                                 </TableCell>
                                 <TableCell>
                                   <Badge 
-                                    variant={exposure.type === 'Receivable' ? 'default' : 'secondary'}
-                                    className={exposure.type === 'Receivable' ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' : 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'}
+                                    variant={exposure.type === 'Long' ? 'default' : 'secondary'}
+                                    className={exposure.type === 'Long' ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' : 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'}
                                   >
-                                    {exposure.type === 'Receivable' ? 'Receivable' : 'Payable'}
+                                    {exposure.type === 'Long' ? 'Long' : 'Short'}
                                   </Badge>
                                 </TableCell>
                                 <TableCell className="font-mono">
@@ -1179,7 +1319,7 @@ const Exposures = () => {
                                   </div>
                                 </TableCell>
                                 <TableCell className="font-mono">
-                                  {formatCurrency(exposure.hedged, exposure.currency)}
+                                  {exposure.hedgedVolume.toLocaleString('en-US', { maximumFractionDigits: 2 })} {exposure.volumeUnit}
                                 </TableCell>
                                 <TableCell>
                                   {getStatusBadge(exposure.hedgeRatio > 80 ? 'well-hedged' : exposure.hedgeRatio > 50 ? 'partially-hedged' : exposure.hedgeRatio > 0 ? 'under-hedged' : 'unhedged')}
@@ -1227,7 +1367,7 @@ const Exposures = () => {
               <DialogDescription>
                 {editingExposure 
                   ? 'Update the exposure details below.'
-                  : 'Enter the details for the new FX exposure.'
+                  : 'Enter the details for the new commodity exposure.'
                 }
               </DialogDescription>
             </DialogHeader>
@@ -1235,25 +1375,44 @@ const Exposures = () => {
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="currency">Currency</Label>
+                  <Label htmlFor="commodity">Commodity</Label>
                   <Select
-                    value={newExposure.currency}
-                    onValueChange={(value) => setNewExposure({...newExposure, currency: value})}
+                    value={newExposure.commodity}
+                    onValueChange={(value) => setNewExposure({...newExposure, commodity: value})}
                   >
                     <SelectTrigger>
-                      <SelectValue placeholder="Select currency" />
+                      <SelectValue placeholder="Select commodity" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="EUR">EUR</SelectItem>
-                      <SelectItem value="GBP">GBP</SelectItem>
-                      <SelectItem value="JPY">JPY</SelectItem>
-                      <SelectItem value="CHF">CHF</SelectItem>
-                      <SelectItem value="CAD">CAD</SelectItem>
-                      <SelectItem value="AUD">AUD</SelectItem>
-                      <SelectItem value="NZD">NZD</SelectItem>
-                      <SelectItem value="SEK">SEK</SelectItem>
-                      <SelectItem value="NOK">NOK</SelectItem>
-                      <SelectItem value="DKK">DKK</SelectItem>
+                      {/* Energy */}
+                      <SelectItem value="WTI">WTI Crude Oil</SelectItem>
+                      <SelectItem value="BRENT">Brent Crude Oil</SelectItem>
+                      <SelectItem value="NATGAS">Natural Gas</SelectItem>
+                      <SelectItem value="HEATING">Heating Oil</SelectItem>
+                      <SelectItem value="GASOLINE">Gasoline</SelectItem>
+                      {/* Precious Metals */}
+                      <SelectItem value="GOLD">Gold</SelectItem>
+                      <SelectItem value="SILVER">Silver</SelectItem>
+                      <SelectItem value="PLATINUM">Platinum</SelectItem>
+                      <SelectItem value="PALLADIUM">Palladium</SelectItem>
+                      {/* Base Metals */}
+                      <SelectItem value="COPPER">Copper</SelectItem>
+                      <SelectItem value="ALUMINUM">Aluminum</SelectItem>
+                      <SelectItem value="ZINC">Zinc</SelectItem>
+                      <SelectItem value="NICKEL">Nickel</SelectItem>
+                      <SelectItem value="LEAD">Lead</SelectItem>
+                      {/* Agriculture - Grains */}
+                      <SelectItem value="CORN">Corn</SelectItem>
+                      <SelectItem value="WHEAT">Wheat</SelectItem>
+                      <SelectItem value="SOYBEANS">Soybeans</SelectItem>
+                      {/* Agriculture - Softs */}
+                      <SelectItem value="COFFEE">Coffee</SelectItem>
+                      <SelectItem value="SUGAR">Sugar</SelectItem>
+                      <SelectItem value="COTTON">Cotton</SelectItem>
+                      <SelectItem value="COCOA">Cocoa</SelectItem>
+                      {/* Livestock */}
+                      <SelectItem value="CATTLE">Live Cattle</SelectItem>
+                      <SelectItem value="HOGS">Lean Hogs</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -1262,7 +1421,7 @@ const Exposures = () => {
                   <Label htmlFor="type">Type</Label>
                   <Select
                     value={newExposure.type}
-                    onValueChange={(value: 'receivable' | 'payable') => 
+                    onValueChange={(value: 'long' | 'short') => 
                       setNewExposure({...newExposure, type: value})
                     }
                   >
@@ -1270,8 +1429,8 @@ const Exposures = () => {
                       <SelectValue placeholder="Select type" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="receivable">Receivable</SelectItem>
-                      <SelectItem value="payable">Payable</SelectItem>
+                      <SelectItem value="long">Long</SelectItem>
+                      <SelectItem value="short">Short</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>

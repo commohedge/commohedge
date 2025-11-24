@@ -3,7 +3,8 @@ import { AppSidebar } from "./AppSidebar";
 import { 
   SidebarInset, 
   SidebarProvider, 
-  SidebarTrigger 
+  SidebarTrigger,
+  useSidebar
 } from "@/components/ui/sidebar";
 import { Separator } from "@/components/ui/separator";
 import { 
@@ -16,6 +17,8 @@ import {
 } from "@/components/ui/breadcrumb";
 import { useCompanySettings, getCompanyNameSync, companySettingsEmitter } from "@/hooks/useCompanySettings";
 import { ScrollArea } from "@/components/ui/ScrollArea";
+import { Button } from "@/components/ui/button";
+import { PanelLeft, PanelLeftClose } from "lucide-react";
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -24,6 +27,28 @@ interface LayoutProps {
     label: string;
     href?: string;
   }>;
+}
+
+function SidebarToggleButton() {
+  const { open, toggleSidebar } = useSidebar();
+
+  return (
+    <Button
+      variant="ghost"
+      size="icon"
+      onClick={toggleSidebar}
+      className="relative -ml-1 h-9 w-9 hover:bg-accent transition-all"
+      title={open ? "Hide Sidebar" : "Show Sidebar"}
+      aria-label={open ? "Hide Sidebar" : "Show Sidebar"}
+    >
+      {open ? (
+        <PanelLeftClose className="h-4 w-4" />
+      ) : (
+        <PanelLeft className="h-4 w-4" />
+      )}
+      <span className="sr-only">{open ? "Hide Sidebar" : "Show Sidebar"}</span>
+    </Button>
+  );
 }
 
 export function Layout({ children, title, breadcrumbs }: LayoutProps) {
@@ -47,7 +72,7 @@ export function Layout({ children, title, breadcrumbs }: LayoutProps) {
       <SidebarInset>
         <header className="flex h-16 shrink-0 items-center gap-2 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
           <div className="flex items-center gap-2 px-4">
-            <SidebarTrigger className="-ml-1" />
+            <SidebarToggleButton />
             <Separator orientation="vertical" className="mr-2 h-4" />
             {breadcrumbs && (
               <Breadcrumb>

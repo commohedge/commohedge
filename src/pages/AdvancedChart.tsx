@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 export default function AdvancedChart() {
-  const [symbol, setSymbol] = useState("NASDAQ:AAPL");
+  const [symbol, setSymbol] = useState("TVC:GOLD");
   const [interval, setInterval] = useState("D");
   const [height, setHeight] = useState(600);
 
@@ -26,9 +26,6 @@ export default function AdvancedChart() {
             <BarChart3 className="h-8 w-8 text-primary" />
             Advanced Chart
           </h1>
-          <p className="text-muted-foreground mt-2">
-            Interactive trading chart with technical analysis tools powered by TradingView
-          </p>
         </div>
 
         <Card className="shadow-md">
@@ -47,11 +44,11 @@ export default function AdvancedChart() {
                   id="symbol"
                   value={symbol}
                   onChange={(e) => setSymbol(e.target.value)}
-                  placeholder="NASDAQ:AAPL"
+                  placeholder="TVC:GOLD"
                   className="font-mono"
                 />
                 <p className="text-xs text-muted-foreground">
-                  Format: EXCHANGE:SYMBOL (e.g., NASDAQ:AAPL, NYSE:TSLA)
+                  Format: EXCHANGE:SYMBOL (e.g., TVC:GOLD, NYMEX:CL1!)
                 </p>
               </div>
               <div className="space-y-2">

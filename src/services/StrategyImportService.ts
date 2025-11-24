@@ -15,8 +15,8 @@ export interface ImportedStrategy {
     quoteVolume: number;
     domesticRate: number;
     foreignRate: number;
-    // Align with Strategy Builder: receivable vs payable
-    volumeType?: 'receivable' | 'payable';
+    // Align with Strategy Builder: long/short (commodity) or receivable/payable (FX)
+    volumeType?: 'long' | 'short' | 'receivable' | 'payable';
   };
 }
 
@@ -74,7 +74,7 @@ export interface HedgingInstrument {
   exposureVolume?: number;        // Volume d'exposition de la période (monthlyVolume du detailed results)
   rawVolume?: number;             // Volume brut de la période (sans appliquer la quantité)
   // ✅ Alignement Strategy Builder → Exposures
-  volumeType?: 'receivable' | 'payable'; // Transmet le sens Receivable/Payable de la stratégie
+  volumeType?: 'long' | 'short' | 'receivable' | 'payable'; // Transmet le type de position: long/short (commodity) ou receivable/payable (FX)
   repricingData?: {           // Complete repricing information
     underlyingPrice: number;
     timeToMaturity: number;
@@ -147,7 +147,7 @@ class StrategyImportService {
       quoteVolume: number;
       domesticRate: number;
       foreignRate: number;
-      volumeType?: 'receivable' | 'payable';
+      volumeType?: 'long' | 'short' | 'receivable' | 'payable';
       useCustomPeriods?: boolean;
       customPeriods?: Array<{ maturityDate: string; volume: number }>;
     },
@@ -210,7 +210,7 @@ class StrategyImportService {
       quoteVolume: number;
       domesticRate: number;
       foreignRate: number;
-      volumeType?: 'receivable' | 'payable';
+      volumeType?: 'long' | 'short' | 'receivable' | 'payable';
       useCustomPeriods?: boolean;
       customPeriods?: Array<{ maturityDate: string; volume: number }>;
     },

@@ -96,6 +96,7 @@ export interface CommodityHedgingInstrument {
   physicalDelivery: boolean;         // Livraison physique ou cash settlement
   deliveryLocation?: string;
   settlementCurrency: string;        // Devise de règlement
+  volumeType?: 'long' | 'short' | 'receivable' | 'payable'; // Type de position: long/short (commodity) ou receivable/payable (FX)
 }
 
 // Métriques de risque pour commodities
