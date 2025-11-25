@@ -82,29 +82,20 @@ export async function scrapeTradingViewSymbol(symbol: string): Promise<ScrapingR
   } catch (error) {
     console.warn(`Vercel function failed for symbol ${symbol}, falling back:`, error);
     
-    // Try multiple URL formats as fallback
-    const urlFormats = [
-      `https://www.tradingview.com/symbols/NYMEX-${symbol}/`,
-      `https://www.tradingview.com/symbols/ICE-${symbol}/`,
-      `https://www.tradingview.com/symbols/${symbol}/`,
-      `https://fr.tradingview.com/symbols/NYMEX-${symbol}/`,
-    ];
-    
-    // Try each format until one works
-    for (const url of urlFormats) {
-      try {
-        console.log(`Trying fallback URL: ${url}`);
-        const result = await scrapePage(url);
-        if (result && result.data && result.data.length > 1000) {
-          return result;
-        }
-      } catch (fallbackError) {
-        console.warn(`Fallback URL ${url} failed:`, fallbackError);
-        continue;
-      }
+    // Determine the correct exchange for the symbol
+    // Freight symbols are typically on ICE, not NYMEX
+    let exchange = 'NYMEX';
+    if (symbol.startsWith('CS') || symbol.startsWith('T') || symbol.startsWith('TD') || 
+        symbol.startsWith('TC') || symbol.startsWith('TF') || symbol.startsWith('FR') || 
+        symbol.startsWith('AE') || symbol.startsWith('BG') || symbol.startsWith('BL') ||
+        symbol.startsWith('USC') || symbol.startsWith('USE') || symbol.startsWith('XUK') ||
+        symbol.startsWith('FLJ') || symbol.startsWith('FLP')) {
+      exchange = 'ICE';
     }
     
-    throw new Error(`All URL formats failed for symbol ${symbol}`);
+    // Fallback vers la fonction générique ou API Ninja
+    const url = `https://www.tradingview.com/symbols/${exchange}-${symbol}/`;
+    return scrapePage(url);
   }
 }
 

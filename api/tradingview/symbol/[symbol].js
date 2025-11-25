@@ -36,7 +36,18 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'Symbol parameter is required' });
   }
 
-  // We'll try multiple URL formats below, starting with NYMEX
+  // Determine the correct exchange for the symbol
+  // Freight symbols are typically on ICE, not NYMEX
+  let exchange = 'NYMEX';
+  if (symbol.startsWith('CS') || symbol.startsWith('T') || symbol.startsWith('TD') || 
+      symbol.startsWith('TC') || symbol.startsWith('TF') || symbol.startsWith('FR') || 
+      symbol.startsWith('AE') || symbol.startsWith('BG') || symbol.startsWith('BL') ||
+      symbol.startsWith('USC') || symbol.startsWith('USE') || symbol.startsWith('XUK') ||
+      symbol.startsWith('FLJ') || symbol.startsWith('FLP')) {
+    exchange = 'ICE';
+  }
+
+  const url = `https://www.tradingview.com/symbols/${exchange}-${symbol}/`;
 
   let browser = null;
   let page = null;
@@ -51,67 +62,30 @@ export default async function handler(req, res) {
     await page.setViewport({ width: 1920, height: 1080 });
     await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36');
     
-    // Try multiple URL formats if the first one fails
-    let html = '';
-    let lastError = null;
-    const urlFormats = [
-      `https://www.tradingview.com/symbols/NYMEX-${symbol}/`,
-      `https://www.tradingview.com/symbols/ICE-${symbol}/`,
-      `https://www.tradingview.com/symbols/${symbol}/`,
-      `https://fr.tradingview.com/symbols/NYMEX-${symbol}/`,
-      `https://fr.tradingview.com/symbols/ICE-${symbol}/`,
-      `https://fr.tradingview.com/symbols/${symbol}/`,
-    ];
-
-    for (const tryUrl of urlFormats) {
-      try {
-        console.log(`Trying URL: ${tryUrl}`);
-        await page.goto(tryUrl, { 
-          waitUntil: 'domcontentloaded',
-          timeout: 30000 
-        });
-        console.log(`TradingView symbol page loaded successfully from ${tryUrl}`);
-        
-        // Attendre que le contenu se charge
-        console.log('Waiting for TradingView symbol content to render...');
-        await new Promise(resolve => setTimeout(resolve, 8000)); // Increased wait time
-        console.log('Wait completed');
-        
-        // Check if page loaded successfully (not a 404 or error page)
-        const pageTitle = await page.title();
-        const pageUrl = page.url();
-        
-        // If we got redirected to a different page or got an error, try next format
-        if (pageUrl.includes('404') || pageUrl.includes('error') || 
-            pageTitle.toLowerCase().includes('not found') || 
-            pageTitle.toLowerCase().includes('error')) {
-          console.log(`Page appears to be an error page, trying next format...`);
-          continue;
-        }
-        
-        // Extraire le HTML
-        html = await page.content();
-        
-        // Check if HTML contains price data or symbol information
-        if (html.includes('tv-symbol-price-quote') || 
-            html.includes('last_price') || 
-            html.includes(symbol.replace(/!$/, '')) ||
-            html.length > 50000) { // Reasonable page size
-          console.log(`Successfully found data on ${tryUrl}`);
-          break;
-        } else {
-          console.log(`No price data found on ${tryUrl}, trying next format...`);
-          continue;
-        }
-      } catch (err) {
-        console.warn(`Error loading ${tryUrl}:`, err.message);
-        lastError = err;
-        continue;
-      }
-    }
+    // Naviguer vers la page
+    console.log(`Navigating to: ${url} (exchange: ${exchange}, symbol: ${symbol})`);
+    await page.goto(url, { 
+      waitUntil: 'networkidle0',
+      timeout: 30000 
+    });
+    console.log('TradingView symbol page loaded successfully');
     
-    if (!html || html.length < 1000) {
-      throw new Error(`Failed to load symbol ${symbol} from any URL format. Last error: ${lastError?.message || 'Unknown'}`);
+    // Attendre que le contenu se charge (augmenté pour les pages freight qui peuvent être plus lentes)
+    console.log('Waiting for TradingView symbol content to render...');
+    await new Promise(resolve => setTimeout(resolve, 8000));
+    console.log('Wait completed');
+    
+    // Vérifier si la page contient une erreur ou un message "symbol not found"
+    const html = await page.content();
+    if (html.includes('Symbol not found') || html.includes('404') || 
+        html.includes('Page not found') || html.includes('symbol does not exist') ||
+        html.includes('This symbol is not available')) {
+      console.warn(`Symbol ${symbol} not found on ${exchange}`);
+      return res.status(404).json({ 
+        error: 'Symbol not found',
+        message: `Symbol ${symbol} not found on ${exchange}`,
+        data: null
+      });
     }
     
     console.log(`Successfully scraped TradingView symbol ${symbol}: ${html.length} characters`);
