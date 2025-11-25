@@ -552,8 +552,10 @@ async function fetchFreightSymbolData(symbol: string, name: string, type: Commod
   
   // Try each exchange until one succeeds
   for (const exchange of allExchangesToTry) {
+    // Declare exchangeLabel once at the start of the loop
+    const exchangeLabel = exchange ? `${exchange} exchange` : 'direct (no exchange prefix)';
+    
     try {
-      const exchangeLabel = exchange ? `${exchange} exchange` : 'direct (no exchange prefix)';
       console.log(`Trying to fetch ${symbol} on ${exchangeLabel}...`);
       const data = await scrapeTradingViewSymbol(symbol, exchange);
     
@@ -671,13 +673,11 @@ async function fetchFreightSymbolData(symbol: string, name: string, type: Commod
     
       // Return null if no valid data found on this exchange
       if (price === 0) {
-        const exchangeLabel = exchange ? `${exchange} exchange` : 'direct access';
         console.warn(`No valid price found for ${symbol} on ${exchangeLabel}, trying next exchange...`);
         continue; // Try next exchange
       }
       
       // Success! Return the commodity data
-      const exchangeLabel = exchange ? `${exchange} exchange` : 'direct access';
       console.log(`Successfully fetched ${symbol} from ${exchangeLabel}`);
       return {
         symbol,
@@ -693,7 +693,6 @@ async function fetchFreightSymbolData(symbol: string, name: string, type: Commod
       };
       
     } catch (error) {
-      const exchangeLabel = exchange ? `${exchange} exchange` : 'direct access';
       console.warn(`Error fetching ${symbol} from ${exchangeLabel}:`, error);
       // Continue to next exchange
       continue;
