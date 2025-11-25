@@ -36,23 +36,7 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'Symbol parameter is required' });
   }
 
-  // Determine the exchange based on symbol type
-  // Freight symbols are typically on ICE or other exchanges, not NYMEX
-  const isFreightSymbol = symbol.includes('CS') || symbol.includes('TM') || symbol.includes('TD') || 
-      symbol.includes('TC') || symbol.includes('TH') || symbol.includes('TK') ||
-      symbol.includes('TL') || symbol.includes('AEB') || symbol.includes('T2D') ||
-      symbol.includes('T7C') || symbol.includes('TDM') || symbol.includes('FRS') ||
-      symbol.includes('T5C') || symbol.includes('ACB') || symbol.includes('FRC') ||
-      symbol.includes('T8C') || symbol.includes('TC11') || symbol.includes('TF21') ||
-      symbol.includes('BG') || symbol.includes('BL') || symbol.includes('USC') ||
-      symbol.includes('USE') || symbol.includes('XUK') || symbol.includes('FLJ') ||
-      symbol.includes('FLP');
-  
-  // For freight symbols, try ICE first (most freight futures are on ICE)
-  // Otherwise try NYMEX
-  const exchangesToTry = isFreightSymbol ? ['ICE', 'NYMEX'] : ['NYMEX', 'ICE'];
-  let url = `https://www.tradingview.com/symbols/${exchangesToTry[0]}-${symbol}/`;
-  console.log(`Trying exchange ${exchangesToTry[0]} for symbol: ${symbol}`);
+  // We'll try multiple URL formats below, starting with NYMEX
 
   let browser = null;
   let page = null;
@@ -67,32 +51,68 @@ export default async function handler(req, res) {
     await page.setViewport({ width: 1920, height: 1080 });
     await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36');
     
-    // Naviguer vers la page
-    console.log(`Navigating to: ${url}`);
-    await page.goto(url, { 
-      waitUntil: 'domcontentloaded',
-      timeout: 30000 
-    });
-    console.log('TradingView symbol page loaded successfully');
-    
-    // Attendre que le contenu se charge - augmenter le temps d'attente pour les données dynamiques
-    console.log('Waiting for TradingView symbol content to render...');
-    await new Promise(resolve => setTimeout(resolve, 8000)); // Augmenté à 8 secondes pour les données dynamiques
-    console.log('Wait completed');
-    
-    // Attendre spécifiquement que les éléments de prix soient chargés
-    try {
-      await page.waitForSelector('.tv-symbol-price-quote__value, [data-field="last_price"], .js-symbol-last, [class*="price"]', { 
-        timeout: 5000 
-      }).catch(() => {
-        console.log('Price selector not found, continuing anyway...');
-      });
-    } catch (e) {
-      console.log('Timeout waiting for price selector, continuing...');
+    // Try multiple URL formats if the first one fails
+    let html = '';
+    let lastError = null;
+    const urlFormats = [
+      `https://www.tradingview.com/symbols/NYMEX-${symbol}/`,
+      `https://www.tradingview.com/symbols/ICE-${symbol}/`,
+      `https://www.tradingview.com/symbols/${symbol}/`,
+      `https://fr.tradingview.com/symbols/NYMEX-${symbol}/`,
+      `https://fr.tradingview.com/symbols/ICE-${symbol}/`,
+      `https://fr.tradingview.com/symbols/${symbol}/`,
+    ];
+
+    for (const tryUrl of urlFormats) {
+      try {
+        console.log(`Trying URL: ${tryUrl}`);
+        await page.goto(tryUrl, { 
+          waitUntil: 'domcontentloaded',
+          timeout: 30000 
+        });
+        console.log(`TradingView symbol page loaded successfully from ${tryUrl}`);
+        
+        // Attendre que le contenu se charge
+        console.log('Waiting for TradingView symbol content to render...');
+        await new Promise(resolve => setTimeout(resolve, 8000)); // Increased wait time
+        console.log('Wait completed');
+        
+        // Check if page loaded successfully (not a 404 or error page)
+        const pageTitle = await page.title();
+        const pageUrl = page.url();
+        
+        // If we got redirected to a different page or got an error, try next format
+        if (pageUrl.includes('404') || pageUrl.includes('error') || 
+            pageTitle.toLowerCase().includes('not found') || 
+            pageTitle.toLowerCase().includes('error')) {
+          console.log(`Page appears to be an error page, trying next format...`);
+          continue;
+        }
+        
+        // Extraire le HTML
+        html = await page.content();
+        
+        // Check if HTML contains price data or symbol information
+        if (html.includes('tv-symbol-price-quote') || 
+            html.includes('last_price') || 
+            html.includes(symbol.replace(/!$/, '')) ||
+            html.length > 50000) { // Reasonable page size
+          console.log(`Successfully found data on ${tryUrl}`);
+          break;
+        } else {
+          console.log(`No price data found on ${tryUrl}, trying next format...`);
+          continue;
+        }
+      } catch (err) {
+        console.warn(`Error loading ${tryUrl}:`, err.message);
+        lastError = err;
+        continue;
+      }
     }
     
-    // Extraire le HTML
-    const html = await page.content();
+    if (!html || html.length < 1000) {
+      throw new Error(`Failed to load symbol ${symbol} from any URL format. Last error: ${lastError?.message || 'Unknown'}`);
+    }
     
     console.log(`Successfully scraped TradingView symbol ${symbol}: ${html.length} characters`);
     

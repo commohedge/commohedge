@@ -82,22 +82,29 @@ export async function scrapeTradingViewSymbol(symbol: string): Promise<ScrapingR
   } catch (error) {
     console.warn(`Vercel function failed for symbol ${symbol}, falling back:`, error);
     
-    // Fallback vers la fonction générique ou API Ninja
-    // Determine exchange based on symbol type
-    let exchange = 'NYMEX';
-    if (symbol.includes('CS') || symbol.includes('TM') || symbol.includes('TD') || 
-        symbol.includes('TC') || symbol.includes('TH') || symbol.includes('TK') ||
-        symbol.includes('TL') || symbol.includes('AEB') || symbol.includes('T2D') ||
-        symbol.includes('T7C') || symbol.includes('TDM') || symbol.includes('FRS') ||
-        symbol.includes('T5C') || symbol.includes('ACB') || symbol.includes('FRC') ||
-        symbol.includes('T8C') || symbol.includes('TC11') || symbol.includes('TF21') ||
-        symbol.includes('BG') || symbol.includes('BL') || symbol.includes('USC') ||
-        symbol.includes('USE') || symbol.includes('XUK') || symbol.includes('FLJ') ||
-        symbol.includes('FLP')) {
-      exchange = 'ICE';
+    // Try multiple URL formats as fallback
+    const urlFormats = [
+      `https://www.tradingview.com/symbols/NYMEX-${symbol}/`,
+      `https://www.tradingview.com/symbols/ICE-${symbol}/`,
+      `https://www.tradingview.com/symbols/${symbol}/`,
+      `https://fr.tradingview.com/symbols/NYMEX-${symbol}/`,
+    ];
+    
+    // Try each format until one works
+    for (const url of urlFormats) {
+      try {
+        console.log(`Trying fallback URL: ${url}`);
+        const result = await scrapePage(url);
+        if (result && result.data && result.data.length > 1000) {
+          return result;
+        }
+      } catch (fallbackError) {
+        console.warn(`Fallback URL ${url} failed:`, fallbackError);
+        continue;
+      }
     }
-    const url = `https://www.tradingview.com/symbols/${exchange}-${symbol}/`;
-    return scrapePage(url);
+    
+    throw new Error(`All URL formats failed for symbol ${symbol}`);
   }
 }
 
