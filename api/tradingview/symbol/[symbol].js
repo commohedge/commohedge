@@ -59,10 +59,21 @@ export default async function handler(req, res) {
     });
     console.log('TradingView symbol page loaded successfully');
     
-    // Attendre que le contenu se charge
+    // Attendre que le contenu se charge - augmenter le temps d'attente pour les données dynamiques
     console.log('Waiting for TradingView symbol content to render...');
-    await new Promise(resolve => setTimeout(resolve, 6000));
+    await new Promise(resolve => setTimeout(resolve, 8000)); // Augmenté à 8 secondes pour les données dynamiques
     console.log('Wait completed');
+    
+    // Attendre spécifiquement que les éléments de prix soient chargés
+    try {
+      await page.waitForSelector('.tv-symbol-price-quote__value, [data-field="last_price"], .js-symbol-last, [class*="price"]', { 
+        timeout: 5000 
+      }).catch(() => {
+        console.log('Price selector not found, continuing anyway...');
+      });
+    } catch (e) {
+      console.log('Timeout waiting for price selector, continuing...');
+    }
     
     // Extraire le HTML
     const html = await page.content();
