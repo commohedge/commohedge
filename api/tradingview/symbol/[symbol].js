@@ -30,29 +30,13 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const { symbol, exchange } = req.query;
+  const { symbol } = req.query;
   
   if (!symbol) {
     return res.status(400).json({ error: 'Symbol parameter is required' });
   }
 
-  // Determine the exchange prefix
-  // If exchange is empty string, try direct symbol access (no prefix)
-  // Default to NYMEX if no exchange specified
-  // For freight, common exchanges are: ICE, BALTIC, CME
-  let url: string;
-  if (exchange === '' || exchange === null || exchange === undefined) {
-    // Try direct symbol access first if exchange is explicitly empty
-    if (exchange === '') {
-      url = `https://www.tradingview.com/symbols/${symbol}/`;
-    } else {
-      // Default to NYMEX if exchange not specified
-      url = `https://www.tradingview.com/symbols/NYMEX-${symbol}/`;
-    }
-  } else {
-    const exchangePrefix = exchange;
-    url = `https://www.tradingview.com/symbols/${exchangePrefix}-${symbol}/`;
-  }
+  const url = `https://www.tradingview.com/symbols/NYMEX-${symbol}/`;
 
   let browser = null;
   let page = null;

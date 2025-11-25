@@ -778,7 +778,7 @@ const PositionMonitor = () => {
                     </TableCell>
                       <TableCell className="font-mono text-sm">
                         {position.maturity.toLocaleDateString()}
-                      </TableCell>
+                    </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">
                         {getExposureIcon(position.exposure)}

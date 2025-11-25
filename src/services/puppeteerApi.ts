@@ -59,20 +59,12 @@ export async function scrapePage(url: string): Promise<ScrapingResult> {
 
 /**
  * Scrape une page TradingView spécifique pour un symbole
- * @param symbol - Le symbole à scraper (ex: 'CS61!', 'CL1!')
- * @param exchange - L'exchange à utiliser (ex: 'NYMEX', 'ICE', 'BALTIC', 'CME'). Si null, essaie sans préfixe d'exchange. Si non fourni, essaie NYMEX par défaut
  */
-export async function scrapeTradingViewSymbol(symbol: string, exchange?: string | null): Promise<ScrapingResult> {
+export async function scrapeTradingViewSymbol(symbol: string): Promise<ScrapingResult> {
   try {
-    console.log(`Scraping TradingView symbol: ${symbol}${exchange ? ` on ${exchange}` : exchange === null ? ' (direct)' : ''}`);
+    console.log(`Scraping TradingView symbol: ${symbol}`);
     
-    let apiUrl = `${SCRAPING_SERVER_URL}/api/tradingview/symbol/${symbol}`;
-    if (exchange !== undefined && exchange !== null) {
-      apiUrl += `?exchange=${exchange}`;
-    } else if (exchange === null) {
-      // Try direct symbol access (no exchange prefix)
-      apiUrl += `?exchange=`;
-    }
+    const apiUrl = `${SCRAPING_SERVER_URL}/api/tradingview/symbol/${symbol}`;
     
     const response = await fetch(apiUrl, {
       timeout: 20000 // Timeout optimisé pour les symboles
@@ -91,14 +83,7 @@ export async function scrapeTradingViewSymbol(symbol: string, exchange?: string 
     console.warn(`Vercel function failed for symbol ${symbol}, falling back:`, error);
     
     // Fallback vers la fonction générique ou API Ninja
-    let url: string;
-    if (exchange === null) {
-      // Try direct symbol access
-      url = `https://www.tradingview.com/symbols/${symbol}/`;
-    } else {
-      const exchangePrefix = exchange || 'NYMEX';
-      url = `https://www.tradingview.com/symbols/${exchangePrefix}-${symbol}/`;
-    }
+    const url = `https://www.tradingview.com/symbols/NYMEX-${symbol}/`;
     return scrapePage(url);
   }
 }

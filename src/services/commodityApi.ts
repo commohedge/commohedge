@@ -16,56 +16,6 @@ const CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
 // List of available commodity types
 export type CommodityCategory = 'metals' | 'agricultural' | 'energy' | 'freight' | 'bunker';
 
-// Mapping of freight symbols to their TradingView exchanges
-// Freight symbols are typically on ICE (Intercontinental Exchange) or Baltic Exchange
-const FREIGHT_EXCHANGE_MAP: { [key: string]: string[] } = {
-  // Container Freight - typically on ICE
-  'CS61!': ['ICE', 'CME'],
-  'CS31!': ['ICE', 'CME'],
-  'CS51!': ['ICE', 'CME'],
-  'CS11!': ['ICE', 'CME'],
-  'CS21!': ['ICE', 'CME'],
-  'CS41!': ['ICE', 'CME'],
-  
-  // Freight Routes - typically on Baltic Exchange (BALTIC) or ICE
-  'TM1!': ['BALTIC', 'ICE'],
-  'TD81!': ['BALTIC', 'ICE'],
-  'TC71!': ['BALTIC', 'ICE'],
-  'TC61!': ['BALTIC', 'ICE'],
-  'TH1!': ['BALTIC', 'ICE'],
-  'TK1!': ['BALTIC', 'ICE'],
-  'TL1!': ['BALTIC', 'ICE'],
-  'AEB1!': ['BALTIC', 'ICE'],
-  'T2D1!': ['BALTIC', 'ICE'],
-  'T7C1!': ['BALTIC', 'ICE'],
-  'TD31!': ['BALTIC', 'ICE'],
-  'TDM1!': ['BALTIC', 'ICE'],
-  'FRS1!': ['BALTIC', 'ICE'],
-  'T5C1!': ['BALTIC', 'ICE'],
-  'ACB1!': ['BALTIC', 'ICE'],
-  'FRC1!': ['BALTIC', 'ICE'],
-  'T8C1!': ['BALTIC', 'ICE'],
-  'TC11!': ['BALTIC', 'ICE'],
-  'TF21!': ['BALTIC', 'ICE'],
-  
-  // LNG Freight - typically on ICE or CME
-  'BG11!': ['ICE', 'CME'],
-  'BG31!': ['ICE', 'CME'],
-  'BG21!': ['ICE', 'CME'],
-  'BL11!': ['BALTIC', 'ICE'],
-  'BL21!': ['BALTIC', 'ICE'],
-  'BL31!': ['BALTIC', 'ICE'],
-  
-  // Dirty Freight - typically on ICE or CME
-  'USC1!': ['ICE', 'CME'],
-  'USE1!': ['ICE', 'CME'],
-  'XUK1!': ['ICE', 'CME'],
-  
-  // Liquid Petroleum Gas Freight - typically on Baltic or ICE
-  'FLJ1!': ['BALTIC', 'ICE'],
-  'FLP1!': ['BALTIC', 'ICE'],
-};
-
 // List of freight symbols with their information
 const FREIGHT_SYMBOLS = [
   // Container Freight
@@ -539,170 +489,289 @@ export async function refreshCommoditiesData(category: CommodityCategory = 'meta
 }
 
 /**
+ * Helper function to parse numeric values from text
+ */
+function parseNumericValue(text: string): number {
+  if (!text) return 0;
+  
+  // Remove common currency symbols and units
+  let cleanText = text.replace(/[^\d.,\-+]/g, '');
+  
+  // Handle negative values
+  const isNegative = text.includes('-') || text.includes('−');
+  
+  // Handle TradingView number format (thousands separators)
+  if (cleanText.includes(',') && cleanText.includes('.')) {
+    const lastDotIndex = cleanText.lastIndexOf('.');
+    const lastCommaIndex = cleanText.lastIndexOf(',');
+    
+    if (lastDotIndex > lastCommaIndex) {
+      // Format: 1,234.56 (US format)
+      cleanText = cleanText.replace(/,/g, '');
+    } else {
+      // Format: 1.234,56 (European format)
+      cleanText = cleanText.replace(/\./g, '').replace(/,([^,]*)$/, '.$1');
+    }
+  } else if (cleanText.includes(',') && !cleanText.includes('.')) {
+    // Check if comma is decimal separator or thousands separator
+    const parts = cleanText.split(',');
+    if (parts.length === 2 && parts[1].length <= 4 && parts[0].length > 3) {
+      // Likely thousands separator: 1,234
+      cleanText = cleanText.replace(/,/g, '');
+    } else if (parts.length === 2 && parts[1].length <= 4) {
+      // Likely decimal separator: 1,23
+      cleanText = cleanText.replace(',', '.');
+    } else {
+      // Remove all commas
+      cleanText = cleanText.replace(/,/g, '');
+    }
+  }
+  
+  const value = parseFloat(cleanText) || 0;
+  return isNegative ? -Math.abs(value) : value;
+}
+
+/**
  * Retrieves data for a specific freight symbol from TradingView
- * Tries multiple exchanges in order until one succeeds
  */
 async function fetchFreightSymbolData(symbol: string, name: string, type: Commodity['type']): Promise<Commodity | null> {
-  // Get the list of exchanges to try for this symbol
-  // Also try without exchange prefix as some symbols might be accessible directly
-  const exchangesToTry = FREIGHT_EXCHANGE_MAP[symbol] || ['ICE', 'BALTIC', 'CME', 'NYMEX'];
-  
-  // Add null to try without exchange prefix (direct symbol access)
-  const allExchangesToTry: (string | null)[] = [...exchangesToTry, null];
-  
-  // Try each exchange until one succeeds
-  for (const exchange of allExchangesToTry) {
-    // Declare exchangeLabel once at the start of the loop
-    const exchangeLabel = exchange ? `${exchange} exchange` : 'direct (no exchange prefix)';
+  try {
+    console.log(`Fetching freight data for symbol: ${symbol}`);
+    const data = await scrapeTradingViewSymbol(symbol);
     
-    try {
-      console.log(`Trying to fetch ${symbol} on ${exchangeLabel}...`);
-      const data = await scrapeTradingViewSymbol(symbol, exchange);
-    
-      if (!data || !data.data) {
-        console.warn(`No data received for ${symbol} on ${exchange}`);
-        continue; // Try next exchange
-      }
+    if (!data || !data.data) {
+      console.warn(`No data received for ${symbol}`);
+      return null;
+    }
 
-      // Parse the HTML to extract data
-      const htmlContent = data.data;
-      const root = parse(htmlContent);
-      
-      // Extract the main price
-      let price = 0;
-      let percentChange = 0;
-      let absoluteChange = 0;
+    // Parse the HTML to extract data
+    const htmlContent = data.data;
+    const root = parse(htmlContent);
     
-    // Search for price elements in different possible selectors
+    // Extract the main price
+    let price = 0;
+    let percentChange = 0;
+    let absoluteChange = 0;
+    let high = 0;
+    let low = 0;
+    
+    // Try to extract data from JSON-LD structured data first (most reliable)
+    try {
+      const jsonLdScripts = root.querySelectorAll('script[type="application/ld+json"]');
+      for (const script of jsonLdScripts) {
+        try {
+          const jsonData = JSON.parse(script.text);
+          if (jsonData.offers && jsonData.offers.price) {
+            price = parseFloat(jsonData.offers.price) || 0;
+            console.log(`Found price in JSON-LD for ${symbol}: ${price}`);
+          }
+        } catch (e) {
+          // Not valid JSON, continue
+        }
+      }
+    } catch (e) {
+      // JSON-LD parsing failed, continue with other methods
+    }
+    
+    // Search for price elements in different possible selectors (TradingView structure)
     const priceSelectors = [
-      '.tv-symbol-price-quote__value',
+      // Modern TradingView selectors
       '[data-field="last_price"]',
+      '[data-field="lastPrice"]',
+      '.tv-symbol-price-quote__value',
       '.js-symbol-last',
       '.tv-symbol-header__price',
-      '[class*="price"]'
+      '[class*="last-price"]',
+      '[class*="price-quote"]',
+      '[class*="symbol-price"]',
+      // Alternative selectors
+      '.tv-symbol-price-quote__value--last',
+      '[data-symbol-last-price]',
+      '[data-field="price"]',
+      // Generic price selectors
+      '[class*="price"]',
+      '[id*="price"]',
+      '[data-price]'
     ];
     
-    for (const selector of priceSelectors) {
-      const priceElement = root.querySelector(selector);
-      if (priceElement) {
-        const rawPriceText = priceElement.text.trim();
-        console.log(`Raw price text for ${symbol}: "${rawPriceText}"`);
-        
-        // Parse prices correctly for TradingView format
-        let priceText = rawPriceText;
-        
-        // Remove units and spaces
-        priceText = priceText.replace(/\s*(USD|usd|$|€|EUR|eur)\s*/gi, '');
-        
-        // Remove all non-numeric characters except commas and dots
-        priceText = priceText.replace(/[^\d.,]/g, '');
-        
-        // Handle TradingView number format
-        if (priceText.includes(',') && priceText.includes('.')) {
-          const lastDotIndex = priceText.lastIndexOf('.');
-          const lastCommaIndex = priceText.lastIndexOf(',');
-          
-          if (lastDotIndex > lastCommaIndex) {
-            priceText = priceText.replace(/,/g, '');
-          } else {
-            priceText = priceText.replace(/\./g, '').replace(/,([^,]*)$/, '.$1');
-          }
-        } else if (priceText.includes(',') && !priceText.includes('.')) {
-          const parts = priceText.split(',');
-          if (parts.length === 2 && parts[1].length === 3 && parts[0].length <= 3) {
-            priceText = priceText.replace(/,/g, '');
-          } else if (parts.length === 2 && parts[1].length <= 4) {
-            priceText = priceText.replace(',', '.');
-          } else {
-            priceText = priceText.replace(/,/g, '');
+    if (price === 0) {
+      for (const selector of priceSelectors) {
+        const priceElements = root.querySelectorAll(selector);
+        for (const priceElement of priceElements) {
+          const rawPriceText = priceElement.text.trim();
+          if (rawPriceText) {
+            console.log(`Trying selector "${selector}" for ${symbol}: "${rawPriceText}"`);
+            
+            // Also check data attributes
+            const dataPrice = priceElement.getAttribute('data-price') || 
+                            priceElement.getAttribute('data-field') ||
+                            priceElement.getAttribute('data-last-price');
+            
+            if (dataPrice) {
+              price = parseNumericValue(dataPrice);
+              if (price > 0) {
+                console.log(`Found price from data attribute for ${symbol}: ${price}`);
+                break;
+              }
+            }
+            
+            // Parse text content
+            price = parseNumericValue(rawPriceText);
+            if (price > 0) {
+              console.log(`Successfully parsed price for ${symbol} using "${selector}": ${price}`);
+              break;
+            }
           }
         }
+        if (price > 0) break;
+      }
+    }
+    
+    // Try to extract change data
+    const changeSelectors = [
+      '[data-field="change"]',
+      '[data-field="changePercent"]',
+      '[class*="change"]',
+      '[class*="percent-change"]',
+      '[class*="absolute-change"]'
+    ];
+    
+    for (const selector of changeSelectors) {
+      const changeElements = root.querySelectorAll(selector);
+      for (const changeElement of changeElements) {
+        const changeText = changeElement.text.trim();
+        const elementClass = changeElement.getAttribute('class') || '';
         
-        console.log(`Processed price text for ${symbol}: "${priceText}"`);
-        price = parseFloat(priceText) || 0;
-        
-        if (price > 0) {
-          console.log(`Successfully parsed price for ${symbol}: ${price}`);
-          break;
+        if (changeText) {
+          const changeValue = parseNumericValue(changeText);
+          
+          // Determine if it's percentage or absolute
+          if (elementClass.includes('percent') || changeText.includes('%')) {
+            percentChange = changeValue;
+          } else {
+            absoluteChange = changeValue;
+          }
         }
       }
     }
     
-    // If no price found, search in general content
+    // Try to extract high/low data
+    const highLowSelectors = [
+      '[data-field="high"]',
+      '[data-field="low"]',
+      '[class*="high"]',
+      '[class*="low"]'
+    ];
+    
+    for (const selector of highLowSelectors) {
+      const elements = root.querySelectorAll(selector);
+      for (const element of elements) {
+        const text = element.text.trim();
+        const elementClass = element.getAttribute('class') || '';
+        const value = parseNumericValue(text);
+        
+        if (elementClass.includes('high') || element.getAttribute('data-field') === 'high') {
+          if (value > 0) high = value;
+        } else if (elementClass.includes('low') || element.getAttribute('data-field') === 'low') {
+          if (value > 0) low = value;
+        }
+      }
+    }
+    
+    // If no price found, search in general content using regex patterns
     if (price === 0) {
       const pricePatterns = [
-        /(\d+\.\d{1,4})\s*USD/i,
-        /(\d{1,3}(?:,\d{3})*\.\d{1,4})\s*USD/i,
-        /(\d{1,3}(?:,\d{3})+)\s*USD/i,
-        /(\d+)\s*USD/i
+        // Patterns for price with USD
+        /(?:price|last|close)[\s:]*(\d{1,3}(?:,\d{3})*(?:\.\d+)?)\s*USD/i,
+        /(\d{1,3}(?:,\d{3})*(?:\.\d+)?)\s*USD/i,
+        // Patterns for standalone numbers that look like prices
+        /(?:last|close|price)[\s:]*(\d+\.\d{2,4})/i,
+        // Look for numbers in specific contexts
+        /"last_price":\s*(\d+\.?\d*)/i,
+        /"price":\s*(\d+\.?\d*)/i,
+        /lastPrice["\s:]*(\d+\.?\d*)/i
       ];
       
       for (const pattern of pricePatterns) {
         const priceMatch = htmlContent.match(pattern);
-        if (priceMatch) {
-          let matchedPrice = priceMatch[1];
-          
-          if (matchedPrice.includes(',') && matchedPrice.includes('.')) {
-            const lastDotIndex = matchedPrice.lastIndexOf('.');
-            const lastCommaIndex = matchedPrice.lastIndexOf(',');
-            
-            if (lastDotIndex > lastCommaIndex) {
-              matchedPrice = matchedPrice.replace(/,/g, '');
-            } else {
-              matchedPrice = matchedPrice.replace(/\./g, '').replace(/,([^,]*)$/, '.$1');
-            }
-          } else if (matchedPrice.includes(',') && !matchedPrice.includes('.')) {
-            const parts = matchedPrice.split(',');
-            if (parts.length === 2 && parts[1].length === 3 && parts[0].length <= 3) {
-              matchedPrice = matchedPrice.replace(/,/g, '');
-            } else if (parts.length === 2 && parts[1].length <= 4) {
-              matchedPrice = matchedPrice.replace(',', '.');
-            } else {
-              matchedPrice = matchedPrice.replace(/,/g, '');
-            }
-          }
-          
-          price = parseFloat(matchedPrice) || 0;
+        if (priceMatch && priceMatch[1]) {
+          price = parseNumericValue(priceMatch[1]);
           if (price > 0) {
-            console.log(`Found price in content for ${symbol}: ${price}`);
+            console.log(`Found price in content for ${symbol} using pattern: ${price}`);
             break;
           }
         }
       }
     }
     
-      // Return null if no valid data found on this exchange
-      if (price === 0) {
-        console.warn(`No valid price found for ${symbol} on ${exchangeLabel}, trying next exchange...`);
-        continue; // Try next exchange
+    // Try to extract from JavaScript variables in the page
+    if (price === 0) {
+      const jsPricePatterns = [
+        /window\.__TV_DATA__\s*=\s*\{[^}]*"last_price":\s*(\d+\.?\d*)/i,
+        /symbolInfo\s*=\s*\{[^}]*"last_price":\s*(\d+\.?\d*)/i,
+        /quoteData\s*=\s*\{[^}]*"last":\s*(\d+\.?\d*)/i
+      ];
+      
+      for (const pattern of jsPricePatterns) {
+        const match = htmlContent.match(pattern);
+        if (match && match[1]) {
+          price = parseNumericValue(match[1]);
+          if (price > 0) {
+            console.log(`Found price in JavaScript for ${symbol}: ${price}`);
+            break;
+          }
+        }
       }
-      
-      // Success! Return the commodity data
-      console.log(`Successfully fetched ${symbol} from ${exchangeLabel}`);
-      return {
-        symbol,
-        name,
-        price,
-        percentChange,
-        absoluteChange,
-        high: 0,
-        low: 0,
-        technicalEvaluation: 'Neutral',
-        type,
-        category: 'freight'
-      };
-      
-    } catch (error) {
-      console.warn(`Error fetching ${symbol} from ${exchangeLabel}:`, error);
-      // Continue to next exchange
-      continue;
     }
+    
+    // Return null if no valid data
+    if (price === 0) {
+      console.warn(`No valid price found for ${symbol}. HTML length: ${htmlContent.length}`);
+      // Log a sample of the HTML for debugging
+      const sample = htmlContent.substring(0, 2000);
+      console.log(`HTML sample for ${symbol}:`, sample);
+      return null;
+    }
+    
+    // Calculate percent change from absolute change if needed
+    if (percentChange === 0 && absoluteChange !== 0 && price !== 0) {
+      const previousPrice = price - absoluteChange;
+      if (previousPrice > 0) {
+        percentChange = (absoluteChange / previousPrice) * 100;
+      }
+    }
+    
+    // Set default high/low if not found
+    if (high === 0) high = price * 1.02; // Estimate
+    if (low === 0) low = price * 0.98; // Estimate
+    
+    const commodity: Commodity = {
+      symbol,
+      name,
+      price,
+      percentChange,
+      absoluteChange,
+      high,
+      low,
+      technicalEvaluation: percentChange >= 0 ? 'Positive' : 'Negative',
+      type,
+      category: 'freight'
+    };
+    
+    console.log(`Successfully extracted data for ${symbol}:`, {
+      price,
+      percentChange,
+      absoluteChange,
+      high,
+      low
+    });
+    
+    return commodity;
+    
+  } catch (error) {
+    console.error(`Error fetching ${symbol}:`, error);
+    return null;
   }
-  
-  // If we get here, all exchanges failed
-  const allExchangesList = allExchangesToTry.map(e => e || 'direct').join(', ');
-  console.error(`Failed to fetch ${symbol} from all exchanges: ${allExchangesList}`);
-  return null;
 }
 
 /**
