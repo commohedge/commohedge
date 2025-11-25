@@ -173,6 +173,14 @@ function loadFromCache(category: CommodityCategory): any[] | null {
       return null;
     }
 
+    // Don't return empty arrays from cache (especially for freight which might have failed)
+    // This ensures we try to fetch fresh data if the cache contains no results
+    if (!cacheData.data || cacheData.data.length === 0) {
+      console.log(`Cache for ${category} contains empty array, ignoring cache`);
+      localStorage.removeItem(getCacheKey(category));
+      return null;
+    }
+
     console.log(`Loading cached data for ${category}: ${cacheData.data.length} items (${Math.round((now - cacheData.timestamp) / (1000 * 60 * 60))} hours old)`);
     return cacheData.data;
   } catch (error) {
@@ -204,6 +212,12 @@ export function clearAllCache(): void {
   } catch (error) {
     console.error('Error clearing all cache:', error);
   }
+}
+
+// Function to clear freight cache specifically (helper function)
+export function clearFreightCache(): void {
+  clearCache('freight');
+  console.log('Freight cache cleared. Next fetch will be fresh.');
 }
 
 // Function to get cache info
@@ -489,9 +503,23 @@ export async function fetchCommoditiesData(category: CommodityCategory = 'metals
 
     // Special handling for freight
     if (category === 'freight') {
-      const freightData = await fetchFreightData();
-      saveToCache(category, freightData);
-      return freightData;
+      try {
+        const freightData = await fetchFreightData();
+        if (freightData && freightData.length > 0) {
+          saveToCache(category, freightData);
+          return freightData;
+        } else {
+          console.warn('Freight data fetch returned empty array');
+          // Ne pas sauvegarder un tableau vide dans le cache
+          // Retourner un tableau vide pour que l'UI affiche "No data"
+          return [];
+        }
+      } catch (error) {
+        console.error('Error fetching freight data:', error);
+        // Ne pas propager l'erreur, retourner un tableau vide
+        // pour que l'UI puisse afficher un message d'erreur approprié
+        return [];
+      }
     }
     
     // Special handling for bunker
@@ -755,14 +783,16 @@ async function fetchFreightSymbolData(symbol: string, name: string, type: Commod
  * Retrieves all freight data in parallel
  */
 async function fetchFreightData(): Promise<Commodity[]> {
-  console.log('Fetching freight data from individual symbol pages...');
+  console.log(`Fetching freight data from individual symbol pages... (${FREIGHT_SYMBOLS.length} symbols)`);
   
-  // Limit to 5 symbols in parallel to avoid API overload
-  const batchSize = 5;
+  // Limit to 3 symbols in parallel to avoid API overload (réduit pour plus de stabilité)
+  const batchSize = 3;
   const results: Commodity[] = [];
+  const errors: string[] = [];
   
   for (let i = 0; i < FREIGHT_SYMBOLS.length; i += batchSize) {
     const batch = FREIGHT_SYMBOLS.slice(i, i + batchSize);
+    console.log(`Processing batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(FREIGHT_SYMBOLS.length / batchSize)}: ${batch.map(b => b.symbol).join(', ')}`);
     
     const batchPromises = batch.map(({ symbol, name, type }) => 
       fetchFreightSymbolData(symbol, name, type)
@@ -773,18 +803,32 @@ async function fetchFreightData(): Promise<Commodity[]> {
     batchResults.forEach((result, index) => {
       if (result.status === 'fulfilled' && result.value) {
         results.push(result.value);
+        console.log(`✅ Successfully fetched ${batch[index].symbol}: ${result.value.price}`);
       } else {
-        console.warn(`Failed to fetch ${batch[index].symbol}:`, result.status === 'rejected' ? result.reason : 'No data');
+        const errorMsg = result.status === 'rejected' 
+          ? result.reason?.message || String(result.reason)
+          : 'No data returned';
+        errors.push(`${batch[index].symbol}: ${errorMsg}`);
+        console.warn(`❌ Failed to fetch ${batch[index].symbol}:`, errorMsg);
       }
     });
     
     // Small delay between batches to respect API limits
     if (i + batchSize < FREIGHT_SYMBOLS.length) {
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      await new Promise(resolve => setTimeout(resolve, 2000)); // Augmenté à 2 secondes
     }
   }
   
-  console.log(`Successfully fetched ${results.length} freight commodities`);
+  console.log(`✅ Successfully fetched ${results.length}/${FREIGHT_SYMBOLS.length} freight commodities`);
+  if (errors.length > 0) {
+    console.warn(`⚠️ ${errors.length} symbols failed:`, errors.slice(0, 5)); // Log les 5 premières erreurs
+  }
+  
+  if (results.length === 0) {
+    console.error('❌ No freight data could be fetched. All symbols failed.');
+    throw new Error('Failed to fetch any freight data. Please check the console for details.');
+  }
+  
   return results;
 }
 
@@ -1106,4 +1150,5 @@ function createBunkerCommodity(
     category: 'bunker'
   };
 }
+
 
