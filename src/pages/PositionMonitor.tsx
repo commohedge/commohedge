@@ -391,7 +391,7 @@ const PositionMonitor = () => {
           const newDailyPnL = newUnrealizedPnL * 0.1;
 
           updated.set(pos.id, {
-            ...pos,
+          ...pos,
             marketPrice: newMarketPrice,
             unrealizedPnL: newUnrealizedPnL,
             dailyPnL: newDailyPnL,
@@ -677,7 +677,7 @@ const PositionMonitor = () => {
           <CardHeader>
             <div className="flex justify-between items-start">
               <div>
-                <CardTitle>Live Positions</CardTitle>
+            <CardTitle>Live Positions</CardTitle>
                 <CardDescription>Real-time position updates and P&L - Detailed by Maturity - Synchronized with Commodity Exposures</CardDescription>
               </div>
             </div>
@@ -754,40 +754,40 @@ const PositionMonitor = () => {
                 No positions found. {exposures.length === 0 ? "Add commodity exposures to see positions here." : "Try adjusting your filters."}
               </div>
             ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Commodity</TableHead>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Commodity</TableHead>
                     <TableHead>Maturity</TableHead>
-                    <TableHead>Position</TableHead>
-                    <TableHead>Market Price</TableHead>
-                    <TableHead>Entry Price</TableHead>
-                    <TableHead>Unrealized P&L</TableHead>
-                    <TableHead>Daily P&L</TableHead>
-                    <TableHead>Hedge Status</TableHead>
-                    <TableHead>Last Trade</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
+                  <TableHead>Position</TableHead>
+                  <TableHead>Market Price</TableHead>
+                  <TableHead>Entry Price</TableHead>
+                  <TableHead>Unrealized P&L</TableHead>
+                  <TableHead>Daily P&L</TableHead>
+                  <TableHead>Hedge Status</TableHead>
+                  <TableHead>Last Trade</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                   {displayPositions.map((position) => (
-                    <TableRow key={position.id}>
-                      <TableCell>
-                        <Badge variant="outline" className="font-mono">
-                          {position.commodity}
-                        </Badge>
-                      </TableCell>
+                  <TableRow key={position.id}>
+                    <TableCell>
+                      <Badge variant="outline" className="font-mono">
+                        {position.commodity}
+                      </Badge>
+                    </TableCell>
                       <TableCell className="font-mono text-sm">
                         {position.maturity.toLocaleDateString()}
                       </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          {getExposureIcon(position.exposure)}
-                          <span className="font-mono">
-                            {Math.abs(position.position).toLocaleString()} {position.unit}
-                          </span>
-                        </div>
-                      </TableCell>
-                      <TableCell className="font-mono">
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        {getExposureIcon(position.exposure)}
+                        <span className="font-mono">
+                          {Math.abs(position.position).toLocaleString()} {position.unit}
+                        </span>
+                      </div>
+                    </TableCell>
+                    <TableCell className="font-mono">
                         {editingPrice === position.id ? (
                           <div className="flex items-center gap-2">
                             <Input
@@ -831,30 +831,30 @@ const PositionMonitor = () => {
                             </Button>
                           </div>
                         )}
-                      </TableCell>
-                      <TableCell className="font-mono">
-                        ${formatPrice(position.entryPrice, position.commodity)}
-                      </TableCell>
-                      <TableCell>
-                        <span className={`font-mono font-medium ${getPnLColor(position.unrealizedPnL)}`}>
-                          {formatCurrency(position.unrealizedPnL)}
-                        </span>
-                      </TableCell>
-                      <TableCell>
-                        <span className={`font-mono font-medium ${getPnLColor(position.dailyPnL)}`}>
-                          {formatCurrency(position.dailyPnL)}
-                        </span>
-                      </TableCell>
-                      <TableCell>
+                    </TableCell>
+                    <TableCell className="font-mono">
+                      ${formatPrice(position.entryPrice, position.commodity)}
+                    </TableCell>
+                    <TableCell>
+                      <span className={`font-mono font-medium ${getPnLColor(position.unrealizedPnL)}`}>
+                        {formatCurrency(position.unrealizedPnL)}
+                      </span>
+                    </TableCell>
+                    <TableCell>
+                      <span className={`font-mono font-medium ${getPnLColor(position.dailyPnL)}`}>
+                        {formatCurrency(position.dailyPnL)}
+                      </span>
+                    </TableCell>
+                    <TableCell>
                         {getHedgeStatusBadge(position.hedge_status, position.hedge_ratio)}
-                      </TableCell>
-                      <TableCell className="font-mono text-sm">
-                        {position.last_trade}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                    </TableCell>
+                    <TableCell className="font-mono text-sm">
+                      {position.last_trade}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
             )}
           </CardContent>
         </Card>
@@ -872,33 +872,33 @@ const PositionMonitor = () => {
         <CardContent>
           <div className="space-y-3">
             {displayPositions.filter(pos => pos.hedge_status === "None").length > 0 && (
-              <div className="flex items-center gap-3 p-3 border rounded-lg bg-yellow-50 border-yellow-200">
-                <Zap className="h-4 w-4 text-yellow-600" />
-                <div className="flex-1">
+            <div className="flex items-center gap-3 p-3 border rounded-lg bg-yellow-50 border-yellow-200">
+              <Zap className="h-4 w-4 text-yellow-600" />
+              <div className="flex-1">
                   <p className="text-sm font-medium">Unhedged Positions Warning</p>
                   <p className="text-xs text-muted-foreground">
                     {displayPositions.filter(pos => pos.hedge_status === "None").length} position(s) without hedge coverage
                   </p>
-                </div>
-                <Badge variant="outline" className="text-xs">
-                  {new Date().toLocaleTimeString()}
-                </Badge>
               </div>
+              <Badge variant="outline" className="text-xs">
+                  {new Date().toLocaleTimeString()}
+              </Badge>
+            </div>
             )}
             
             {displayPositions.filter(pos => pos.hedge_status === "Partial").length > 0 && (
               <div className="flex items-center gap-3 p-3 border rounded-lg bg-orange-50 border-orange-200">
                 <AlertTriangle className="h-4 w-4 text-orange-600" />
-                <div className="flex-1">
+              <div className="flex-1">
                   <p className="text-sm font-medium">Partial Hedge Coverage</p>
                   <p className="text-xs text-muted-foreground">
                     {displayPositions.filter(pos => pos.hedge_status === "Partial").length} position(s) with partial hedge coverage
                   </p>
-                </div>
-                <Badge variant="outline" className="text-xs">
-                  {new Date().toLocaleTimeString()}
-                </Badge>
               </div>
+              <Badge variant="outline" className="text-xs">
+                  {new Date().toLocaleTimeString()}
+              </Badge>
+            </div>
             )}
 
             {displayPositions.length === 0 && (
@@ -913,4 +913,4 @@ const PositionMonitor = () => {
   );
 };
 
-export default PositionMonitor;
+export default PositionMonitor; 

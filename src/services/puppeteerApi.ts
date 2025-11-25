@@ -59,12 +59,20 @@ export async function scrapePage(url: string): Promise<ScrapingResult> {
 
 /**
  * Scrape une page TradingView spécifique pour un symbole
+ * @param symbol - Le symbole à scraper (ex: 'CS61!', 'CL1!')
+ * @param exchange - L'exchange à utiliser (ex: 'NYMEX', 'ICE', 'BALTIC', 'CME'). Si null, essaie sans préfixe d'exchange. Si non fourni, essaie NYMEX par défaut
  */
-export async function scrapeTradingViewSymbol(symbol: string): Promise<ScrapingResult> {
+export async function scrapeTradingViewSymbol(symbol: string, exchange?: string | null): Promise<ScrapingResult> {
   try {
-    console.log(`Scraping TradingView symbol: ${symbol}`);
+    console.log(`Scraping TradingView symbol: ${symbol}${exchange ? ` on ${exchange}` : exchange === null ? ' (direct)' : ''}`);
     
-    const apiUrl = `${SCRAPING_SERVER_URL}/api/tradingview/symbol/${symbol}`;
+    let apiUrl = `${SCRAPING_SERVER_URL}/api/tradingview/symbol/${symbol}`;
+    if (exchange !== undefined && exchange !== null) {
+      apiUrl += `?exchange=${exchange}`;
+    } else if (exchange === null) {
+      // Try direct symbol access (no exchange prefix)
+      apiUrl += `?exchange=`;
+    }
     
     const response = await fetch(apiUrl, {
       timeout: 20000 // Timeout optimisé pour les symboles
@@ -83,25 +91,14 @@ export async function scrapeTradingViewSymbol(symbol: string): Promise<ScrapingR
     console.warn(`Vercel function failed for symbol ${symbol}, falling back:`, error);
     
     // Fallback vers la fonction générique ou API Ninja
-    // Pour les symboles Freight, essayer différentes URLs d'exchange
-    let url = `https://www.tradingview.com/symbols/${symbol}/`;
-    
-    // Si le symbole contient '!', essayer sans le '!' d'abord
-    if (symbol.includes('!')) {
-      const symbolWithoutExclamation = symbol.replace('!', '');
-      // Essayer différentes URLs d'exchange pour les symboles Freight
-      const exchangeUrls = [
-        `https://www.tradingview.com/symbols/${symbol}/`,
-        `https://www.tradingview.com/symbols/ICE-${symbolWithoutExclamation}/`,
-        `https://www.tradingview.com/symbols/CME-${symbolWithoutExclamation}/`,
-        `https://www.tradingview.com/symbols/NYMEX-${symbolWithoutExclamation}/`,
-        `https://www.tradingview.com/symbols/${symbolWithoutExclamation}/`
-      ];
-      
-      // Essayer la première URL (avec '!')
-      url = exchangeUrls[0];
+    let url: string;
+    if (exchange === null) {
+      // Try direct symbol access
+      url = `https://www.tradingview.com/symbols/${symbol}/`;
+    } else {
+      const exchangePrefix = exchange || 'NYMEX';
+      url = `https://www.tradingview.com/symbols/${exchangePrefix}-${symbol}/`;
     }
-    
     return scrapePage(url);
   }
 }

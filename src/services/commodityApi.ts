@@ -16,6 +16,56 @@ const CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
 // List of available commodity types
 export type CommodityCategory = 'metals' | 'agricultural' | 'energy' | 'freight' | 'bunker';
 
+// Mapping of freight symbols to their TradingView exchanges
+// Freight symbols are typically on ICE (Intercontinental Exchange) or Baltic Exchange
+const FREIGHT_EXCHANGE_MAP: { [key: string]: string[] } = {
+  // Container Freight - typically on ICE
+  'CS61!': ['ICE', 'CME'],
+  'CS31!': ['ICE', 'CME'],
+  'CS51!': ['ICE', 'CME'],
+  'CS11!': ['ICE', 'CME'],
+  'CS21!': ['ICE', 'CME'],
+  'CS41!': ['ICE', 'CME'],
+  
+  // Freight Routes - typically on Baltic Exchange (BALTIC) or ICE
+  'TM1!': ['BALTIC', 'ICE'],
+  'TD81!': ['BALTIC', 'ICE'],
+  'TC71!': ['BALTIC', 'ICE'],
+  'TC61!': ['BALTIC', 'ICE'],
+  'TH1!': ['BALTIC', 'ICE'],
+  'TK1!': ['BALTIC', 'ICE'],
+  'TL1!': ['BALTIC', 'ICE'],
+  'AEB1!': ['BALTIC', 'ICE'],
+  'T2D1!': ['BALTIC', 'ICE'],
+  'T7C1!': ['BALTIC', 'ICE'],
+  'TD31!': ['BALTIC', 'ICE'],
+  'TDM1!': ['BALTIC', 'ICE'],
+  'FRS1!': ['BALTIC', 'ICE'],
+  'T5C1!': ['BALTIC', 'ICE'],
+  'ACB1!': ['BALTIC', 'ICE'],
+  'FRC1!': ['BALTIC', 'ICE'],
+  'T8C1!': ['BALTIC', 'ICE'],
+  'TC11!': ['BALTIC', 'ICE'],
+  'TF21!': ['BALTIC', 'ICE'],
+  
+  // LNG Freight - typically on ICE or CME
+  'BG11!': ['ICE', 'CME'],
+  'BG31!': ['ICE', 'CME'],
+  'BG21!': ['ICE', 'CME'],
+  'BL11!': ['BALTIC', 'ICE'],
+  'BL21!': ['BALTIC', 'ICE'],
+  'BL31!': ['BALTIC', 'ICE'],
+  
+  // Dirty Freight - typically on ICE or CME
+  'USC1!': ['ICE', 'CME'],
+  'USE1!': ['ICE', 'CME'],
+  'XUK1!': ['ICE', 'CME'],
+  
+  // Liquid Petroleum Gas Freight - typically on Baltic or ICE
+  'FLJ1!': ['BALTIC', 'ICE'],
+  'FLP1!': ['BALTIC', 'ICE'],
+};
+
 // List of freight symbols with their information
 const FREIGHT_SYMBOLS = [
   // Container Freight
@@ -454,31 +504,9 @@ export async function fetchCommoditiesData(category: CommodityCategory = 'metals
 
     // Special handling for freight
     if (category === 'freight') {
-      try {
-        const freightData = await fetchFreightData();
-        if (freightData && freightData.length > 0) {
-          saveToCache(category, freightData);
-          return freightData;
-        } else {
-          console.warn('[Freight] No data returned, trying cache...');
-          const cachedData = loadFromCache(category);
-          if (cachedData && cachedData.length > 0) {
-            console.log(`[Freight] Returning cached data: ${cachedData.length} items`);
-            return normalizeCommoditySymbols(cachedData) as any;
-          }
-          throw new Error('No freight data available and no cache found');
-        }
-      } catch (error) {
-        console.error('[Freight] Error fetching freight data:', error);
-        // Try to return cached data as fallback
-        const cachedData = loadFromCache(category);
-        if (cachedData && cachedData.length > 0) {
-          console.log(`[Freight] Returning cached data as fallback: ${cachedData.length} items`);
-          return normalizeCommoditySymbols(cachedData) as any;
-        }
-        // If no cache, throw the error
-        throw error;
-      }
+      const freightData = await fetchFreightData();
+      saveToCache(category, freightData);
+      return freightData;
     }
     
     // Special handling for bunker
@@ -512,56 +540,60 @@ export async function refreshCommoditiesData(category: CommodityCategory = 'meta
 
 /**
  * Retrieves data for a specific freight symbol from TradingView
+ * Tries multiple exchanges in order until one succeeds
  */
 async function fetchFreightSymbolData(symbol: string, name: string, type: Commodity['type']): Promise<Commodity | null> {
-  try {
-    console.log(`[Freight] Fetching data for ${symbol}...`);
-    const data = await scrapeTradingViewSymbol(symbol);
+  // Get the list of exchanges to try for this symbol
+  // Also try without exchange prefix as some symbols might be accessible directly
+  const exchangesToTry = FREIGHT_EXCHANGE_MAP[symbol] || ['ICE', 'BALTIC', 'CME', 'NYMEX'];
+  
+  // Add null to try without exchange prefix (direct symbol access)
+  const allExchangesToTry: (string | null)[] = [...exchangesToTry, null];
+  
+  // Try each exchange until one succeeds
+  for (const exchange of allExchangesToTry) {
+    try {
+      const exchangeLabel = exchange ? `${exchange} exchange` : 'direct (no exchange prefix)';
+      console.log(`Trying to fetch ${symbol} on ${exchangeLabel}...`);
+      const data = await scrapeTradingViewSymbol(symbol, exchange);
     
-    if (!data || !data.data) {
-      console.warn(`[Freight] No data received for ${symbol}`);
-      return null;
-    }
+      if (!data || !data.data) {
+        console.warn(`No data received for ${symbol} on ${exchange}`);
+        continue; // Try next exchange
+      }
 
-    // Parse the HTML to extract data
-    const htmlContent = data.data;
-    const root = parse(htmlContent);
+      // Parse the HTML to extract data
+      const htmlContent = data.data;
+      const root = parse(htmlContent);
+      
+      // Extract the main price
+      let price = 0;
+      let percentChange = 0;
+      let absoluteChange = 0;
     
-    // Extract the main price
-    let price = 0;
-    let percentChange = 0;
-    let absoluteChange = 0;
-    
-    // Search for price elements in different possible selectors (updated for TradingView's current structure)
+    // Search for price elements in different possible selectors
     const priceSelectors = [
       '.tv-symbol-price-quote__value',
       '[data-field="last_price"]',
       '.js-symbol-last',
       '.tv-symbol-header__price',
-      '[class*="price"]',
-      '[class*="last"]',
-      '.tv-symbol-price-quote__value--last',
-      '[data-symbol-last-price]',
-      '.js-symbol-price',
-      'span[class*="tv-symbol-price-quote"]'
+      '[class*="price"]'
     ];
     
     for (const selector of priceSelectors) {
-      const priceElements = root.querySelectorAll(selector);
-      for (const priceElement of priceElements) {
+      const priceElement = root.querySelector(selector);
+      if (priceElement) {
         const rawPriceText = priceElement.text.trim();
-        if (!rawPriceText) continue;
-        
-        console.log(`[Freight] Raw price text for ${symbol}: "${rawPriceText}"`);
+        console.log(`Raw price text for ${symbol}: "${rawPriceText}"`);
         
         // Parse prices correctly for TradingView format
         let priceText = rawPriceText;
         
         // Remove units and spaces
-        priceText = priceText.replace(/\s*(USD|usd|$|€|EUR|eur|points?|pts?)\s*/gi, '');
+        priceText = priceText.replace(/\s*(USD|usd|$|€|EUR|eur)\s*/gi, '');
         
-        // Remove all non-numeric characters except commas, dots, and minus signs
-        priceText = priceText.replace(/[^\d.,-]/g, '');
+        // Remove all non-numeric characters except commas and dots
+        priceText = priceText.replace(/[^\d.,]/g, '');
         
         // Handle TradingView number format
         if (priceText.includes(',') && priceText.includes('.')) {
@@ -584,29 +616,23 @@ async function fetchFreightSymbolData(symbol: string, name: string, type: Commod
           }
         }
         
-        console.log(`[Freight] Processed price text for ${symbol}: "${priceText}"`);
-        const parsedPrice = parseFloat(priceText);
+        console.log(`Processed price text for ${symbol}: "${priceText}"`);
+        price = parseFloat(priceText) || 0;
         
-        if (!isNaN(parsedPrice) && parsedPrice > 0) {
-          price = parsedPrice;
-          console.log(`[Freight] Successfully parsed price for ${symbol}: ${price}`);
+        if (price > 0) {
+          console.log(`Successfully parsed price for ${symbol}: ${price}`);
           break;
         }
       }
-      if (price > 0) break;
     }
     
-    // If no price found, search in general content with more patterns
+    // If no price found, search in general content
     if (price === 0) {
       const pricePatterns = [
-        /last[:\s]*(\d+\.\d{1,6})/i,
-        /price[:\s]*(\d+\.\d{1,6})/i,
-        /(\d+\.\d{1,6})\s*USD/i,
-        /(\d{1,3}(?:,\d{3})*\.\d{1,6})\s*USD/i,
+        /(\d+\.\d{1,4})\s*USD/i,
+        /(\d{1,3}(?:,\d{3})*\.\d{1,4})\s*USD/i,
         /(\d{1,3}(?:,\d{3})+)\s*USD/i,
-        /(\d+)\s*USD/i,
-        /"last_price":\s*(\d+\.?\d*)/i,
-        /data-field="last_price"[^>]*>([^<]+)/i
+        /(\d+)\s*USD/i
       ];
       
       for (const pattern of pricePatterns) {
@@ -634,60 +660,64 @@ async function fetchFreightSymbolData(symbol: string, name: string, type: Commod
             }
           }
           
-          const parsedPrice = parseFloat(matchedPrice);
-          if (!isNaN(parsedPrice) && parsedPrice > 0) {
-            price = parsedPrice;
-            console.log(`[Freight] Found price in content for ${symbol}: ${price}`);
+          price = parseFloat(matchedPrice) || 0;
+          if (price > 0) {
+            console.log(`Found price in content for ${symbol}: ${price}`);
             break;
           }
         }
       }
     }
     
-    // Return null if no valid data
-    if (price === 0) {
-      console.warn(`[Freight] No valid price found for ${symbol}. HTML length: ${htmlContent.length}`);
-      // Log a sample of the HTML for debugging
-      if (htmlContent.length > 0) {
-        const sample = htmlContent.substring(0, 500);
-        console.log(`[Freight] HTML sample for ${symbol}:`, sample);
+      // Return null if no valid data found on this exchange
+      if (price === 0) {
+        const exchangeLabel = exchange ? `${exchange} exchange` : 'direct access';
+        console.warn(`No valid price found for ${symbol} on ${exchangeLabel}, trying next exchange...`);
+        continue; // Try next exchange
       }
-      return null;
+      
+      // Success! Return the commodity data
+      const exchangeLabel = exchange ? `${exchange} exchange` : 'direct access';
+      console.log(`Successfully fetched ${symbol} from ${exchangeLabel}`);
+      return {
+        symbol,
+        name,
+        price,
+        percentChange,
+        absoluteChange,
+        high: 0,
+        low: 0,
+        technicalEvaluation: 'Neutral',
+        type,
+        category: 'freight'
+      };
+      
+    } catch (error) {
+      const exchangeLabel = exchange ? `${exchange} exchange` : 'direct access';
+      console.warn(`Error fetching ${symbol} from ${exchangeLabel}:`, error);
+      // Continue to next exchange
+      continue;
     }
-    
-    return {
-      symbol,
-      name,
-      price,
-      percentChange,
-      absoluteChange,
-      high: 0,
-      low: 0,
-      technicalEvaluation: 'Neutral',
-      type,
-      category: 'freight'
-    };
-    
-  } catch (error) {
-    console.error(`[Freight] Error fetching ${symbol}:`, error);
-    return null;
   }
+  
+  // If we get here, all exchanges failed
+  const allExchangesList = allExchangesToTry.map(e => e || 'direct').join(', ');
+  console.error(`Failed to fetch ${symbol} from all exchanges: ${allExchangesList}`);
+  return null;
 }
 
 /**
  * Retrieves all freight data in parallel
  */
 async function fetchFreightData(): Promise<Commodity[]> {
-  console.log(`[Freight] Fetching freight data from individual symbol pages... (${FREIGHT_SYMBOLS.length} symbols)`);
+  console.log('Fetching freight data from individual symbol pages...');
   
-  // Limit to 3 symbols in parallel to avoid API overload (reduced from 5)
-  const batchSize = 3;
+  // Limit to 5 symbols in parallel to avoid API overload
+  const batchSize = 5;
   const results: Commodity[] = [];
-  const errors: Array<{ symbol: string; error: string }> = [];
   
   for (let i = 0; i < FREIGHT_SYMBOLS.length; i += batchSize) {
     const batch = FREIGHT_SYMBOLS.slice(i, i + batchSize);
-    console.log(`[Freight] Processing batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(FREIGHT_SYMBOLS.length / batchSize)}: ${batch.map(b => b.symbol).join(', ')}`);
     
     const batchPromises = batch.map(({ symbol, name, type }) => 
       fetchFreightSymbolData(symbol, name, type)
@@ -696,37 +726,21 @@ async function fetchFreightData(): Promise<Commodity[]> {
     const batchResults = await Promise.allSettled(batchPromises);
     
     batchResults.forEach((result, index) => {
-      const { symbol } = batch[index];
       if (result.status === 'fulfilled' && result.value) {
         results.push(result.value);
-        console.log(`[Freight] ✅ Successfully fetched ${symbol}`);
       } else {
-        const errorMsg = result.status === 'rejected' 
-          ? result.reason?.message || String(result.reason)
-          : 'No data returned';
-        errors.push({ symbol, error: errorMsg });
-        console.warn(`[Freight] ❌ Failed to fetch ${symbol}:`, errorMsg);
+        console.warn(`Failed to fetch ${batch[index].symbol}:`, result.status === 'rejected' ? result.reason : 'No data');
       }
     });
     
     // Small delay between batches to respect API limits
     if (i + batchSize < FREIGHT_SYMBOLS.length) {
-      await new Promise(resolve => setTimeout(resolve, 1500)); // Increased delay
+      await new Promise(resolve => setTimeout(resolve, 1000));
     }
   }
   
-  console.log(`[Freight] Successfully fetched ${results.length}/${FREIGHT_SYMBOLS.length} freight commodities`);
-  if (errors.length > 0) {
-    console.warn(`[Freight] Errors encountered:`, errors);
-  }
-  
-  // If we got some results, return them even if not all succeeded
-  if (results.length > 0) {
-    return results;
-  }
-  
-  // If no results at all, throw an error to trigger fallback or cache
-  throw new Error(`Failed to fetch any freight data. ${errors.length} errors encountered.`);
+  console.log(`Successfully fetched ${results.length} freight commodities`);
+  return results;
 }
 
 /**
@@ -1047,5 +1061,4 @@ function createBunkerCommodity(
     category: 'bunker'
   };
 }
-
 
