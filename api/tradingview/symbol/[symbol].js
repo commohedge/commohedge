@@ -36,18 +36,9 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'Symbol parameter is required' });
   }
 
-  // Determine the correct exchange for the symbol
-  // Freight symbols are typically on ICE, not NYMEX
-  let exchange = 'NYMEX';
-  if (symbol.startsWith('CS') || symbol.startsWith('T') || symbol.startsWith('TD') || 
-      symbol.startsWith('TC') || symbol.startsWith('TF') || symbol.startsWith('FR') || 
-      symbol.startsWith('AE') || symbol.startsWith('BG') || symbol.startsWith('BL') ||
-      symbol.startsWith('USC') || symbol.startsWith('USE') || symbol.startsWith('XUK') ||
-      symbol.startsWith('FLJ') || symbol.startsWith('FLP')) {
-    exchange = 'ICE';
-  }
-
-  const url = `https://www.tradingview.com/symbols/${exchange}-${symbol}/`;
+  // Construct URL - handle symbols with or without exclamation mark
+  const cleanSymbol = symbol.replace(/^NYMEX-/, ''); // Remove NYMEX- prefix if present
+  const url = `https://www.tradingview.com/symbols/NYMEX-${cleanSymbol}/`;
 
   let browser = null;
   let page = null;
@@ -63,30 +54,48 @@ export default async function handler(req, res) {
     await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36');
     
     // Naviguer vers la page
-    console.log(`Navigating to: ${url} (exchange: ${exchange}, symbol: ${symbol})`);
+    console.log(`Navigating to: ${url}`);
     await page.goto(url, { 
-      waitUntil: 'networkidle0',
-      timeout: 30000 
+      waitUntil: 'networkidle2',
+      timeout: 45000 
     });
     console.log('TradingView symbol page loaded successfully');
     
-    // Attendre que le contenu se charge (augmenté pour les pages freight qui peuvent être plus lentes)
+    // Attendre que le contenu se charge (augmenté pour les symboles freight)
     console.log('Waiting for TradingView symbol content to render...');
+    
+    // Attendre que les éléments de prix soient présents
+    try {
+      await page.waitForSelector('.tv-symbol-price-quote__value, [data-field="last_price"], .js-symbol-last, [class*="price"]', {
+        timeout: 10000
+      }).catch(() => {
+        console.log('Price selector not found, continuing anyway...');
+      });
+    } catch (e) {
+      console.log('Waiting for price selectors timed out, continuing...');
+    }
+    
+    // Attendre un peu plus pour que les données JSON se chargent
     await new Promise(resolve => setTimeout(resolve, 8000));
     console.log('Wait completed');
     
-    // Vérifier si la page contient une erreur ou un message "symbol not found"
-    const html = await page.content();
-    if (html.includes('Symbol not found') || html.includes('404') || 
-        html.includes('Page not found') || html.includes('symbol does not exist') ||
-        html.includes('This symbol is not available')) {
-      console.warn(`Symbol ${symbol} not found on ${exchange}`);
-      return res.status(404).json({ 
-        error: 'Symbol not found',
-        message: `Symbol ${symbol} not found on ${exchange}`,
-        data: null
+    // Vérifier si on a un CAPTCHA
+    const hasCaptcha = await page.evaluate(() => {
+      return document.body.textContent.includes('Complete the test below') || 
+             document.body.textContent.includes('Just one more step') ||
+             document.querySelector('[class*="captcha"], [id*="captcha"]') !== null;
+    });
+    
+    if (hasCaptcha) {
+      console.warn('CAPTCHA detected on TradingView page');
+      return res.status(403).json({ 
+        error: 'CAPTCHA detected',
+        message: 'TradingView is showing a CAPTCHA. Please try again later.'
       });
     }
+    
+    // Extraire le HTML
+    const html = await page.content();
     
     console.log(`Successfully scraped TradingView symbol ${symbol}: ${html.length} characters`);
     

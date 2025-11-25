@@ -82,19 +82,8 @@ export async function scrapeTradingViewSymbol(symbol: string): Promise<ScrapingR
   } catch (error) {
     console.warn(`Vercel function failed for symbol ${symbol}, falling back:`, error);
     
-    // Determine the correct exchange for the symbol
-    // Freight symbols are typically on ICE, not NYMEX
-    let exchange = 'NYMEX';
-    if (symbol.startsWith('CS') || symbol.startsWith('T') || symbol.startsWith('TD') || 
-        symbol.startsWith('TC') || symbol.startsWith('TF') || symbol.startsWith('FR') || 
-        symbol.startsWith('AE') || symbol.startsWith('BG') || symbol.startsWith('BL') ||
-        symbol.startsWith('USC') || symbol.startsWith('USE') || symbol.startsWith('XUK') ||
-        symbol.startsWith('FLJ') || symbol.startsWith('FLP')) {
-      exchange = 'ICE';
-    }
-    
     // Fallback vers la fonction générique ou API Ninja
-    const url = `https://www.tradingview.com/symbols/${exchange}-${symbol}/`;
+    const url = `https://www.tradingview.com/symbols/NYMEX-${symbol}/`;
     return scrapePage(url);
   }
 }
