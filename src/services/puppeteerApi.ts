@@ -83,7 +83,20 @@ export async function scrapeTradingViewSymbol(symbol: string): Promise<ScrapingR
     console.warn(`Vercel function failed for symbol ${symbol}, falling back:`, error);
     
     // Fallback vers la fonction générique ou API Ninja
-    const url = `https://www.tradingview.com/symbols/NYMEX-${symbol}/`;
+    // Determine exchange based on symbol type
+    let exchange = 'NYMEX';
+    if (symbol.includes('CS') || symbol.includes('TM') || symbol.includes('TD') || 
+        symbol.includes('TC') || symbol.includes('TH') || symbol.includes('TK') ||
+        symbol.includes('TL') || symbol.includes('AEB') || symbol.includes('T2D') ||
+        symbol.includes('T7C') || symbol.includes('TDM') || symbol.includes('FRS') ||
+        symbol.includes('T5C') || symbol.includes('ACB') || symbol.includes('FRC') ||
+        symbol.includes('T8C') || symbol.includes('TC11') || symbol.includes('TF21') ||
+        symbol.includes('BG') || symbol.includes('BL') || symbol.includes('USC') ||
+        symbol.includes('USE') || symbol.includes('XUK') || symbol.includes('FLJ') ||
+        symbol.includes('FLP')) {
+      exchange = 'ICE';
+    }
+    const url = `https://www.tradingview.com/symbols/${exchange}-${symbol}/`;
     return scrapePage(url);
   }
 }

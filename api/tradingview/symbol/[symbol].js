@@ -36,7 +36,23 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'Symbol parameter is required' });
   }
 
-  const url = `https://www.tradingview.com/symbols/NYMEX-${symbol}/`;
+  // Determine the exchange based on symbol type
+  // Freight symbols are typically on ICE or other exchanges, not NYMEX
+  const isFreightSymbol = symbol.includes('CS') || symbol.includes('TM') || symbol.includes('TD') || 
+      symbol.includes('TC') || symbol.includes('TH') || symbol.includes('TK') ||
+      symbol.includes('TL') || symbol.includes('AEB') || symbol.includes('T2D') ||
+      symbol.includes('T7C') || symbol.includes('TDM') || symbol.includes('FRS') ||
+      symbol.includes('T5C') || symbol.includes('ACB') || symbol.includes('FRC') ||
+      symbol.includes('T8C') || symbol.includes('TC11') || symbol.includes('TF21') ||
+      symbol.includes('BG') || symbol.includes('BL') || symbol.includes('USC') ||
+      symbol.includes('USE') || symbol.includes('XUK') || symbol.includes('FLJ') ||
+      symbol.includes('FLP');
+  
+  // For freight symbols, try ICE first (most freight futures are on ICE)
+  // Otherwise try NYMEX
+  const exchangesToTry = isFreightSymbol ? ['ICE', 'NYMEX'] : ['NYMEX', 'ICE'];
+  let url = `https://www.tradingview.com/symbols/${exchangesToTry[0]}-${symbol}/`;
+  console.log(`Trying exchange ${exchangesToTry[0]} for symbol: ${symbol}`);
 
   let browser = null;
   let page = null;

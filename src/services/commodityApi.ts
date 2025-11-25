@@ -556,8 +556,13 @@ async function fetchFreightSymbolData(symbol: string, name: string, type: Commod
     }
     
     // Search for price elements in different possible selectors (expanded list)
+    // Prioritize selectors that are more specific to the symbol page
     if (price === 0) {
+      // First, try to find the main symbol container to avoid navigation elements
+      const symbolContainer = root.querySelector('.tv-symbol-header, [class*="symbol-header"], main, [role="main"]') || root;
+      
       const priceSelectors = [
+        // Most specific selectors first
         '.tv-symbol-price-quote__value',
         '.tv-symbol-price-quote__value--last',
         '[data-field="last_price"]',
@@ -565,19 +570,44 @@ async function fetchFreightSymbolData(symbol: string, name: string, type: Commod
         '.js-symbol-last',
         '.tv-symbol-header__price',
         '.tv-symbol-price-quote__price',
+        // More general but still in symbol context
+        '.tv-symbol-price-quote [class*="value"]',
+        '.tv-symbol-header [class*="price"]',
         '[class*="price-quote"]',
-        '[class*="price"]',
+        // Fallback selectors (but only in symbol container)
         '.last-price',
-        '[data-symbol-price]',
-        'span[class*="value"]',
-        'div[class*="value"]'
+        '[data-symbol-price]'
       ];
       
       for (const selector of priceSelectors) {
-        const priceElements = root.querySelectorAll(selector);
-        for (const priceElement of priceElements) {
+        // Search within symbol container first
+        const priceElements = symbolContainer.querySelectorAll(selector);
+        
+        // If not found in container, try root (but be more careful)
+        const elementsToCheck = priceElements.length > 0 ? priceElements : root.querySelectorAll(selector);
+        
+        for (const priceElement of elementsToCheck) {
+          // Skip if element is in navigation or header menu
+          const parent = priceElement.parentElement;
+          if (parent) {
+            const parentClasses = parent.className || '';
+            const parentId = parent.id || '';
+            if (parentClasses.includes('nav') || parentClasses.includes('menu') || 
+                parentId.includes('nav') || parentId.includes('menu') ||
+                parentClasses.includes('header') && !parentClasses.includes('symbol-header')) {
+              continue;
+            }
+          }
+          
           const rawPriceText = priceElement.text.trim();
           if (!rawPriceText || rawPriceText.length === 0) continue;
+          
+          // Skip if it looks like a navigation element (common patterns)
+          if (rawPriceText === '1.60' || rawPriceText === '1,60' || 
+              rawPriceText.match(/^[0-9]\.[0-9]{2}$/) && parseFloat(rawPriceText) === 1.60) {
+            console.log(`[Freight] Skipping likely navigation element with value "${rawPriceText}" for ${symbol}`);
+            continue;
+          }
           
           console.log(`[Freight] Raw price text for ${symbol} (${selector}): "${rawPriceText}"`);
           
@@ -589,6 +619,9 @@ async function fetchFreightSymbolData(symbol: string, name: string, type: Commod
           
           // Remove all non-numeric characters except commas, dots, and minus sign
           priceText = priceText.replace(/[^\d.,-]/g, '');
+          
+          // Skip if empty after cleaning
+          if (!priceText || priceText.length === 0) continue;
           
           // Handle TradingView number format
           if (priceText.includes(',') && priceText.includes('.')) {
@@ -614,29 +647,46 @@ async function fetchFreightSymbolData(symbol: string, name: string, type: Commod
           console.log(`[Freight] Processed price text for ${symbol}: "${priceText}"`);
           const parsedPrice = parseFloat(priceText) || 0;
           
-          if (parsedPrice > 0) {
+          // Validate price is reasonable (not 1.60 which seems to be a common false positive)
+          // and is greater than 0
+          if (parsedPrice > 0 && parsedPrice !== 1.60) {
             price = parsedPrice;
             console.log(`[Freight] Successfully parsed price for ${symbol}: ${price}`);
             break;
+          } else if (parsedPrice > 0 && parsedPrice === 1.60) {
+            // If we get 1.60, it might be correct, but log it for debugging
+            console.warn(`[Freight] Found price 1.60 for ${symbol} - might be correct or might be navigation element`);
+            // Only use it if we can't find anything else
+            if (price === 0) {
+              price = parsedPrice;
+            }
           }
         }
-        if (price > 0) break;
+        if (price > 0 && price !== 1.60) break;
       }
     }
     
     // If no price found, search in general content with more patterns
-    if (price === 0) {
+    // But be more careful to avoid navigation elements
+    if (price === 0 || price === 1.60) {
+      // Try to find price near the symbol name or in main content area
+      const mainContent = root.querySelector('main, [role="main"], .tv-symbol-page, [class*="symbol-page"]') || root;
+      const mainContentText = mainContent.text || '';
+      
       const pricePatterns = [
-        /(\d+\.\d{1,6})\s*(USD|usd|$|MMBtu|mmbtu)?/i,
-        /(\d{1,3}(?:,\d{3})*\.\d{1,6})\s*(USD|usd|$|MMBtu|mmbtu)?/i,
-        /(\d{1,3}(?:,\d{3})+)\s*(USD|usd|$|MMBtu|mmbtu)?/i,
-        /(\d+)\s*(USD|usd|$|MMBtu|mmbtu)?/i,
-        /price[:\s]+([\d.,]+)/i,
-        /last[:\s]+([\d.,]+)/i
+        // Look for patterns that include the symbol name
+        new RegExp(`${symbol.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}[^]*?(\\d+\\.\\d{1,6})`, 'i'),
+        // Look for "last price" or "price" followed by number
+        /(?:last\s+price|price|quote)[:\s]+([\d.,]+)/i,
+        // Look for numbers that look like prices (with decimals)
+        /(\d+\.\d{2,6})\s*(?:USD|usd|$|MMBtu|mmbtu)?/i,
+        /(\d{1,3}(?:,\d{3})*\.\d{2,6})\s*(?:USD|usd|$|MMBtu|mmbtu)?/i,
+        // More general patterns
+        /(\d{1,3}(?:,\d{3})+)\s*(?:USD|usd|$|MMBtu|mmbtu)?/i
       ];
       
       for (const pattern of pricePatterns) {
-        const priceMatch = htmlContent.match(pattern);
+        const priceMatch = mainContentText.match(pattern);
         if (priceMatch) {
           let matchedPrice = priceMatch[1];
           
@@ -661,7 +711,8 @@ async function fetchFreightSymbolData(symbol: string, name: string, type: Commod
           }
           
           const parsedPrice = parseFloat(matchedPrice) || 0;
-          if (parsedPrice > 0) {
+          // Accept price if it's > 0 and not the suspicious 1.60 value
+          if (parsedPrice > 0 && parsedPrice !== 1.60) {
             price = parsedPrice;
             console.log(`[Freight] Found price in content for ${symbol}: ${price}`);
             break;
