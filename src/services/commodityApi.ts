@@ -454,6 +454,39 @@ export async function fetchCommoditiesData(category: CommodityCategory = 'metals
 
     // Special handling for freight
     if (category === 'freight') {
+      // Try to fetch from category page first (less likely to be blocked)
+      try {
+        console.log('Attempting to fetch freight data from TradingView category page...');
+        const categoryData = await scrapeTradingViewCategory('freight');
+        const parsedCommodities = normalizeCommoditySymbols(parseCommoditiesData(categoryData, category));
+        
+        // Filter to only freight-related symbols
+        const freightFromCategory = parsedCommodities.filter(c => 
+          c.symbol.includes('CS') || 
+          c.symbol.includes('TM') || 
+          c.symbol.includes('TD') || 
+          c.symbol.includes('TC') || 
+          c.symbol.includes('BG') || 
+          c.symbol.includes('BL') || 
+          c.symbol.includes('USC') || 
+          c.symbol.includes('USE') || 
+          c.symbol.includes('XUK') || 
+          c.symbol.includes('FLJ') || 
+          c.symbol.includes('FLP') ||
+          c.name.toLowerCase().includes('freight') ||
+          c.name.toLowerCase().includes('container')
+        );
+        
+        if (freightFromCategory.length > 0) {
+          console.log(`Successfully fetched ${freightFromCategory.length} freight commodities from category page`);
+          saveToCache(category, freightFromCategory);
+          return freightFromCategory;
+        }
+      } catch (error) {
+        console.warn('Failed to fetch freight from category page, trying individual symbols:', error);
+      }
+      
+      // Fallback to individual symbol pages (with increased delays)
       const freightData = await fetchFreightData();
       saveToCache(category, freightData);
       return freightData;
@@ -752,34 +785,45 @@ async function fetchFreightSymbolData(symbol: string, name: string, type: Commod
 async function fetchFreightData(): Promise<Commodity[]> {
   console.log('Fetching freight data from individual symbol pages...');
   
-  // Limit to 5 symbols in parallel to avoid API overload
-  const batchSize = 5;
+  // Reduce batch size and increase delays to avoid CAPTCHA
+  const batchSize = 2; // Reduced from 5 to 2
   const results: Commodity[] = [];
   
   for (let i = 0; i < FREIGHT_SYMBOLS.length; i += batchSize) {
     const batch = FREIGHT_SYMBOLS.slice(i, i + batchSize);
     
-    const batchPromises = batch.map(({ symbol, name, type }) => 
-      fetchFreightSymbolData(symbol, name, type)
-    );
-    
-    const batchResults = await Promise.allSettled(batchPromises);
-    
-    batchResults.forEach((result, index) => {
-      if (result.status === 'fulfilled' && result.value) {
-        results.push(result.value);
-      } else {
-        console.warn(`Failed to fetch ${batch[index].symbol}:`, result.status === 'rejected' ? result.reason : 'No data');
+    // Process sequentially within batch to reduce rate limiting
+    for (const { symbol, name, type } of batch) {
+      try {
+        const data = await fetchFreightSymbolData(symbol, name, type);
+        if (data) {
+          results.push(data);
+        }
+        // Delay between each symbol to avoid CAPTCHA
+        await new Promise(resolve => setTimeout(resolve, 3000)); // 3 seconds between symbols
+      } catch (error) {
+        console.warn(`Failed to fetch ${symbol}:`, error);
       }
-    });
+    }
     
-    // Small delay between batches to respect API limits
+    // Longer delay between batches to respect API limits and avoid CAPTCHA
     if (i + batchSize < FREIGHT_SYMBOLS.length) {
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      console.log(`Waiting 5 seconds before next batch to avoid CAPTCHA...`);
+      await new Promise(resolve => setTimeout(resolve, 5000)); // 5 seconds between batches
     }
   }
   
   console.log(`Successfully fetched ${results.length} freight commodities`);
+  
+  // If no data was fetched (all blocked by CAPTCHA), log warning
+  if (results.length === 0) {
+    console.warn('⚠️ All freight symbols were blocked by CAPTCHA. TradingView is currently blocking automated access.');
+    console.warn('💡 Suggestions:');
+    console.warn('   1. Wait a few hours and try again');
+    console.warn('   2. Use the category page method (if available)');
+    console.warn('   3. Consider using an alternative data source for freight rates');
+  }
+  
   return results;
 }
 

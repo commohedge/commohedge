@@ -74,10 +74,16 @@ export async function scrapeTradingViewSymbol(symbol: string): Promise<ScrapingR
       throw new Error(`Vercel function error: ${response.status}`);
     }
     
-    const data = await response.json();
-    console.log(`Successfully scraped via Vercel symbol ${symbol}: ${data.data.length} characters`);
-    
-    return data;
+    // Check if response is JSON or HTML
+    const contentType = response.headers.get('content-type');
+    if (contentType && contentType.includes('application/json')) {
+      const data = await response.json();
+      console.log(`Successfully scraped via Vercel symbol ${symbol}: ${data.data.length} characters`);
+      return data;
+    } else {
+      // Response is HTML (likely CAPTCHA), throw to use fallback
+      throw new Error('Response is HTML, not JSON (likely CAPTCHA)');
+    }
     
   } catch (error) {
     console.warn(`Vercel function failed for symbol ${symbol}, falling back:`, error);
@@ -105,16 +111,27 @@ export async function scrapeTradingViewCategory(category: string): Promise<Scrap
       throw new Error(`Vercel function error: ${response.status}`);
     }
     
-    const data = await response.json();
-    console.log(`Successfully scraped via Vercel category ${category}: ${data.data.length} characters`);
-    
-    return data;
+    // Check if response is JSON or HTML
+    const contentType = response.headers.get('content-type');
+    if (contentType && contentType.includes('application/json')) {
+      const data = await response.json();
+      console.log(`Successfully scraped via Vercel category ${category}: ${data.data.length} characters`);
+      return data;
+    } else {
+      // Response is HTML (likely CAPTCHA), throw to use fallback
+      throw new Error('Response is HTML, not JSON (likely CAPTCHA)');
+    }
     
   } catch (error) {
     console.warn(`Vercel function failed for category ${category}, falling back:`, error);
     
     // Fallback vers la fonction générique ou API Ninja
-    const url = `https://www.tradingview.com/markets/futures/quotes-${category}/`;
+    // For freight, try different URL patterns
+    let url = `https://www.tradingview.com/markets/futures/quotes-${category}/`;
+    if (category === 'freight') {
+      // Try freight-specific URLs
+      url = `https://www.tradingview.com/markets/futures/quotes-freight/`;
+    }
     return scrapePage(url);
   }
 }
