@@ -8376,16 +8376,218 @@ const pricingFunctions = {
             </TabsContent>
 
             <TabsContent value="hedging-profile">
-              {payoffData.length > 0 && (
-                <PayoffChart
-                  data={payoffData}
-                  strategy={strategy}
-                  spot={params.spotPrice}
-                  currencyPair={params.currencyPair}
-                  includePremium={true}
-                  className="mt-6"
-                />
-              )}
+              {(() => {
+                // Génération des données de prix et grecques en fonction du spot
+                const generatePriceData = () => {
+                  if (!strategy || strategy.length === 0) return [];
+                  
+                  const currentSpot = params.spotPrice;
+                  const spotRange = Array.from({length: 101}, (_, i) => currentSpot * (0.7 + i * 0.006)); // -30% à +30%
+                  const r = getRiskFreeRate(params);
+                  const b = calculateCostOfCarry(params);
+                  // Valeurs par défaut pour les modèles de pricing
+                  const optionPricingModel = 'black-scholes' as 'black-scholes' | 'monte-carlo';
+                  const barrierPricingModel = 'closed-form' as 'closed-form' | 'monte-carlo';
+                  
+                  return spotRange.map(spot => {
+                    try {
+                      // Calculer les grecques agrégées pour toute la stratégie
+                      let totalDelta = 0;
+                      let totalGamma = 0;
+                      let totalTheta = 0;
+                      let totalVega = 0;
+                      let totalRho = 0;
+                      let totalPrice = 0;
+                      
+                      strategy.forEach(option => {
+                        // Calculer le strike selon le type
+                        const strike = option.strikeType === 'percent' 
+                          ? currentSpot * (option.strike / 100)
+                          : option.strike;
+                        
+                        // Calculer les barrières selon le type
+                        const barrier = option.barrier ? (
+                          option.barrierType === 'percent'
+                            ? currentSpot * (option.barrier / 100)
+                            : option.barrier
+                        ) : undefined;
+
+                        const secondBarrier = option.secondBarrier ? (
+                          option.barrierType === 'percent'
+                            ? currentSpot * (option.secondBarrier / 100)
+                            : option.secondBarrier
+                        ) : undefined;
+
+                        const S = spot; // Spot variable pour la courbe de sensibilité
+                        const K = strike;
+                        const t = params.monthsToHedge / 12; // Time to maturity en années
+                        const sigma = option.volatility / 100;
+                        const quantity = option.quantity / 100;
+                        
+                        let greeks;
+                        let price = 0;
+                        
+                        if (option.type === 'forward') {
+                          const forward = spot * Math.exp(b * t);
+                          price = forward - strike;
+                          greeks = { delta: 1, gamma: 0, theta: 0, vega: 0, rho: 0 };
+                        } else if (option.type === 'swap') {
+                          const forward = spot * Math.exp(b * t);
+                          price = PricingService.calculateSwapPrice([forward], [t], r);
+                          greeks = { delta: 0, gamma: 0, theta: 0, vega: 0, rho: 0 };
+                        } else if (option.type === 'call' || option.type === 'put') {
+                          // Options vanilles
+                          if (optionPricingModel === 'monte-carlo') {
+                            price = PricingService.calculateVanillaOptionMonteCarlo(
+                              option.type,
+                              S,
+                              K,
+                              r,
+                              b,
+                              t,
+                              sigma,
+                              1000
+                            );
+                          } else {
+                            // Black-Scholes
+                            const d1 = (Math.log(S / K) + (r + sigma * sigma / 2) * t) / (sigma * Math.sqrt(t));
+                            const d2 = d1 - sigma * Math.sqrt(t);
+                            const Nd1 = (1 + PricingService.erf(d1 / Math.sqrt(2))) / 2;
+                            const Nd2 = (1 + PricingService.erf(d2 / Math.sqrt(2))) / 2;
+                            
+                            if (option.type === 'call') {
+                              price = S * Nd1 - K * Math.exp(-r * t) * Nd2;
+                            } else {
+                              price = K * Math.exp(-r * t) * (1 - Nd2) - S * (1 - Nd1);
+                            }
+                          }
+                          greeks = PricingService.calculateGreeks(option.type, S, K, r, b, t, sigma);
+                        } else if (option.type.includes('knockout') || option.type.includes('knockin')) {
+                          // Options barrières
+                          if (barrierPricingModel === 'closed-form') {
+                            price = PricingService.calculateBarrierOptionClosedForm(
+                              option.type,
+                              S,
+                              K,
+                              r,
+                              t,
+                              sigma,
+                              barrier || 0,
+                              secondBarrier,
+                              b,
+                              barrierOptionSimulations || 1000
+                            );
+                          } else {
+                            price = PricingService.calculateBarrierOptionPrice(
+                              option.type,
+                              S,
+                              K,
+                              r,
+                              t,
+                              sigma,
+                              barrier || 0,
+                              secondBarrier,
+                              barrierOptionSimulations || 1000
+                            );
+                          }
+                          greeks = PricingService.calculateGreeks(
+                            option.type,
+                            S,
+                            K,
+                            r,
+                            b,
+                            t,
+                            sigma,
+                            barrier,
+                            secondBarrier
+                          );
+                        } else {
+                          // Options digitales
+                          const rebate = option.rebate !== undefined ? option.rebate : 1;
+                          const numSimulations = barrierOptionSimulations || 10000;
+                          price = PricingService.calculateDigitalOptionPrice(
+                            option.type,
+                            S,
+                            K,
+                            r,
+                            t,
+                            sigma,
+                            barrier,
+                            secondBarrier,
+                            numSimulations,
+                            rebate
+                          );
+                          greeks = PricingService.calculateGreeks(
+                            option.type,
+                            S,
+                            K,
+                            r,
+                            b,
+                            t,
+                            sigma,
+                            barrier,
+                            secondBarrier,
+                            rebate
+                          );
+                        }
+                        
+                        price = Math.max(0, price);
+                        const adjustedPrice = price * quantity;
+                        
+                        // Agréger les prix et grecques en tenant compte de la quantité
+                        totalPrice += adjustedPrice;
+                        totalDelta += greeks.delta * quantity;
+                        totalGamma += greeks.gamma * quantity;
+                        totalTheta += greeks.theta * quantity;
+                        totalVega += greeks.vega * quantity;
+                        totalRho += greeks.rho * quantity;
+                      });
+                      
+                      return { 
+                        spot: parseFloat(spot.toFixed(4)),
+                        price: totalPrice,
+                        delta: totalDelta,
+                        gamma: totalGamma,
+                        theta: totalTheta,
+                        vega: totalVega,
+                        rho: totalRho
+                      };
+                    } catch (error) {
+                      console.warn('Error calculating price/Greeks at spot', spot, error);
+                      return { 
+                        spot: parseFloat(spot.toFixed(4)),
+                        price: 0,
+                        delta: 0,
+                        gamma: 0,
+                        theta: 0,
+                        vega: 0,
+                        rho: 0
+                      };
+                    }
+                  });
+                };
+                
+                const priceData = generatePriceData();
+                
+                return payoffData.length > 0 ? (
+                  <PayoffChart
+                    data={payoffData}
+                    strategy={strategy}
+                    spot={params.spotPrice}
+                    currencyPair={params.currencyPair}
+                    includePremium={true}
+                    className="mt-6"
+                    priceData={priceData}
+                  />
+                ) : (
+                  <div className="flex items-center justify-center h-96 text-muted-foreground">
+                    <div className="text-center">
+                      <p className="text-lg font-medium mb-2">Aucune donnée disponible</p>
+                      <p className="text-sm">Cliquez sur "Calculate Results" pour générer les courbes</p>
+                    </div>
+                  </div>
+                );
+              })()}
             </TabsContent>
 
             <TabsContent value="monte-carlo">
