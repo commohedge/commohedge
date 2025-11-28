@@ -6459,7 +6459,7 @@ const pricingFunctions = {
   };
 
   return (
-    <div id="content-to-pdf" className="w-full max-w-6xl mx-auto p-4 space-y-6">
+    <div id="content-to-pdf" className="w-full px-4 space-y-6">
       <style type="text/css" media="print">
         {`
           @page {
