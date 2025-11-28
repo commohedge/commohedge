@@ -929,6 +929,7 @@ interface FXStrategyParams {
   baseVolume?: number; // Backward compatibility
   quoteVolume?: number; // Backward compatibility
   spotPrice: number;
+  priceDifferential?: number; // Price differential (basis) - applied only to costs, not to options/swaps/forwards
   currencyPair: CurrencyPair;
   useCustomPeriods: boolean;
   customPeriods: CustomPeriod[];
@@ -1014,6 +1015,7 @@ interface SavedScenario {
     baseVolume?: number; // Backward compatibility
     quoteVolume?: number; // Backward compatibility
     spotPrice: number;
+    priceDifferential?: number; // Price differential (basis) - applied only to costs
     currencyPair?: CurrencyPair;
     useCustomPeriods?: boolean;
     customPeriods?: CustomPeriod[];
@@ -1234,6 +1236,7 @@ const Index = () => {
       foreignRate: 0.5, // USD rate
       totalVolume: 10000000, // Main volume for calculations
       spotPrice: CURRENCY_PAIRS[0].defaultSpotRate, // Default to WTI spot price
+      priceDifferential: 0, // Price differential (basis) for commodities - applied only to costs
       currencyPair: CURRENCY_PAIRS[0], // Default to WTI
       useCustomPeriods: false,
       customPeriods: [],
@@ -1255,6 +1258,10 @@ const Index = () => {
       // Ensure backward compatibility - add volumeType if missing
       if (!savedParams.volumeType) {
         savedParams.volumeType = 'long'; // Default to long
+      }
+      // Ensure backward compatibility - add priceDifferential if missing
+      if (savedParams.priceDifferential === undefined) {
+        savedParams.priceDifferential = 0; // Default to 0
       }
       return savedParams;
       }
@@ -2961,8 +2968,11 @@ const Index = () => {
           );
       })();
 
-      // Get real price
+      // Get real price (sans PDD - utilisé pour les payoffs d'options/swaps/forwards)
       const realPrice = realPrices[monthKey] || forward;
+      
+      // Prix réel avec PDD (uniquement pour les coûts, pas pour les payoffs)
+      const realPriceWithPDD = realPrice + (params.priceDifferential || 0);
 
       // Calculer le prix du swap une fois pour tous les swaps
         const swapPrice = calculateSwapPrice(
@@ -3113,13 +3123,13 @@ const Index = () => {
                 // This will be used to display in the UI
                 option.dynamicStrikeInfo = {
                   calculatedStrike: strike,
-                  calculatedStrikePercent: (strike / forward * 100).toFixed(2) + '%',
+                  calculatedStrikePercent: (forward > 0 ? (strike / forward * 100).toFixed(2) : '0.00') + '%',
                   forwardRate: forward,
                   timeToMaturity: t
                 };
                 
                 // Optional: Log the calculated strike for debugging
-                console.log(`Period ${i} (${monthKey}): Calculated strike for ${currentType} at ${strike.toFixed(4)} (${(strike/forward*100).toFixed(2)}% of forward)`);
+                console.log(`Period ${i} (${monthKey}): Calculated strike for ${currentType} at ${(strike || 0).toFixed(4)} (${forward > 0 ? (strike/forward*100).toFixed(2) : '0.00'}% of forward)`);
               }
             }
             
@@ -3379,7 +3389,7 @@ const Index = () => {
         ...optionPrices,
         ...swaps.map((swap, swapIndex) => ({
           type: 'swap',
-          price: swapPrice,
+          price: swap.strike, // Afficher le strike (prix fixe saisi) au lieu du swapPrice calculé
           quantity: swap.quantity/100,
           strike: swap.strike,
           label: `Swap Price ${swapIndex + 1}`
@@ -3539,8 +3549,15 @@ const Index = () => {
       // Calculer le pourcentage total de swaps dans la stratégie
         const totalSwapPercentage = validateDataForReduce(swaps).reduce((sum, swap) => sum + swap.quantity, 0) / 100;
       
-      // Calculer le prix couvert (hedged price) en tenant compte des swaps et du prix réel
-        const hedgedPrice = totalSwapPercentage * swapPrice + (1 - totalSwapPercentage) * realPrice;
+      // Calculer le prix couvert (hedged price) en tenant compte des swaps et du prix réel avec PDD
+      // Pour les swaps, utiliser le strike réel (prix fixe saisi) au lieu du swapPrice calculé
+      // Le PDD s'applique aux coûts : pour les swaps, on applique le PDD au strike du swap
+      const swapStrikeAverage = swaps.length > 0 
+        ? validateDataForReduce(swaps).reduce((sum, swap) => sum + (swap.strike * swap.quantity), 0) / 
+          validateDataForReduce(swaps).reduce((sum, swap) => sum + swap.quantity, 0)
+        : 0;
+      const swapStrikeWithPDD = swapStrikeAverage + (params.priceDifferential || 0);
+      const hedgedPrice = totalSwapPercentage * swapStrikeWithPDD + (1 - totalSwapPercentage) * realPriceWithPDD;
 
       // Vérifier si la stratégie contient des options digitales
       const hasDigitalOptions = strategy.some(opt => 
@@ -3556,8 +3573,8 @@ const Index = () => {
             (monthlyVolume * (1 - totalSwapPercentage) * totalPayoff)
           );
       
-      // Calculer le coût non hedgé selon la formule d'origine
-      const unhedgedCost = -(monthlyVolume * realPrice);
+      // Calculer le coût non hedgé selon la formule d'origine (avec PDD appliqué)
+      const unhedgedCost = -(monthlyVolume * realPriceWithPDD);
       
       // Calculer le Delta P&L selon la formule d'origine
       const deltaPnL = hedgedCost - unhedgedCost;
@@ -3579,6 +3596,21 @@ const Index = () => {
 
     // Store complete results for calculations (includes periods before user's start date)
     setResults(detailedResults);
+    
+    // Update swap prices automatically when results are calculated
+    const hasSwaps = strategy.some(component => component.type === 'swap');
+    if (hasSwaps && detailedResults.length > 0) {
+      const forwards = detailedResults.map(r => r.forward);
+      const times = detailedResults.map(r => r.timeToMaturity);
+      const swapPrice = calculateSwapPrice(forwards, times, params.domesticRate / 100);
+      
+      // Update all swaps in the strategy with the new calculated price
+      setStrategy(prevStrategy => prevStrategy.map(component => 
+        component.type === 'swap' 
+          ? { ...component, strike: swapPrice }
+          : component
+      ));
+    }
     
     // Show all calculated results (all months to hedge from hedging start date)
     const displayResults = filterResultsForDisplay(detailedResults, params.startDate);
@@ -4343,11 +4375,11 @@ const Index = () => {
             <p>Spot Price: ${params.spotPrice}</p>
                             <p>Volume: {params.totalVolume.toLocaleString()}</p>
                 <p>Position Type: {params.volumeType === 'long' || params.volumeType === 'receivable' ? 'Long' : 'Short'}</p>
-                <p>Current Rate: {params.spotPrice.toFixed(4)}</p>
+                <p>Current Rate: {(params.spotPrice || 0).toFixed(4)}</p>
           </div>
           <div class="stress-parameters">
-            <p>Volatility: ${(stressTestScenarios[activeStressTest || 'base']?.volatility * 100).toFixed(1)}%</p>
-            <p>Price Shock: ${(stressTestScenarios[activeStressTest || 'base']?.priceShock * 100).toFixed(1)}%</p>
+            <p>Volatility: ${((stressTestScenarios[activeStressTest || 'base']?.volatility || 0) * 100).toFixed(1)}%</p>
+            <p>Price Shock: ${((stressTestScenarios[activeStressTest || 'base']?.priceShock || 0) * 100).toFixed(1)}%</p>
           </div>
         </div>
       </div>
@@ -4741,7 +4773,7 @@ const Index = () => {
         calculationMethod = `Monthly average (${prices.length} data points)`;
       }
       
-      console.log(`[BACKTEST] ${month}: ${calculationMethod} = ${avgPrice.toFixed(4)}`);
+      console.log(`[BACKTEST] ${month}: ${calculationMethod} = ${(avgPrice || 0).toFixed(4)}`);
       
       // Calculate volatility (same logic as before)
       const returns = prices.slice(1).map((price, i) => 
@@ -5202,12 +5234,13 @@ const Index = () => {
               <td class="border p-2">
                 ${result.name}
               </td>
-              <td class="border p-2 text-center">${result.coverageRatio}%</td>
-              <td class="border p-2 text-center">${(result.hedgingCost / 1000000).toFixed(1)}</td>
+              <td class="border p-2 text-center">${result.coverageRatio || 0}%</td>
+              <td class="border p-2 text-center">${((result.hedgingCost || 0) / 1000000).toFixed(1)}</td>
               ${priceRanges.map(range => {
                 const rangeKey = `${range.min},${range.max}`;
-                const value = (result.differences[rangeKey] / 1000000).toFixed(1);
-                const color = result.differences[rangeKey] > 0 
+                const diffValue = result.differences?.[rangeKey] || 0;
+                const value = (diffValue / 1000000).toFixed(1);
+                const color = diffValue > 0 
                   ? 'rgba(0, 128, 0, 0.2)' 
                   : 'rgba(255, 0, 0, 0.2)';
                 return `<td class="border p-2 text-center" style="background-color: ${color}">${value}</td>`;
@@ -5391,18 +5424,18 @@ const Index = () => {
     }
     
     // Total results
-    const totalHedgedCost = validateDataForReduce(results).reduce((sum, row) => sum + row.hedgedCost, 0);
-    const totalUnhedgedCost = validateDataForReduce(results).reduce((sum, row) => sum + row.unhedgedCost, 0);
-    const totalPnL = validateDataForReduce(results).reduce((sum, row) => sum + row.deltaPnL, 0);
-    const costReduction = (totalPnL / Math.abs(totalUnhedgedCost)) * 100;
+    const totalHedgedCost = validateDataForReduce(results).reduce((sum, row) => sum + (row.hedgedCost || 0), 0);
+    const totalUnhedgedCost = validateDataForReduce(results).reduce((sum, row) => sum + (row.unhedgedCost || 0), 0);
+    const totalPnL = validateDataForReduce(results).reduce((sum, row) => sum + (row.deltaPnL || 0), 0);
+    const costReduction = totalUnhedgedCost !== 0 ? (totalPnL / Math.abs(totalUnhedgedCost)) * 100 : 0;
     
     doc.setFontSize(14);
     doc.text('Total Results', 10, 170);
     doc.setFontSize(10);
-    doc.text(`Total Cost with Hedging: ${totalHedgedCost.toFixed(2)}`, 15, 180);
-    doc.text(`Total Cost without Hedging: ${totalUnhedgedCost.toFixed(2)}`, 15, 185);
-    doc.text(`Total P&L: ${totalPnL.toFixed(2)}`, 15, 190);
-    doc.text(`Cost Reduction: ${costReduction.toFixed(2)}%`, 15, 195);
+    doc.text(`Total Cost with Hedging: ${(totalHedgedCost || 0).toFixed(2)}`, 15, 180);
+    doc.text(`Total Cost without Hedging: ${(totalUnhedgedCost || 0).toFixed(2)}`, 15, 185);
+    doc.text(`Total P&L: ${(totalPnL || 0).toFixed(2)}`, 15, 190);
+    doc.text(`Cost Reduction: ${(costReduction || 0).toFixed(2)}%`, 15, 195);
     
     // Capture the P&L chart and add it
     const pnlChartContainer = document.getElementById('historical-backtest-pnl-chart');
@@ -5511,12 +5544,13 @@ const Index = () => {
                   <tr key={`${i}-${ratio}`}>
                     <td className="border p-2">{strategyName}</td>
                     <td className="border p-2">{ratio}%</td>
-                    <td className="border p-2">{((result.hedgingCost / result.coverageRatio) * ratio / 1000).toFixed(1)}</td>
+                    <td className="border p-2">{(((result.hedgingCost || 0) / (result.coverageRatio || 1)) * ratio / 1000).toFixed(1)}</td>
                     
                     {priceRanges.map((range, j) => {
                       const rangeKey = `${range.min},${range.max}`;
                       // Ajuster la valeur en fonction du ratio
-                      const adjustedValue = (result.differences[rangeKey] / result.coverageRatio) * ratio;
+                      const diffValue = result.differences?.[rangeKey] || 0;
+                      const adjustedValue = (diffValue / (result.coverageRatio || 1)) * ratio;
                       
                       return (
                         <td 
@@ -5524,7 +5558,7 @@ const Index = () => {
                           className="border p-2"
                           style={{ backgroundColor: getCellColor(adjustedValue) }}
                         >
-                          {(adjustedValue / 1000).toFixed(1)}
+                          {((adjustedValue || 0) / 1000).toFixed(1)}
                         </td>
                       );
                     })}
@@ -5533,19 +5567,20 @@ const Index = () => {
               })
             : riskMatrixResults.map((result, i) => (
                 <tr key={i}>
-                  <td className="border p-2">{result.name}</td>
-                  <td className="border p-2">{result.coverageRatio}%</td>
-                  <td className="border p-2">{(result.hedgingCost / 1000).toFixed(1)}</td>
+                  <td className="border p-2">{result.name || ''}</td>
+                  <td className="border p-2">{result.coverageRatio || 0}%</td>
+                  <td className="border p-2">{((result.hedgingCost || 0) / 1000).toFixed(1)}</td>
                   
                   {priceRanges.map((range, j) => {
                     const rangeKey = `${range.min},${range.max}`;
+                    const diffValue = result.differences?.[rangeKey] || 0;
                     return (
                       <td 
                         key={j} 
                         className="border p-2"
-                        style={{ backgroundColor: getCellColor(result.differences[rangeKey]) }}
+                        style={{ backgroundColor: getCellColor(diffValue) }}
                       >
-                        {(result.differences[rangeKey] / 1000).toFixed(1)}
+                        {(diffValue / 1000).toFixed(1)}
                       </td>
                     );
                   })}
@@ -6824,7 +6859,7 @@ const pricingFunctions = {
                 <div className="space-y-1.5">
                   <label className="text-sm font-medium text-foreground flex items-center justify-between">
                     <span>Risk-free Rate (r) %</span>
-                    <span className="text-xs text-muted-foreground font-mono">{params.interestRate.toFixed(2)}%</span>
+                    <span className="text-xs text-muted-foreground font-mono">{(params.interestRate || 0).toFixed(2)}%</span>
                   </label>
                   <div className="flex items-center gap-3">
                     <Slider 
@@ -6939,10 +6974,46 @@ const pricingFunctions = {
                   </div>
                   <div className="text-xs text-muted-foreground flex items-center gap-1 bg-primary/5 p-2 rounded border border-primary/10">
                     <span>💱</span>
-                    <span>Current: <span className="font-mono font-medium">${params.spotPrice.toFixed(2)}</span></span>
+                    <span>Current: <span className="font-mono font-medium">${(params.spotPrice || 0).toFixed(2)}</span></span>
                     {params.currencyPair?.base && (
                       <span className="text-muted-foreground">/{params.currencyPair.base}</span>
                     )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Section 3b: Price Differential */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                {/* Price Differential */}
+                <div className="space-y-1.5">
+                  <label className="text-sm font-medium text-foreground">
+                    Price Differential (Basis)
+                    <span className="ml-1 text-xs text-muted-foreground font-normal">
+                      ({params.currencyPair?.quote || 'USD'})
+                    </span>
+                  </label>
+                  <Input
+                    type="number"
+                    value={params.priceDifferential || 0}
+                    onChange={(e) => setParams({...params, priceDifferential: Number(e.target.value) || 0})}
+                    className="h-10 text-base font-mono"
+                    step="0.01"
+                    placeholder="0.00"
+                  />
+                  <div className="text-xs text-muted-foreground flex items-center gap-1 bg-blue-50 p-2 rounded border border-blue-100">
+                    <span>📊</span>
+                    <span>Effective Price for Costs: <span className="font-mono font-medium">${((params.spotPrice || 0) + (params.priceDifferential || 0)).toFixed(2)}</span></span>
+                    {params.currencyPair?.base && (
+                      <span className="text-muted-foreground">/{params.currencyPair.base}</span>
+                    )}
+                    {params.priceDifferential !== 0 && (
+                      <span className={`ml-1 ${params.priceDifferential > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                        ({params.priceDifferential > 0 ? '+' : ''}{(params.priceDifferential || 0).toFixed(2)})
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-xs text-muted-foreground mt-1">
+                    <span className="font-medium">ℹ️</span> Applied only to costs (hedged/unhedged), not to options/swaps/forwards payoffs
                   </div>
                 </div>
               </div>
@@ -7548,9 +7619,9 @@ const pricingFunctions = {
                     <span className="font-medium text-green-700">✓ Active Scenario:</span>
                     <span className="text-green-800">{stressTestScenarios[activeStressTest].name}</span>
                     <span className="text-green-600 text-sm">
-                      (Vol: {(stressTestScenarios[activeStressTest].volatility * 100).toFixed(1)}%, 
-                      Shock: {(stressTestScenarios[activeStressTest].priceShock * 100).toFixed(1)}%, 
-                      Drift: {(stressTestScenarios[activeStressTest].drift * 100).toFixed(1)}%)
+                      (Vol: {((stressTestScenarios[activeStressTest]?.volatility || 0) * 100).toFixed(1)}%, 
+                      Shock: {((stressTestScenarios[activeStressTest]?.priceShock || 0) * 100).toFixed(1)}%, 
+                      Drift: {((stressTestScenarios[activeStressTest]?.drift || 0) * 100).toFixed(1)}%)
                     </span>
                   </div>
                 </div>
@@ -7580,7 +7651,7 @@ const pricingFunctions = {
                               <div className="grid grid-cols-2 gap-2 text-xs">
                           <div>
                             <span className="text-muted-foreground">Volatility:</span>
-                            <span className="ml-1 font-medium">{(scenario.volatility * 100).toFixed(1)}%</span>
+                            <span className="ml-1 font-medium">{((scenario.volatility || 0) * 100).toFixed(1)}%</span>
                                 </div>
                           <div>
                             <span className="text-muted-foreground">Drift:</span>
@@ -8047,7 +8118,7 @@ const pricingFunctions = {
             <TabsList className="grid w-full grid-cols-4 lg:grid-cols-8 mb-6">
               <TabsTrigger value="detailed" className="text-xs">Detailed Results</TabsTrigger>
               <TabsTrigger value="pnl-evolution" className="text-xs">P&L Evolution</TabsTrigger>
-              <TabsTrigger value="fx-rates" className="text-xs">Spot vs Forward</TabsTrigger>
+              <TabsTrigger value="fx-rates" className="text-xs">Forward vs Real Price</TabsTrigger>
               <TabsTrigger value="hedging-profile" className="text-xs">Hedging Profile</TabsTrigger>
               <TabsTrigger value="monte-carlo" className="text-xs">Monte Carlo</TabsTrigger>
               <TabsTrigger value="yearly-stats" className="text-xs">Yearly Statistics</TabsTrigger>
@@ -8103,8 +8174,14 @@ const pricingFunctions = {
                         <tr className="bg-muted/50 text-xs uppercase tracking-wider">
                           <th className="px-3 py-3 text-left font-medium text-foreground/70 border-b">Maturity</th>
                           <th className="px-3 py-3 text-left font-medium text-foreground/70 border-b">Time to Maturity</th>
-                          <th className="px-3 py-3 text-left font-medium text-foreground/70 border-b bg-blue-500/5">Forward FX Rate</th>
-                          <th className="px-3 py-3 text-left font-medium text-foreground/70 border-b bg-primary/5">Spot FX Rate</th>
+                          <th className="px-3 py-3 text-left font-medium text-foreground/70 border-b bg-blue-500/5">
+                            Forward Price
+                            <div className="text-xs font-normal text-muted-foreground mt-1">Theoretical forward price</div>
+                          </th>
+                          <th className="px-3 py-3 text-left font-medium text-foreground/70 border-b bg-primary/5">
+                            Real Price
+                            <div className="text-xs font-normal text-muted-foreground mt-1">Monthly realized price</div>
+                          </th>
                           
                           {/* Ajouter des colonnes pour les strikes dynamiques si présents */}
                           {strategy.some(opt => opt.dynamicStrike) && displayResults && displayResults.length > 0 && 
@@ -8345,7 +8422,10 @@ const pricingFunctions = {
             <TabsContent value="fx-rates">
               <Card>
                 <CardHeader>
-                  <CardTitle>Spot vs Forward FX Rates</CardTitle>
+                  <CardTitle>Forward Price vs Real Price</CardTitle>
+                  <CardDescription className="mt-2">
+                    Real Price represents the monthly realized price for commodity transactions
+                  </CardDescription>
                 </CardHeader>
             <CardContent>
               <div className="h-96">
@@ -8359,13 +8439,13 @@ const pricingFunctions = {
                     <Line 
                       type="monotone" 
                       dataKey="forward" 
-                      name="Forward FX Rate" 
+                      name="Forward Price" 
                       stroke="#8884d8" 
                     />
                     <Line 
                       type="monotone" 
                       dataKey="realPrice"
-                      name="Spot FX Rate"
+                      name="Real Price (Monthly Realized)"
                       stroke="#82ca9d"
                     />
                   </LineChart>
@@ -8826,9 +8906,11 @@ const pricingFunctions = {
                       <td className="border p-2 font-medium">Cost Reduction (%)</td>
                       <td className="border p-2 text-right">
                         {(() => {
-                          const totalPnL = validateDataForReduce(results).reduce((sum, row) => sum + row.deltaPnL, 0);
-                          const totalUnhedgedCost = validateDataForReduce(results).reduce((sum, row) => sum + row.unhedgedCost, 0);
-                                                             return (((totalPnL / Math.abs(totalUnhedgedCost)) * 100).toFixed(2) + '%');
+                          if (!results || results.length === 0) return 'N/A';
+                          const totalPnL = validateDataForReduce(results).reduce((sum, row) => sum + (row.deltaPnL || 0), 0);
+                          const totalUnhedgedCost = validateDataForReduce(results).reduce((sum, row) => sum + (row.unhedgedCost || 0), 0);
+                          if (Math.abs(totalUnhedgedCost) < 0.01) return 'N/A';
+                          return (((totalPnL / Math.abs(totalUnhedgedCost)) * 100).toFixed(2) + '%');
                         })()}
                       </td>
                     </tr>
@@ -8836,8 +8918,9 @@ const pricingFunctions = {
                       <td className="border p-2 font-medium">Strike Target</td>
                       <td className="border p-2 text-right">
                         {(() => {
-                          const totalHedgedCost = validateDataForReduce(results).reduce((sum, row) => sum + row.hedgedCost, 0);
-                          const totalVolume = validateDataForReduce(results).reduce((sum, row) => sum + row.monthlyVolume, 0);
+                          if (!results || results.length === 0) return 'N/A';
+                          const totalHedgedCost = validateDataForReduce(results).reduce((sum, row) => sum + (row.hedgedCost || 0), 0);
+                          const totalVolume = validateDataForReduce(results).reduce((sum, row) => sum + (row.monthlyVolume || 0), 0);
                           return totalVolume > 0 
                             ? ((-1) * totalHedgedCost / totalVolume).toLocaleString(undefined, {
                                 minimumFractionDigits: 2,
