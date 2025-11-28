@@ -28,6 +28,7 @@ interface PayoffChartProps {
   showPremiumToggle?: boolean;
   realPremium?: number; // ✅ Vraie prime calculée par PricingService
   priceData?: Array<{ spot: number; price: number; delta: number; gamma: number; theta: number; vega: number; rho: number }>; // ✅ Données de prix et grecques
+  defaultTab?: "payoff" | "hedging" | "delta" | "gamma" | "theta" | "vega" | "rho"; // ✅ Onglet actif par défaut
 }
 
 // Generate commodity hedging payoff data based on strategy
@@ -379,9 +380,10 @@ const PayoffChart: React.FC<PayoffChartProps> = ({
   className = "",
   showPremiumToggle = false,
   realPremium, // ✅ Receive real premium
-  priceData // ✅ Receive price and Greeks data
+  priceData, // ✅ Receive price and Greeks data
+  defaultTab = "payoff" // ✅ Default tab
 }) => {
-  const [activeTab, setActiveTab] = useState<"payoff" | "hedging" | "delta" | "gamma" | "theta" | "vega" | "rho">("payoff");
+  const [activeTab, setActiveTab] = useState<"payoff" | "hedging" | "delta" | "gamma" | "theta" | "vega" | "rho">(defaultTab);
   const [showPremium, setShowPremium] = useState(includePremium);
   const { theme } = useThemeContext();
   const isBloombergTheme = theme === 'bloomberg';

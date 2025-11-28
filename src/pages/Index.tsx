@@ -845,28 +845,28 @@ export const calculateStrategyPayoffAtPrice = (components: any[], price: number,
       'one-touch', 'no-touch', 'double-touch', 'double-no-touch', 'range-binary', 'outside-binary'
     ].includes(comp.type)) {
       // Options digitales : payoff = rebate si condition atteinte
-      const barrier = comp.barrierType === 'percent' ? spotPrice * (comp.barrier || 0) / 100 : (comp.barrier || 0);
-      const secondBarrier = comp.barrierType === 'percent' ? spotPrice * (comp.secondBarrier || 0) / 100 : (comp.secondBarrier || 0);
+      const digitalBarrier = comp.barrierType === 'percent' ? spotPrice * (comp.barrier || 0) / 100 : (comp.barrier || 0);
+      const digitalSecondBarrier = comp.barrierType === 'percent' ? spotPrice * (comp.secondBarrier || 0) / 100 : (comp.secondBarrier || 0);
       const rebate = (comp.rebate || 1) / 100;
       let conditionMet = false;
       switch(comp.type) {
         case 'one-touch':
-          conditionMet = price >= barrier;
+          conditionMet = price >= digitalBarrier;
           break;
         case 'no-touch':
-          conditionMet = price < barrier;
+          conditionMet = price < digitalBarrier;
           break;
         case 'double-touch':
-          conditionMet = price >= barrier || price <= secondBarrier;
+          conditionMet = price >= digitalBarrier || price <= digitalSecondBarrier;
           break;
         case 'double-no-touch':
-          conditionMet = price < barrier && price > secondBarrier;
+          conditionMet = price < digitalBarrier && price > digitalSecondBarrier;
           break;
         case 'range-binary':
-          conditionMet = price <= barrier && price >= strike;
+          conditionMet = price <= digitalBarrier && price >= strike;
           break;
         case 'outside-binary':
-          conditionMet = price > barrier || price < strike;
+          conditionMet = price > digitalBarrier || price < strike;
           break;
       }
       payoff = conditionMet ? rebate : 0;
@@ -883,6 +883,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import StrategyImportService from '../services/StrategyImportService';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { Plus, Trash2, Save, X, AlertTriangle, Table, PlusCircle, Trash, Upload, BarChart3, Calculator, Shield, Calendar, ChevronDown } from 'lucide-react';
@@ -1027,6 +1028,7 @@ interface SavedScenario {
   impliedVolatilities: OptionImpliedVolatility;
   manualForwards: {[key: string]: number};
   realPrices: {[key: string]: number};
+  useCustomOptionPrices?: boolean;
   customOptionPrices?: {[key: string]: {[optionKey: string]: number}};
 }
 
@@ -1539,13 +1541,47 @@ const Index = () => {
     }));
   };
 
-  // Add these new states
-  const [useImpliedVol, setUseImpliedVol] = useState(false);
-  const [impliedVolatilities, setImpliedVolatilities] = useState<OptionImpliedVolatility>({});
+  // Add these new states - Initialize from localStorage
+  const [useImpliedVol, setUseImpliedVol] = useState(() => {
+    try {
+      const savedState = localStorage.getItem('calculatorState');
+      return savedState ? JSON.parse(savedState).useImpliedVol || false : false;
+    } catch (error) {
+      console.warn('Error parsing useImpliedVol from localStorage:', error);
+      return false;
+    }
+  });
+  
+  const [impliedVolatilities, setImpliedVolatilities] = useState<OptionImpliedVolatility>(() => {
+    try {
+      const savedState = localStorage.getItem('calculatorState');
+      return savedState ? JSON.parse(savedState).impliedVolatilities || {} : {};
+    } catch (error) {
+      console.warn('Error parsing impliedVolatilities from localStorage:', error);
+      return {};
+    }
+  });
 
-  // État pour les prix d'options personnalisés
-  const [useCustomOptionPrices, setUseCustomOptionPrices] = useState(false);
-  const [customOptionPrices, setCustomOptionPrices] = useState<{[key: string]: {[key: string]: number}}>({});
+  // État pour les prix d'options personnalisés - Initialize from localStorage
+  const [useCustomOptionPrices, setUseCustomOptionPrices] = useState(() => {
+    try {
+      const savedState = localStorage.getItem('calculatorState');
+      return savedState ? JSON.parse(savedState).useCustomOptionPrices || false : false;
+    } catch (error) {
+      console.warn('Error parsing useCustomOptionPrices from localStorage:', error);
+      return false;
+    }
+  });
+  
+  const [customOptionPrices, setCustomOptionPrices] = useState<{[key: string]: {[key: string]: number}}>(() => {
+    try {
+      const savedState = localStorage.getItem('calculatorState');
+      return savedState ? JSON.parse(savedState).customOptionPrices || {} : {};
+    } catch (error) {
+      console.warn('Error parsing customOptionPrices from localStorage:', error);
+      return {};
+    }
+  });
   
   // Historical data and monthly stats
   const [historicalData, setHistoricalData] = useState<HistoricalDataPoint[]>([]);
@@ -3756,17 +3792,26 @@ const Index = () => {
   }, [params.currencyPair.symbol, params.spotPrice]);
 
   const saveScenario = () => {
-    if (!results || !payoffData) {
+    // Vérifier qu'il y a au moins une stratégie ou des paramètres à sauvegarder
+    if (!strategy || strategy.length === 0) {
       toast({
-        title: "Error",
-        description: "No results to save. Please run calculations first.",
+        title: "Warning",
+        description: "No strategy components to save. Please add at least one component first.",
         variant: "destructive",
       });
       return;
     }
 
+    // Générer un nom par défaut basé sur le contexte
+    let defaultName = `Strategy - ${params.currencyPair?.symbol || 'Unknown'} - ${new Date().toLocaleDateString()}`;
+    if (activeStressTest && stressTestScenarios[activeStressTest]) {
+      defaultName = `Strategy - ${stressTestScenarios[activeStressTest].name} - ${new Date().toLocaleDateString()}`;
+    } else if (results && payoffData) {
+      defaultName = `Strategy - Calculated - ${new Date().toLocaleDateString()}`;
+    }
+
     // Ask user for scenario name
-    const scenarioName = prompt("Enter scenario name:", `Stress Test - ${activeStressTest ? stressTestScenarios[activeStressTest]?.name : 'Base Case'} - ${new Date().toLocaleDateString()}`);
+    const scenarioName = prompt("Enter strategy name:", defaultName);
     if (!scenarioName) return;
 
     const scenario: SavedScenario = {
@@ -3775,13 +3820,14 @@ const Index = () => {
       timestamp: Date.now(),
       params,
       strategy,
-      results,
-      payoffData,
+      results: results || null, // Permettre null si pas encore calculé
+      payoffData: payoffData || [], // Permettre tableau vide si pas encore calculé
       stressTest: activeStressTest ? stressTestScenarios[activeStressTest] : null,
       useImpliedVol,
       impliedVolatilities,
       manualForwards,
       realPrices,
+      useCustomOptionPrices,
       customOptionPrices
     };
 
@@ -3789,15 +3835,16 @@ const Index = () => {
     savedScenarios.push(scenario);
     localStorage.setItem('optionScenarios', JSON.stringify(savedScenarios));
 
+    const hasResults = results && payoffData;
     toast({
       title: "Success",
-      description: `Scenario "${scenarioName}" saved successfully!`,
+      description: `Strategy "${scenarioName}" saved successfully!${hasResults ? '' : ' (Strategy saved without calculations. Run calculations to add results.)'}`,
     });
   };
 
   const viewSavedScenarios = () => {
-    // Navigate to the saved scenarios page instead of showing an alert
-    window.location.href = '/saved';
+    // Navigate to the Reports page where PDFs are generated
+    window.location.href = '/reports';
   };
 
   const importToHedgingInstruments = () => {
@@ -6437,18 +6484,48 @@ const pricingFunctions = {
           }
         `}
       </style>
-      {/* Add Clear Scenario button if a scenario is loaded */}
-      {displayResults && (
-        <div className="flex justify-end">
+      {/* Global Toolbar with Save and View buttons */}
+      <div className="flex justify-between items-center mb-6 p-4 bg-muted/50 rounded-lg border">
+        <div className="flex items-center gap-2">
+          <h2 className="text-lg font-semibold">Strategy Builder</h2>
+          {strategy && strategy.length > 0 && (
+            <Badge variant="secondary" className="ml-2">
+              {strategy.length} component{strategy.length > 1 ? 's' : ''}
+            </Badge>
+          )}
+        </div>
+        <div className="flex items-center gap-3">
+          {displayResults && (
+            <Button
+              variant="destructive"
+              onClick={clearLoadedScenario}
+              className="flex items-center gap-2"
+              size="sm"
+            >
+              <X className="h-4 w-4" />
+              Clear Loaded Scenario
+            </Button>
+          )}
           <Button
-            variant="destructive"
-            onClick={clearLoadedScenario}
-            className="flex items-center gap-2"
+            onClick={saveScenario}
+            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white"
+            disabled={!strategy || strategy.length === 0}
+            size="sm"
           >
-            Clear Loaded Scenario
+            <Save className="h-4 w-4" />
+            Save Strategy
+          </Button>
+          <Button
+            onClick={viewSavedScenarios}
+            variant="outline"
+            className="flex items-center gap-2"
+            size="sm"
+          >
+            <Table className="h-4 w-4" />
+            View Saved
           </Button>
         </div>
-      )}
+      </div>
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList className="grid w-full grid-cols-5 mb-4">
           <TabsTrigger value="parameters" className="py-2.5 text-sm">Strategy Parameters</TabsTrigger>
@@ -7451,25 +7528,6 @@ const pricingFunctions = {
               </div>
             </CardHeader>
             <CardContent>
-              {/* Save Scenario Buttons */}
-              <div className="mb-4 flex gap-3">
-                <Button
-                  onClick={saveScenario}
-                  className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white"
-                  disabled={!results || !payoffData}
-                >
-                  <Save className="h-4 w-4" />
-                  Save Scenario
-                </Button>
-                <Button
-                  onClick={viewSavedScenarios}
-                  variant="outline"
-                  className="flex items-center gap-2"
-                >
-                  View Saved Scenarios
-                </Button>
-              </div>
-              
               {/* Scenarios count indicator */}
               <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
                 <div className="flex items-center justify-between text-sm">
@@ -7990,7 +8048,7 @@ const pricingFunctions = {
               <TabsTrigger value="detailed" className="text-xs">Detailed Results</TabsTrigger>
               <TabsTrigger value="pnl-evolution" className="text-xs">P&L Evolution</TabsTrigger>
               <TabsTrigger value="fx-rates" className="text-xs">Spot vs Forward</TabsTrigger>
-              <TabsTrigger value="hedging-profile" className="text-xs">FX HEDGING PROFILE</TabsTrigger>
+              <TabsTrigger value="hedging-profile" className="text-xs">Hedging Profile</TabsTrigger>
               <TabsTrigger value="monte-carlo" className="text-xs">Monte Carlo</TabsTrigger>
               <TabsTrigger value="yearly-stats" className="text-xs">Yearly Statistics</TabsTrigger>
               <TabsTrigger value="total-stats" className="text-xs">Total Statistics</TabsTrigger>

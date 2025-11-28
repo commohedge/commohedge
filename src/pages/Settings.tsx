@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
@@ -232,6 +233,10 @@ const Settings = () => {
   const [pendingLogo, setPendingLogo] = useState<string | null>(null);
   const [logoMarkedForRemoval, setLogoMarkedForRemoval] = useState(false);
   const [pendingCompanyName, setPendingCompanyName] = useState<string | null>(null);
+  const [includeLogoInPdf, setIncludeLogoInPdf] = useState<boolean>(() => {
+    const saved = localStorage.getItem('includeLogoInPdf');
+    return saved ? JSON.parse(saved) : false;
+  });
 
   // Load settings from localStorage
   useEffect(() => {
@@ -739,6 +744,20 @@ const Settings = () => {
                           }
                         }}
                       />
+                      <div className="flex items-center gap-2">
+                        <Checkbox
+                          id="include-logo-pdf"
+                          checked={includeLogoInPdf}
+                          onCheckedChange={(checked) => {
+                            setIncludeLogoInPdf(checked === true);
+                            localStorage.setItem('includeLogoInPdf', JSON.stringify(checked === true));
+                            setHasChanges(true);
+                          }}
+                        />
+                        <Label htmlFor="include-logo-pdf" className="text-sm font-normal cursor-pointer">
+                          Include in PDF
+                        </Label>
+                      </div>
                       {(pendingLogo !== null || logo !== "/fx-hedging-logo.png" || logoMarkedForRemoval) && (
                         <div className="flex gap-2">
                           {!logoMarkedForRemoval && (

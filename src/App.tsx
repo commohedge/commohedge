@@ -31,7 +31,6 @@ import AdvancedChart from "./pages/AdvancedChart";
 import UserManagement from "./pages/UserManagement";
 import Settings from "./pages/Settings";
 import DatabaseSync from "./pages/DatabaseSync";
-import SavedScenarios from "./pages/SavedScenarios";
 import RegressionAnalysis from "./pages/RegressionAnalysis";
 import LandingPage from "./pages/LandingPage";
 import SupabaseLogin from "./pages/SupabaseLogin";
@@ -97,8 +96,8 @@ const App = () => {
             <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
             <Route path="/regression-analysis" element={<ProtectedRoute><RegressionAnalysis /></ProtectedRoute>} />
             
-            {/* Legacy routes */}
-            <Route path="/saved" element={<ProtectedRoute><SavedScenarios /></ProtectedRoute>} />
+            {/* Legacy routes - redirect /saved to /reports */}
+            <Route path="/saved" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
             <Route path="*" element={<NotFound />} />
           </Routes>
           </Router>

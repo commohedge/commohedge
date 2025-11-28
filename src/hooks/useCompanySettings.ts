@@ -182,4 +182,9 @@ export function useCompanySettings() {
 
 export function getCompanyNameSync() {
   return companyNameCache;
+}
+
+export function getIncludeLogoInPdf(): boolean {
+  const saved = localStorage.getItem('includeLogoInPdf');
+  return saved ? JSON.parse(saved) : false;
 } 

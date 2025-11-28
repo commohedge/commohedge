@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createRoot } from 'react-dom/client';
 import { Layout } from '@/components/Layout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -23,12 +24,15 @@ import {
   Activity,
   XCircle,
   ChevronUp,
-  ChevronDown
+  ChevronDown,
+  Upload
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { SavedScenario } from '@/types/Scenario';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine } from 'recharts';
 import ScenariosPdfExport from '@/components/ScenariosPdfExport';
+import PayoffChart from '@/components/PayoffChart';
+import { ThemeProvider } from '@/hooks/ThemeProvider';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 import html2canvas from 'html2canvas';
@@ -165,7 +169,7 @@ const Reports = () => {
       // Statistiques par devise
       const scenariosByCurrency: Record<string, number> = {};
       scenarios.forEach((scenario: SavedScenario) => {
-        const currency = scenario.params.currencyPair?.symbol || 'Unknown';
+        const currency = scenario.params.commodity?.symbol || scenario.params.commodity?.base || (scenario.params as any).currencyPair?.symbol || 'Unknown';
         scenariosByCurrency[currency] = (scenariosByCurrency[currency] || 0) + 1;
       });
 
@@ -306,6 +310,40 @@ const Reports = () => {
       setSelectedReport(null);
     } catch (error) {
       console.error('Error deleting report:', error);
+    }
+  };
+
+  const loadScenario = (scenario: SavedScenario) => {
+    try {
+      localStorage.setItem('calculatorState', JSON.stringify({
+        params: scenario.params,
+        strategy: scenario.strategy,
+        results: scenario.results,
+        payoffData: scenario.payoffData,
+        // Récupérer les paramètres personnalisés du scénario sauvegardé ou utiliser des valeurs par défaut
+        manualForwards: scenario.manualForwards || {},
+        realPrices: scenario.realPrices || {},
+        realPriceParams: {
+          useSimulation: false,
+          volatility: 0.3,
+          drift: 0.01,
+          numSimulations: 1000
+        },
+        barrierOptionSimulations: 1000,
+        useClosedFormBarrier: false,
+        activeTab: 'parameters',
+        customScenario: scenario.stressTest,
+        stressTestScenarios: {}, // You might want to save this too
+        // Récupérer les paramètres de volatilité implicite
+        useImpliedVol: scenario.useImpliedVol || false,
+        impliedVolatilities: scenario.impliedVolatilities || {},
+        // Récupérer les prix personnalisés des options
+        useCustomOptionPrices: (scenario as any).useCustomOptionPrices || false,
+        customOptionPrices: scenario.customOptionPrices || {}
+      }));
+      navigate('/strategy-builder');
+    } catch (error) {
+      console.error('Error loading scenario:', error);
     }
   };
 
@@ -566,6 +604,41 @@ const Reports = () => {
     return data;
   };
 
+  // Helper functions pour le formatage
+  const formatNumber = (value: number, decimals: number = 2): string => {
+    if (isNaN(value) || value === null || value === undefined) return 'N/A';
+    return Math.abs(value).toLocaleString('en-US', {
+      minimumFractionDigits: decimals,
+      maximumFractionDigits: decimals,
+      useGrouping: true
+    });
+  };
+
+  const formatCurrency = (value: number): string => {
+    if (isNaN(value) || value === null || value === undefined) return 'N/A';
+    const sign = value < 0 ? '-' : '';
+    const absValue = Math.abs(value);
+    return `${sign}$${absValue.toLocaleString('en-US', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+      useGrouping: true
+    })}`;
+  };
+
+  const formatPercentage = (value: number, decimals: number = 2): string => {
+    if (isNaN(value) || value === null || value === undefined) return 'N/A';
+    return `${value.toFixed(decimals)}%`;
+  };
+
+  const formatVolume = (value: number): string => {
+    if (isNaN(value) || value === null || value === undefined) return 'N/A';
+    return value.toLocaleString('en-US', {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+      useGrouping: true
+    });
+  };
+
   // Fonction pour exporter en PDF - Version améliorée et professionnelle
   const exportToPdf = async (report: any) => {
     if (report.type === 'scenario') {
@@ -598,45 +671,129 @@ const Reports = () => {
         const addPageHeader = () => {
           // Header avec logo et titre
           pdf.setFillColor(30, 64, 175); // Blue-600
-          pdf.rect(0, 0, pageWidth, 25, 'F');
+          pdf.rect(0, 0, pageWidth, 28, 'F');
+          
+          // Ajouter le logo si l'option est cochée
+          const includeLogoInPdf = (() => {
+            try {
+              const saved = localStorage.getItem('includeLogoInPdf');
+              return saved ? JSON.parse(saved) : false;
+            } catch {
+              return false;
+            }
+          })();
+          
+          if (includeLogoInPdf) {
+            try {
+              const companyLogo = localStorage.getItem('companyLogo');
+              if (companyLogo && companyLogo.trim() !== '') {
+                // Centrer verticalement le logo dans la barre (hauteur 28mm, logo 18mm -> offset de 5mm)
+                const logoY = 5; // Position Y pour centrer dans la barre de 28mm
+                const logoHeight = 18;
+                const logoWidth = 18;
+                
+                let imageData = '';
+                let imageFormat = 'PNG';
+                
+                if (companyLogo.startsWith('data:image')) {
+                  // Logo en base64 avec préfixe data:image
+                  imageData = companyLogo;
+                  // Extraire le format depuis le data URL
+                  if (companyLogo.includes('image/jpeg') || companyLogo.includes('image/jpg')) {
+                    imageFormat = 'JPEG';
+                  } else if (companyLogo.includes('image/png')) {
+                    imageFormat = 'PNG';
+                  }
+                } else if (!companyLogo.startsWith('/') && !companyLogo.startsWith('http')) {
+                  // Logo en base64 sans préfixe data: - détecter le format
+                  if (companyLogo.startsWith('iVBORw0KGgo') || companyLogo.startsWith('/9j/')) {
+                    // PNG base64 commence par iVBORw0KGgo
+                    imageData = `data:image/png;base64,${companyLogo}`;
+                    imageFormat = 'PNG';
+                  } else if (companyLogo.startsWith('/9j/') || companyLogo.startsWith('iVBORw0KGgo') === false) {
+                    // JPEG base64 commence par /9j/
+                    imageData = `data:image/jpeg;base64,${companyLogo}`;
+                    imageFormat = 'JPEG';
+                  } else {
+                    // Par défaut, essayer PNG
+                    imageData = `data:image/png;base64,${companyLogo}`;
+                    imageFormat = 'PNG';
+                  }
+                }
+                
+                if (imageData) {
+                  // Ajouter le logo APRÈS le rectangle bleu pour qu'il soit visible au-dessus
+                  pdf.addImage(imageData, imageFormat, contentPadding, logoY, logoWidth, logoHeight);
+                }
+              }
+            } catch (error) {
+              console.warn('Could not add logo to PDF:', error);
+            }
+          }
+          
+          const logoOffset = includeLogoInPdf ? 25 : 0;
           
           pdf.setFont('helvetica', 'bold');
           pdf.setTextColor(255);
-          pdf.setFontSize(16);
-          pdf.text('FX HEDGING PLATFORM', contentPadding, 12);
+          pdf.setFontSize(18);
+          pdf.text('COMMODITY RISK MANAGER', contentPadding + logoOffset, 12);
           
           pdf.setFont('helvetica', 'normal');
-          pdf.setFontSize(10);
-          pdf.text('Professional Risk Management Report', contentPadding, 18);
+          pdf.setFontSize(11);
+          pdf.text('Professional Commodity Hedging & Risk Management Report', contentPadding + logoOffset, 19);
+          
+          // Report ID and generation date - simplified and smaller, below the subtitle
+          const reportId = report.id || `RPT-${Date.now()}`;
+          // Simplify ID: take first 8 characters if it's a UUID, otherwise use first 8 chars
+          const shortId = reportId.length > 8 ? reportId.substring(0, 8).toUpperCase() : reportId.toUpperCase();
+          const generatedDate = new Date(report.timestamp).toLocaleString('en-US', {
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit'
+          });
+          
+          pdf.setFont('helvetica', 'normal');
+          pdf.setFontSize(7);
+          pdf.setTextColor(220, 220, 220); // Lighter gray for less prominence
+          pdf.text(`ID: ${shortId} | ${generatedDate}`, pageWidth - contentPadding, 24, { align: 'right' });
+          
+          // Reset text color to black for the rest of the document
+          pdf.setTextColor(0, 0, 0);
           
           // Ligne de séparation
           pdf.setDrawColor(200, 200, 200);
-          pdf.line(contentPadding, 25, pageWidth - contentPadding, 25);
+          pdf.line(contentPadding, 28, pageWidth - contentPadding, 28);
           
-          yOffset = 35;
+          yOffset = 38;
         };
 
         // En-tête principal du document
         addPageHeader();
         
-        // Titre principal du rapport
+        // Titre principal du rapport avec meilleur styling
+        const cleanTitle = report.name.replace(/[^\w\s-]/g, ' ').trim();
         pdf.setFont('helvetica', 'bold');
         pdf.setTextColor(0);
         pdf.setFontSize(20);
-        pdf.text(report.name, contentPadding, yOffset);
-        yOffset += 8;
+        pdf.text(cleanTitle, contentPadding, yOffset, { maxWidth: pageWidth - 2 * contentPadding });
+        yOffset += 10;
 
         // Sous-titre avec métadonnées
-        pdf.setFont('helvetica', 'normal');
-        pdf.setFontSize(12);
-        pdf.setTextColor(100, 100, 100);
         const scenarioType = getScenarioTypeName(report);
+        pdf.setFontSize(11);
+        pdf.setFont('helvetica', 'normal');
+        pdf.setTextColor(60, 60, 60);
         pdf.text(`Scenario Type: ${scenarioType}`, contentPadding, yOffset);
-        yOffset += 5;
-        pdf.text(`Generated: ${new Date(report.timestamp).toLocaleString()}`, contentPadding, yOffset);
-        yOffset += 5;
-        pdf.text(`Report ID: ${report.id}`, contentPadding, yOffset);
-        yOffset += 15;
+        yOffset += 6;
+        
+        // Commodity information
+        const commodityNameForHeader = report.params.commodity?.symbol || report.params.commodity?.base || (report.params as any).currencyPair?.symbol || 'N/A';
+        pdf.setFontSize(10);
+        pdf.setTextColor(100, 100, 100);
+        pdf.text(`Commodity: ${commodityNameForHeader}`, contentPadding, yOffset);
+        yOffset += 8;
 
         // Table des matières
         checkPageBreak(30);
@@ -652,8 +809,9 @@ const Reports = () => {
           '3. Strategy Components',
           '4. Risk Analysis',
           '5. Detailed Results',
-          '6. Performance Metrics',
-          '7. Summary Statistics'
+          '6. Yearly & Monthly Breakdown',
+          '7. Performance Metrics',
+          '8. Summary Statistics'
         ];
 
         pdf.setFont('helvetica', 'normal');
@@ -679,16 +837,30 @@ const Reports = () => {
         const avgHedgedCost = report.results?.reduce((sum: number, r: any) => sum + r.hedgedCost, 0) / (report.results?.length || 1) || 0;
         const avgUnhedgedCost = report.results?.reduce((sum: number, r: any) => sum + r.unhedgedCost, 0) / (report.results?.length || 1) || 0;
         const costReduction = avgUnhedgedCost !== 0 ? ((totalPnL / Math.abs(avgUnhedgedCost)) * 100) : 0;
+        
+        // Déclarer commodityName avant son utilisation
+        const commodityName = report.params.commodity?.symbol || report.params.commodity?.base || (report.params as any).currencyPair?.symbol || 'N/A';
 
+        // Check if custom periods are used
+        const useCustomPeriods = report.params.useCustomPeriods || false;
+        const customPeriodsCount = report.params.customPeriods?.length || 0;
+        
+        const strategyCoverageText = useCustomPeriods && customPeriodsCount > 0
+          ? `The strategy uses ${customPeriodsCount} custom hedging period${customPeriodsCount > 1 ? 's' : ''} with a total volume of ${formatVolume(totalVolume)} units.`
+          : `The strategy covers ${report.params.monthsToHedge} months with a total volume of ${formatVolume(totalVolume)} units.`;
+        
         const summaryText = [
-          `This report presents a comprehensive analysis of the "${report.name}" hedging strategy.`,
-          `The strategy covers ${report.params.monthsToHedge} months with a total volume of ${totalVolume.toLocaleString()} units.`,
-          `Key performance metrics:`,
-          `• Total P&L: ${totalPnL.toFixed(2)}`,
-          `• Average Hedged Cost: ${avgHedgedCost.toFixed(2)}`,
-          `• Average Unhedged Cost: ${avgUnhedgedCost.toFixed(2)}`,
-          `• Cost Reduction: ${costReduction.toFixed(2)}%`,
-          `• Strategy Components: ${report.strategy?.length || 0} instruments`
+          `This report presents a comprehensive analysis of the "${report.name}" commodity hedging strategy.`,
+          strategyCoverageText,
+          '',
+          'Key Performance Metrics:',
+          '',
+          `• Total P&L: ${formatCurrency(totalPnL)}`,
+          `• Average Hedged Cost: ${formatCurrency(avgHedgedCost)}`,
+          `• Average Unhedged Cost: ${formatCurrency(avgUnhedgedCost)}`,
+          `• Cost Reduction: ${formatPercentage(costReduction)}`,
+          `• Strategy Components: ${report.strategy?.length || 0} instrument${(report.strategy?.length || 0) > 1 ? 's' : ''}`,
+          `• Commodity: ${commodityName}`
         ];
 
         summaryText.forEach(line => {
@@ -728,25 +900,37 @@ const Reports = () => {
           },
           tableWidth: 'auto'
         };
-
+        
+        // Build basic parameters - adapt based on custom periods (reuse variables already declared above)
         const basicParams = [
           ['Parameter', 'Value', 'Description'],
-          ['Start Date', report.params.startDate, 'Hedging start date'],
-          ['Months to Hedge', report.params.monthsToHedge.toString(), 'Hedging period in months'],
-          ['Interest Rate', `${report.params.interestRate}%`, 'Risk-free interest rate'],
-          ['Currency Pair', report.params.currencyPair?.symbol || 'N/A', 'Trading currency pair']
+          ['Start Date', report.params.startDate, 'Hedging start date']
         ];
+        
+        // Add hedging period information based on whether custom periods are used
+        if (useCustomPeriods && customPeriodsCount > 0) {
+          basicParams.push(['Hedging Periods', `${customPeriodsCount} custom period${customPeriodsCount > 1 ? 's' : ''}`, 'Number of custom hedging periods']);
+        } else {
+          basicParams.push(['Months to Hedge', report.params.monthsToHedge.toString(), 'Hedging period in months']);
+        }
+        
+        basicParams.push(
+          ['Interest Rate', `${report.params.interestRate}%`, 'Risk-free interest rate'],
+          ['Commodity', commodityName, 'Trading commodity']
+        );
 
         if (report.params.baseVolume && report.params.quoteVolume) {
+          const baseName = report.params.commodity?.base || (report.params as any).currencyPair?.base || 'BASE';
+          const quoteName = report.params.commodity?.quote || (report.params as any).currencyPair?.quote || 'QUOTE';
           basicParams.push(
-            [`Base Volume (${report.params.currencyPair?.base || 'BASE'})`, report.params.baseVolume.toLocaleString(), 'Base currency volume'],
-            [`Quote Volume (${report.params.currencyPair?.quote || 'QUOTE'})`, Math.round(report.params.quoteVolume).toLocaleString(), 'Quote currency volume'],
-            ['Spot Price', report.params.spotPrice?.toFixed(4) || 'N/A', 'Current spot exchange rate']
+            [`Base Volume (${baseName})`, formatVolume(report.params.baseVolume), 'Base commodity volume'],
+            [`Quote Volume (${quoteName})`, formatVolume(Math.round(report.params.quoteVolume)), 'Quote commodity volume'],
+            ['Spot Price', formatNumber(report.params.spotPrice || 0, 4), 'Current spot price']
           );
         } else {
           basicParams.push(
-            ['Total Volume', report.params.totalVolume?.toLocaleString() || 'N/A', 'Total hedging volume'],
-            ['Spot Price', report.params.spotPrice?.toFixed(4) || 'N/A', 'Current spot exchange rate']
+            ['Total Volume', formatVolume(report.params.totalVolume || 0), 'Total hedging volume'],
+            ['Spot Price', formatNumber(report.params.spotPrice || 0, 2), 'Current spot price']
           );
         }
 
@@ -767,23 +951,177 @@ const Reports = () => {
           pdf.text('3. STRATEGY COMPONENTS', contentPadding, yOffset);
           yOffset += 8;
 
-          const strategyData = report.strategy.map((comp: any, index: number) => [
-            `Component ${index + 1}`,
-            comp.type.toUpperCase(),
-            comp.strikeType === 'percent' ? `${comp.strike}%` : comp.strike.toString(),
-            `${comp.volatility}%`,
-            `${comp.quantity}%`,
-            comp.barrier ? (comp.barrierType === 'percent' ? `${comp.barrier}%` : comp.barrier.toString()) : 'N/A'
-          ]);
+          // Tableau récapitulatif des composants
+          const strategyData = report.strategy.map((comp: any, index: number) => {
+            const strikeValue = comp.strikeType === 'percent' 
+              ? `${comp.strike}%` 
+              : formatNumber(comp.strike, 2);
+            
+            const row = [
+              `Component ${index + 1}`,
+              comp.type.toUpperCase(),
+              strikeValue,
+              formatPercentage(comp.volatility || 0, 1),
+              formatPercentage(comp.quantity || 0, 0)
+            ];
+            
+            // Ajouter la première barrière
+            if (comp.barrier !== undefined && comp.barrier !== null) {
+              const barrierValue = comp.barrierType === 'percent'
+                ? `${comp.barrier}%`
+                : formatNumber(comp.barrier, 2);
+              row.push(barrierValue);
+            } else {
+              row.push('N/A');
+            }
+            
+            // Ajouter la deuxième barrière pour les options à double barrière
+            if (comp.type && comp.type.includes('double') && comp.secondBarrier !== undefined && comp.secondBarrier !== null) {
+              const secondBarrierValue = comp.barrierType === 'percent'
+                ? `${comp.secondBarrier}%`
+                : formatNumber(comp.secondBarrier, 2);
+              row.push(secondBarrierValue);
+            } else {
+              row.push('N/A');
+            }
+            
+            return row;
+          });
 
           pdf.autoTable({
             ...tableOptions,
             startY: yOffset,
-            head: [['Component', 'Type', 'Strike', 'Volatility', 'Quantity', 'Barrier']],
-            body: strategyData
+            head: [['Component', 'Type', 'Strike', 'Volatility', 'Quantity', 'Barrier', 'Second Barrier']],
+            body: strategyData,
+            styles: {
+              overflow: 'hidden',
+              cellPadding: 2,
+              fontSize: 9
+            },
+            columnStyles: {
+              0: { cellWidth: 28, fontStyle: 'bold', overflow: 'hidden' }, // Augmenté pour "Component 1", "Component 2"
+              1: { cellWidth: 35, overflow: 'hidden' },
+              2: { cellWidth: 25, halign: 'right' },
+              3: { cellWidth: 20, halign: 'right' },
+              4: { cellWidth: 20, halign: 'right' },
+              5: { cellWidth: 25, halign: 'right' },
+              6: { cellWidth: 25, halign: 'right' }
+            }
           });
 
           yOffset = (pdf as any).lastAutoTable.finalY + 10;
+
+          // Tableau détaillé par maturité
+          if (report.results && report.results.length > 0) {
+            checkPageBreak(30);
+            pdf.setFont('helvetica', 'bold');
+            pdf.setFontSize(12);
+            pdf.text('Strategy Components by Maturity', contentPadding, yOffset);
+            yOffset += 6;
+
+            // Préparer les données détaillées par maturité
+            const detailedStrategyData: any[] = [];
+            
+            report.results.forEach((result: any) => {
+              const date = new Date(result.date);
+              const monthKey = `${date.getFullYear()}-${date.getMonth() + 1}`;
+              const maturityDate = new Date(result.date).toLocaleDateString('en-GB', { 
+                day: '2-digit', 
+                month: '2-digit', 
+                year: 'numeric' 
+              });
+              
+              // Pour chaque composant de stratégie
+              report.strategy.forEach((comp: any, compIndex: number) => {
+                // Trouver l'option correspondante dans les résultats
+                const optionPrice = result.optionPrices && result.optionPrices[compIndex] 
+                  ? result.optionPrices[compIndex] 
+                  : null;
+                
+                // Calculer le strike absolu (utiliser le strike dynamique si disponible)
+                let absoluteStrike = comp.strikeType === 'percent'
+                  ? report.params.spotPrice * (comp.strike / 100)
+                  : comp.strike;
+                
+                // Si l'option a un strike dynamique calculé, l'utiliser
+                if (optionPrice && optionPrice.dynamicStrikeInfo) {
+                  absoluteStrike = optionPrice.dynamicStrikeInfo.calculatedStrike;
+                } else if (optionPrice && optionPrice.strike) {
+                  absoluteStrike = optionPrice.strike;
+                }
+                
+                // Obtenir la volatilité effective (implied vol si disponible, sinon stratégie)
+                let effectiveVol = comp.volatility;
+                if (report.useImpliedVol && report.impliedVolatilities && report.impliedVolatilities[monthKey]) {
+                  const monthIV = report.impliedVolatilities[monthKey];
+                  // Vérifier si c'est un objet (nouveau format) ou un nombre (ancien format)
+                  if (typeof monthIV === 'object' && monthIV !== null) {
+                    const optionKey = `${comp.type}-${compIndex}`;
+                    const impliedVol = (monthIV as any)[optionKey] || (monthIV as any).global;
+                    if (impliedVol !== undefined && impliedVol !== null && !isNaN(impliedVol)) {
+                      effectiveVol = impliedVol;
+                    }
+                  } else if (typeof monthIV === 'number') {
+                    // Ancien format : valeur directe
+                    effectiveVol = monthIV;
+                  }
+                }
+                
+                // Calculer les barrières absolues si présentes
+                let absoluteBarrier = 'N/A';
+                let absoluteSecondBarrier = 'N/A';
+                
+                if (comp.barrier !== undefined && comp.barrier !== null) {
+                  absoluteBarrier = comp.barrierType === 'percent'
+                    ? formatNumber(report.params.spotPrice * (comp.barrier / 100), 2)
+                    : formatNumber(comp.barrier, 2);
+                }
+                
+                if (comp.type && comp.type.includes('double') && comp.secondBarrier !== undefined && comp.secondBarrier !== null) {
+                  absoluteSecondBarrier = comp.barrierType === 'percent'
+                    ? formatNumber(report.params.spotPrice * (comp.secondBarrier / 100), 2)
+                    : formatNumber(comp.secondBarrier, 2);
+                }
+                
+                const row = [
+                  maturityDate,
+                  comp.type.toUpperCase(),
+                  formatNumber(absoluteStrike, 2),
+                  formatPercentage(effectiveVol, 1),
+                  optionPrice ? formatNumber(optionPrice.price, 4) : 'N/A',
+                  formatPercentage(comp.quantity || 0, 0),
+                  absoluteBarrier,
+                  absoluteSecondBarrier
+                ];
+                
+                detailedStrategyData.push(row);
+              });
+            });
+
+            pdf.autoTable({
+              ...tableOptions,
+              startY: yOffset,
+              head: [['Maturity', 'Type', 'Strike', 'Vol (%)', 'Price', 'Quantity (%)', 'Barrier', '2nd Barrier']],
+              body: detailedStrategyData,
+              styles: {
+                fontSize: 7,
+                cellPadding: 1,
+                overflow: 'hidden'
+              },
+              columnStyles: {
+                0: { cellWidth: 25, fontStyle: 'bold' },
+                1: { cellWidth: 40, overflow: 'hidden' }, // Augmenté pour afficher "PUT-KNOCKOUT" complet
+                2: { cellWidth: 20, halign: 'right' },
+                3: { cellWidth: 18, halign: 'right' },
+                4: { cellWidth: 20, halign: 'right' },
+                5: { cellWidth: 18, halign: 'right' },
+                6: { cellWidth: 20, halign: 'right' },
+                7: { cellWidth: 20, halign: 'right' }
+              }
+            });
+
+            yOffset = (pdf as any).lastAutoTable.finalY + 10;
+          }
         }
 
         // 4. Risk Analysis (Stress Test)
@@ -829,12 +1167,12 @@ const Reports = () => {
           const yearlyResults = calculateYearlyResults(report.results);
           const yearlyData = Object.entries(yearlyResults).map(([year, data]) => [
             year,
-            data.volume.toLocaleString(),
-            data.strategyPremium.toFixed(2),
-            data.hedgedCost.toFixed(2),
-            data.unhedgedCost.toFixed(2),
-            data.deltaPnL.toFixed(2),
-            ((data.deltaPnL / Math.abs(data.unhedgedCost)) * 100).toFixed(2) + '%'
+            formatVolume(data.volume),
+            formatCurrency(data.strategyPremium),
+            formatCurrency(data.hedgedCost),
+            formatCurrency(data.unhedgedCost),
+            formatCurrency(data.deltaPnL),
+            formatPercentage((data.deltaPnL / Math.abs(data.unhedgedCost)) * 100)
           ]);
 
           pdf.autoTable({
@@ -846,7 +1184,7 @@ const Reports = () => {
 
           yOffset = (pdf as any).lastAutoTable.finalY + 10;
 
-          // Graphique P&L Evolution
+          // Graphique P&L Evolution - Rendre avec React et capturer
           checkPageBreak(80);
           pdf.setFont('helvetica', 'bold');
           pdf.setFontSize(12);
@@ -854,132 +1192,106 @@ const Reports = () => {
           yOffset += 6;
 
           try {
-            // Créer un tableau simple pour le P&L
-            const pnlData = report.results.map((result: any, index: number) => ({
-              month: new Date(result.date).toLocaleDateString('en-US', { month: 'short', year: '2-digit' }),
-              pnl: result.deltaPnL
+            // Créer un conteneur temporaire hors écran avec une taille plus grande
+            const tempContainer = document.createElement('div');
+            tempContainer.id = `temp-pnl-chart-${report.id}`;
+            tempContainer.style.position = 'absolute';
+            tempContainer.style.left = '-9999px';
+            tempContainer.style.top = '0';
+            tempContainer.style.width = '900px';
+            tempContainer.style.height = '500px';
+            tempContainer.style.backgroundColor = '#ffffff';
+            tempContainer.style.padding = '20px';
+            document.body.appendChild(tempContainer);
+
+            // Préparer les données pour le graphique
+            const pnlChartData = report.results.map((result: any) => ({
+              date: new Date(result.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+              deltaPnL: result.deltaPnL
             }));
 
-            // Créer un graphique simple avec Canvas
-            const canvas = document.createElement('canvas');
-            canvas.width = 800;
-            canvas.height = 400;
-            const ctx = canvas.getContext('2d');
-            
-            if (ctx) {
-              // Background
-              ctx.fillStyle = '#ffffff';
-              ctx.fillRect(0, 0, canvas.width, canvas.height);
-              
-              // Border
-              ctx.strokeStyle = '#e5e7eb';
-              ctx.lineWidth = 1;
-              ctx.strokeRect(0, 0, canvas.width, canvas.height);
-              
-              // Title
-              ctx.fillStyle = '#1f2937';
-              ctx.font = 'bold 16px Arial';
-              ctx.textAlign = 'center';
-              ctx.fillText('P&L Evolution Over Time', canvas.width / 2, 30);
-              ctx.font = '12px Arial';
-              ctx.fillStyle = '#6b7280';
-              ctx.fillText('Monthly Delta P&L Performance', canvas.width / 2, 50);
-              
-              // Chart area
-              const chartX = 60;
-              const chartY = 80;
-              const chartWidth = canvas.width - 120;
-              const chartHeight = canvas.height - 120;
-              
-              // Grid
-              ctx.strokeStyle = '#f3f4f6';
-              ctx.lineWidth = 1;
-              for (let i = 0; i <= 5; i++) {
-                const y = chartY + (i * chartHeight) / 5;
-                ctx.beginPath();
-                ctx.moveTo(chartX, y);
-                ctx.lineTo(chartX + chartWidth, y);
-                ctx.stroke();
-              }
-              
-              // Y-axis
-              const pnlValues = pnlData.map(d => d.pnl);
-              const minPnL = Math.min(...pnlValues);
-              const maxPnL = Math.max(...pnlValues);
-              const range = maxPnL - minPnL || 1;
-              
-              // Zero line
-              if (minPnL <= 0 && maxPnL >= 0) {
-                const zeroY = chartY + chartHeight - ((0 - minPnL) / range) * chartHeight;
-                ctx.strokeStyle = '#ef4444';
-                ctx.lineWidth = 1;
-                ctx.setLineDash([3, 3]);
-                ctx.beginPath();
-                ctx.moveTo(chartX, zeroY);
-                ctx.lineTo(chartX + chartWidth, zeroY);
-                ctx.stroke();
-                ctx.setLineDash([]);
-              }
-              
-              // P&L line
-              ctx.strokeStyle = '#3b82f6';
-              ctx.lineWidth = 2;
-              ctx.beginPath();
-              
-              pnlData.forEach((point, index) => {
-                const x = chartX + (index * chartWidth) / (pnlData.length - 1);
-                const y = chartY + chartHeight - ((point.pnl - minPnL) / range) * chartHeight;
-                
-                if (index === 0) {
-                  ctx.moveTo(x, y);
-                } else {
-                  ctx.lineTo(x, y);
-                }
-              });
-              ctx.stroke();
-              
-              // Y-axis labels
-              ctx.fillStyle = '#6b7280';
-              ctx.font = '10px Arial';
-              ctx.textAlign = 'right';
-              for (let i = 0; i <= 5; i++) {
-                const value = maxPnL - (i * range) / 5;
-                const y = chartY + (i * chartHeight) / 5;
-                ctx.fillText(value.toFixed(0), chartX - 10, y + 5);
-              }
-              
-              // X-axis labels
-              ctx.textAlign = 'center';
-              for (let i = 0; i <= 4; i++) {
-                const index = Math.floor((i * pnlData.length) / 4);
-                if (index < pnlData.length) {
-                  const x = chartX + (i * chartWidth) / 4;
-                  ctx.fillText(pnlData[index].month, x, chartY + chartHeight + 20);
-                }
-              }
-              
-              // Axis labels
-              ctx.fillStyle = '#374151';
-              ctx.font = 'bold 12px Arial';
-              ctx.textAlign = 'center';
-              ctx.fillText('Time Period', canvas.width / 2, canvas.height - 10);
-              
-              ctx.save();
-              ctx.translate(20, canvas.height / 2);
-              ctx.rotate(-Math.PI / 2);
-              ctx.fillText('Delta P&L', 0, 0);
-              ctx.restore();
+            // Vérifier que nous avons des données
+            if (!pnlChartData || pnlChartData.length === 0) {
+              throw new Error('No P&L data available');
             }
 
+            // Rendre le graphique P&L avec React
+            const PnlChartComponent = () => (
+              <div style={{ width: '100%', height: '100%', background: 'white' }}>
+                <h3 style={{ margin: '0 0 10px 0', fontSize: '16px', fontWeight: 'bold' }}>P&L Evolution Over Time</h3>
+                <p style={{ margin: '0 0 20px 0', fontSize: '12px', color: '#666' }}>Monthly Delta P&L Performance</p>
+                <div style={{ width: '100%', height: '420px' }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={pnlChartData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis 
+                        dataKey="date" 
+                        angle={-45}
+                        textAnchor="end"
+                        height={60}
+                      />
+                      <YAxis />
+                      <Tooltip />
+                      <Legend />
+                      <Line 
+                        type="monotone" 
+                        dataKey="deltaPnL" 
+                        name="Delta P&L" 
+                        stroke="#8884d8" 
+                        strokeWidth={2}
+                        dot={{ r: 4 }}
+                        activeDot={{ r: 6 }}
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+            );
+
+            const root = createRoot(tempContainer);
+            root.render(<PnlChartComponent />);
+
+            // Attendre que le graphique soit complètement rendu (augmenter le délai)
+            await new Promise(resolve => setTimeout(resolve, 2000));
+
+            // Vérifier que le graphique est rendu avant de capturer
+            const chartElement = tempContainer.querySelector('.recharts-wrapper');
+            if (!chartElement) {
+              console.warn('Chart element not found, waiting longer...');
+              await new Promise(resolve => setTimeout(resolve, 2000));
+            }
+
+            // Capturer avec html2canvas
+            const renderOptions = {
+              scale: 2,
+              useCORS: true,
+              logging: true, // Activer les logs pour déboguer
+              backgroundColor: '#ffffff',
+              allowTaint: true
+            };
+            
+            console.log('Capturing P&L chart...');
+            const canvas = await html2canvas(tempContainer, renderOptions);
+            console.log('P&L chart captured, dimensions:', canvas.width, 'x', canvas.height);
+            
             const imgData = canvas.toDataURL('image/png');
             const imgWidth = pageWidth - (2 * contentPadding);
             const imgHeight = (canvas.height * imgWidth) / canvas.width;
 
-            pdf.addImage(imgData, 'PNG', contentPadding, yOffset, imgWidth, imgHeight);
-            yOffset += imgHeight + 10;
+            // Vérifier que l'image n'est pas vide
+            if (canvas.width > 0 && canvas.height > 0) {
+              pdf.addImage(imgData, 'PNG', contentPadding, yOffset, imgWidth, imgHeight);
+              yOffset += imgHeight + 10;
+              console.log('P&L chart added to PDF');
+            } else {
+              throw new Error('Captured canvas is empty');
+            }
 
+            // Nettoyer
+            root.unmount();
+            document.body.removeChild(tempContainer);
           } catch (error) {
-            console.warn('Could not generate P&L chart:', error);
+            console.error('Error generating P&L chart:', error);
             pdf.setFont('helvetica', 'italic');
             pdf.setFontSize(10);
             pdf.setTextColor(100, 100, 100);
@@ -987,7 +1299,7 @@ const Reports = () => {
             yOffset += 10;
           }
 
-          // Graphique Commodity Hedging Profile
+          // Graphique Commodity Hedging Profile - Rendre avec React et capturer
           checkPageBreak(80);
           pdf.setFont('helvetica', 'bold');
           pdf.setFontSize(12);
@@ -995,179 +1307,47 @@ const Reports = () => {
           yOffset += 6;
 
           try {
-            // Générer les données de hedging
-            const hedgingData = generateCommodityHedgingData(report.strategy, report.params.spotPrice, false);
-            
-            // Créer un graphique simple avec Canvas
-            const canvas = document.createElement('canvas');
-            canvas.width = 800;
-            canvas.height = 400;
-            const ctx = canvas.getContext('2d');
-            
-            if (ctx && hedgingData.length > 0) {
-              // Background
-              ctx.fillStyle = '#ffffff';
-              ctx.fillRect(0, 0, canvas.width, canvas.height);
-              
-              // Border
-              ctx.strokeStyle = '#e5e7eb';
-              ctx.lineWidth = 1;
-              ctx.strokeRect(0, 0, canvas.width, canvas.height);
-              
-              // Title
-              ctx.fillStyle = '#1f2937';
-              ctx.font = 'bold 16px Arial';
-              ctx.textAlign = 'center';
-              ctx.fillText('Commodity Hedging Profile', canvas.width / 2, 30);
-              ctx.font = '12px Arial';
-              ctx.fillStyle = '#6b7280';
-              ctx.fillText('Hedged vs Unhedged Rates Across Market Scenarios', canvas.width / 2, 50);
-              
-              // Chart area
-              const chartX = 60;
-              const chartY = 80;
-              const chartWidth = canvas.width - 120;
-              const chartHeight = canvas.height - 120;
-              
-              // Calculate scales
-              const minSpot = Math.min(...hedgingData.map(d => d.spot));
-              const maxSpot = Math.max(...hedgingData.map(d => d.spot));
-              const minRate = Math.min(...hedgingData.map(d => Math.min(d.unhedged, d.hedged)));
-              const maxRate = Math.max(...hedgingData.map(d => Math.max(d.unhedged, d.hedged)));
-              
-              const xScale = chartWidth / (maxSpot - minSpot);
-              const yScale = chartHeight / (maxRate - minRate);
-              
-              // Grid
-              ctx.strokeStyle = '#f3f4f6';
-              ctx.lineWidth = 1;
-              for (let i = 0; i <= 5; i++) {
-                const y = chartY + (i * chartHeight) / 5;
-                ctx.beginPath();
-                ctx.moveTo(chartX, y);
-                ctx.lineTo(chartX + chartWidth, y);
-                ctx.stroke();
-              }
-              for (let i = 0; i <= 10; i++) {
-                const x = chartX + (i * chartWidth) / 10;
-                ctx.beginPath();
-                ctx.moveTo(x, chartY);
-                ctx.lineTo(x, chartY + chartHeight);
-                ctx.stroke();
-              }
-              
-              // Current spot line
-              const currentSpotX = chartX + ((report.params.spotPrice - minSpot) * xScale);
-              ctx.strokeStyle = '#10b981';
-              ctx.lineWidth = 2;
-              ctx.setLineDash([5, 5]);
-              ctx.beginPath();
-              ctx.moveTo(currentSpotX, chartY);
-              ctx.lineTo(currentSpotX, chartY + chartHeight);
-              ctx.stroke();
-              ctx.setLineDash([]);
-              
-              // Unhedged line
-              ctx.strokeStyle = '#9ca3af';
-              ctx.lineWidth = 2;
-              ctx.setLineDash([4, 4]);
-              ctx.beginPath();
-              
-              hedgingData.forEach((point, index) => {
-                const x = chartX + ((point.spot - minSpot) * xScale);
-                const y = chartY + chartHeight - ((point.unhedged - minRate) * yScale);
-                
-                if (index === 0) {
-                  ctx.moveTo(x, y);
-                } else {
-                  ctx.lineTo(x, y);
-                }
-              });
-              ctx.stroke();
-              ctx.setLineDash([]);
-              
-              // Hedged line
-              ctx.strokeStyle = '#3b82f6';
-              ctx.lineWidth = 3;
-              ctx.beginPath();
-              
-              hedgingData.forEach((point, index) => {
-                const x = chartX + ((point.spot - minSpot) * xScale);
-                const y = chartY + chartHeight - ((point.hedged - minRate) * yScale);
-                
-                if (index === 0) {
-                  ctx.moveTo(x, y);
-                } else {
-                  ctx.lineTo(x, y);
-                }
-              });
-              ctx.stroke();
-              
-              // Y-axis labels
-              ctx.fillStyle = '#6b7280';
-              ctx.font = '10px Arial';
-              ctx.textAlign = 'right';
-              for (let i = 0; i <= 5; i++) {
-                const value = minRate + (i * (maxRate - minRate)) / 5;
-                const y = chartY + chartHeight - (i * chartHeight) / 5;
-                ctx.fillText(value.toFixed(3), chartX - 10, y + 5);
-              }
-              
-              // X-axis labels
-              ctx.textAlign = 'center';
-              for (let i = 0; i <= 5; i++) {
-                const value = minSpot + (i * (maxSpot - minSpot)) / 5;
-                const x = chartX + (i * chartWidth) / 5;
-                ctx.fillText(value.toFixed(3), x, chartY + chartHeight + 20);
-              }
-              
-              // Legend
-              const legendX = canvas.width - 200;
-              const legendY = chartY + 10;
-              ctx.fillStyle = 'white';
-              ctx.strokeStyle = '#e5e7eb';
-              ctx.lineWidth = 1;
-              ctx.fillRect(legendX, legendY, 180, 60);
-              ctx.strokeRect(legendX, legendY, 180, 60);
-              
-              // Legend items
-              ctx.fillStyle = '#374151';
-              ctx.font = '11px Arial';
-              ctx.textAlign = 'left';
-              
-              // Unhedged
-              ctx.strokeStyle = '#9ca3af';
-              ctx.lineWidth = 2;
-              ctx.setLineDash([4, 4]);
-              ctx.beginPath();
-              ctx.moveTo(legendX + 10, legendY + 25);
-              ctx.lineTo(legendX + 30, legendY + 25);
-              ctx.stroke();
-              ctx.setLineDash([]);
-              ctx.fillText('Unhedged Rate', legendX + 35, legendY + 30);
-              
-              // Hedged
-              ctx.strokeStyle = '#3b82f6';
-              ctx.lineWidth = 3;
-              ctx.beginPath();
-              ctx.moveTo(legendX + 10, legendY + 45);
-              ctx.lineTo(legendX + 30, legendY + 45);
-              ctx.stroke();
-              ctx.fillText('Hedged Rate', legendX + 35, legendY + 50);
-              
-              // Axis labels
-              ctx.fillStyle = '#374151';
-              ctx.font = 'bold 12px Arial';
-              ctx.textAlign = 'center';
-              ctx.fillText('FX Rate', canvas.width / 2, canvas.height - 10);
-              
-              ctx.save();
-              ctx.translate(20, canvas.height / 2);
-              ctx.rotate(-Math.PI / 2);
-              ctx.fillText('Effective Rate', 0, 0);
-              ctx.restore();
-            }
+            // Créer un conteneur temporaire hors écran
+            const tempContainer = document.createElement('div');
+            tempContainer.id = `temp-commodity-hedging-chart-${report.id}`;
+            tempContainer.style.position = 'absolute';
+            tempContainer.style.left = '-9999px';
+            tempContainer.style.top = '0';
+            tempContainer.style.width = '900px';
+            tempContainer.style.height = '600px';
+            tempContainer.style.backgroundColor = '#ffffff';
+            document.body.appendChild(tempContainer);
 
+            // Rendre le graphique PayoffChart avec React (onglet hedging actif)
+            const HedgingChartComponent = () => (
+              <ThemeProvider>
+                <PayoffChart
+                  data={report.payoffData || []}
+                  strategy={report.strategy}
+                  spot={report.params.spotPrice}
+                  currencyPair={report.params.commodity || (report.params as any).currencyPair}
+                  includePremium={false}
+                  showPremiumToggle={false}
+                  defaultTab="hedging"
+                />
+              </ThemeProvider>
+            );
+
+            const root = createRoot(tempContainer);
+            root.render(<HedgingChartComponent />);
+
+            // Attendre que le graphique soit rendu (plus de temps pour PayoffChart)
+            await new Promise(resolve => setTimeout(resolve, 2000));
+
+            // Capturer avec html2canvas
+            const renderOptions = {
+              scale: 1.8,
+              useCORS: true,
+              logging: false,
+              backgroundColor: '#ffffff'
+            };
+            
+            const canvas = await html2canvas(tempContainer, renderOptions);
             const imgData = canvas.toDataURL('image/png');
             const imgWidth = pageWidth - (2 * contentPadding);
             const imgHeight = (canvas.height * imgWidth) / canvas.width;
@@ -1175,6 +1355,9 @@ const Reports = () => {
             pdf.addImage(imgData, 'PNG', contentPadding, yOffset, imgWidth, imgHeight);
             yOffset += imgHeight + 10;
 
+            // Nettoyer
+            root.unmount();
+            document.body.removeChild(tempContainer);
           } catch (error) {
             console.warn('Could not generate Commodity Hedging chart:', error);
             pdf.setFont('helvetica', 'italic');
@@ -1184,6 +1367,7 @@ const Reports = () => {
             yOffset += 10;
           }
 
+
           // Tableau détaillé (premiers 15 résultats)
           checkPageBreak(50);
           pdf.setFont('helvetica', 'bold');
@@ -1192,12 +1376,16 @@ const Reports = () => {
           yOffset += 6;
 
           const detailedData = report.results.slice(0, 15).map((result: any) => [
-            new Date(result.date).toLocaleDateString(),
-            result.monthlyVolume.toLocaleString(),
-            result.strategyPrice.toFixed(4),
-            result.hedgedCost.toFixed(2),
-            result.unhedgedCost.toFixed(2),
-            result.deltaPnL.toFixed(2)
+            new Date(result.date).toLocaleDateString('en-GB', {
+              day: '2-digit',
+              month: '2-digit',
+              year: 'numeric'
+            }),
+            formatVolume(result.monthlyVolume),
+            formatNumber(result.strategyPrice, 4),
+            formatCurrency(result.hedgedCost),
+            formatCurrency(result.unhedgedCost),
+            formatCurrency(result.deltaPnL)
           ]);
 
           pdf.autoTable({
@@ -1211,11 +1399,204 @@ const Reports = () => {
           yOffset = (pdf as any).lastAutoTable.finalY + 10;
         }
 
-        // 6. Performance Metrics
+        // 6. Yearly & Monthly Breakdown
+        checkPageBreak(50);
+        pdf.addPage();
+        yOffset = contentPadding;
+        pdf.setFont('helvetica', 'bold');
+        pdf.setFontSize(14);
+        pdf.text('6. YEARLY & MONTHLY BREAKDOWN', contentPadding, yOffset);
+        pdf.setFont('helvetica', 'normal');
+        pdf.setFontSize(10);
+        pdf.setTextColor(100, 100, 100);
+        pdf.text('Monthly & Yearly P&L Breakdown', contentPadding, yOffset + 6);
+        pdf.setTextColor(0);
+        yOffset += 12;
+
+        // Organiser les données par année et par mois
+        const pnlByYearMonth: Record<string, Record<string, number>> = {};
+        const yearTotals: Record<string, number> = {};
+        const monthTotalsMap: Record<string, number> = {};
+        let grandTotal = 0;
+        const months: string[] = [
+          'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 
+          'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+        ];
+        
+        // Initialiser les totaux mensuels
+        months.forEach(month => {
+          monthTotalsMap[month] = 0;
+        });
+        
+        // Collecter les données
+        if (report.results && report.results.length > 0) {
+          report.results.forEach((result: any) => {
+            try {
+              const date = new Date(result.date);
+              const year = date.getFullYear().toString();
+              const month = date.getMonth();
+              const monthKey = months[month];
+              
+              if (!pnlByYearMonth[year]) {
+                pnlByYearMonth[year] = {};
+                yearTotals[year] = 0;
+              }
+              
+              if (!pnlByYearMonth[year][monthKey]) {
+                pnlByYearMonth[year][monthKey] = 0;
+              }
+              
+              // Ajouter le P&L au mois correspondant
+              pnlByYearMonth[year][monthKey] += result.deltaPnL;
+              
+              // Mettre à jour les totaux
+              yearTotals[year] += result.deltaPnL;
+              monthTotalsMap[monthKey] += result.deltaPnL;
+              grandTotal += result.deltaPnL;
+            } catch (error) {
+              console.error('Erreur lors du traitement de la date:', result.date, error);
+            }
+          });
+        }
+        
+        // Convertir l'ensemble des années en tableau trié
+        const sortedYears = Array.from(Object.keys(pnlByYearMonth)).sort();
+        
+        // Fonction pour formater les valeurs de P&L (sans espaces, format cohérent)
+        const formatPnLForPdf = (value: number) => {
+          if (value === 0) return '-';
+          if (isNaN(value) || value === null || value === undefined) return '-';
+          const sign = value < 0 ? '-' : '';
+          const absValue = Math.abs(value);
+          return `${sign}$${absValue.toLocaleString('en-US', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+            useGrouping: true
+          })}`;
+        };
+        
+        // Préparer les données pour le tableau
+        const monthlyPnLData = sortedYears.map(year => {
+          const rowData: any[] = [year];
+          
+          months.forEach(month => {
+            const value = pnlByYearMonth[year][month] || 0;
+            rowData.push(value === 0 ? '-' : formatPnLForPdf(value));
+          });
+          
+          rowData.push(formatPnLForPdf(yearTotals[year])); // Total annuel
+          return rowData;
+        });
+        
+        // Ajouter une ligne de total pour chaque mois
+        const monthlyTotalsRow = ['Total'];
+        
+        months.forEach((month) => {
+          const monthTotal = monthTotalsMap[month];
+          monthlyTotalsRow.push(monthTotal === 0 ? '-' : formatPnLForPdf(monthTotal));
+        });
+        
+        monthlyTotalsRow.push(formatPnLForPdf(grandTotal)); // Total général
+        monthlyPnLData.push(monthlyTotalsRow);
+        
+        const monthlyHeaders = ['Year'].concat(months).concat(['Total']);
+        
+        // Calculer les largeurs de colonnes pour un meilleur affichage
+        const tableWidth = pageWidth - (2 * contentPadding);
+        const yearColumnWidth = 15; // Réduit pour laisser plus d'espace aux colonnes numériques
+        const totalColumnWidth = 22; // Augmenté pour le Total
+        const availableWidth = tableWidth - yearColumnWidth - totalColumnWidth;
+        const monthColumnWidth = availableWidth / 12; // 12 mois
+        
+        const columnStyles: any = {
+          0: { fontStyle: 'bold', halign: 'left', cellWidth: yearColumnWidth, cellPadding: 1 }
+        };
+        
+        // Largeurs pour les colonnes de mois (1-12) - alignées à droite, sans linebreak
+        for (let i = 1; i <= 12; i++) {
+          columnStyles[i] = { 
+            halign: 'right', 
+            cellWidth: monthColumnWidth, 
+            fontSize: 6.5,
+            cellPadding: 1,
+            overflow: 'hidden' // Empêche le retour à la ligne
+          };
+        }
+        
+        // Largeur pour la colonne Total
+        columnStyles[13] = { 
+          fontStyle: 'bold', 
+          halign: 'right', 
+          cellWidth: totalColumnWidth,
+          cellPadding: 1,
+          overflow: 'hidden'
+        };
+        
+        pdf.autoTable({
+          ...tableOptions,
+          startY: yOffset,
+          head: [monthlyHeaders],
+          body: monthlyPnLData,
+          styles: { 
+            overflow: 'hidden', // Pas de linebreak par défaut
+            cellPadding: 1, // Padding réduit
+            fontSize: 6.5 // Police légèrement réduite
+          },
+          columnStyles: columnStyles,
+          didParseCell: function(data: any) {
+            // Styles conditionnels pour les valeurs positives/négatives
+            if (data.section === 'body' && data.column.index > 0 && data.column.index < 13) {
+              const value = data.cell.raw;
+              
+              if (value === '-') return;
+              
+              try {
+                // Extract numeric value from currency string (remove $, commas, spaces)
+                const numValue = typeof value === 'string' 
+                  ? parseFloat(value.replace(/[^0-9.-]/g, '')) 
+                  : value;
+                
+                if (!isNaN(numValue)) {
+                  if (numValue > 0) {
+                    data.cell.styles.fillColor = [230, 255, 230];
+                  } else if (numValue < 0) {
+                    data.cell.styles.fillColor = [255, 230, 230];
+                  }
+                }
+              } catch (e) {
+                console.error('Erreur lors du formatage de la cellule:', e);
+              }
+            }
+            // Style pour la colonne Total
+            if (data.section === 'body' && data.column.index === 13) {
+              const value = data.cell.raw;
+              if (value !== '-') {
+                try {
+                  const numValue = typeof value === 'string' 
+                    ? parseFloat(value.replace(/[^0-9.-]/g, '')) 
+                    : value;
+                  if (!isNaN(numValue)) {
+                    if (numValue > 0) {
+                      data.cell.styles.fillColor = [230, 255, 230];
+                    } else if (numValue < 0) {
+                      data.cell.styles.fillColor = [255, 230, 230];
+                    }
+                  }
+                } catch (e) {
+                  console.error('Erreur lors du formatage de la cellule Total:', e);
+                }
+              }
+            }
+          }
+        });
+        
+        yOffset = (pdf as any).lastAutoTable.finalY + 10;
+
+        // 7. Performance Metrics
         checkPageBreak(40);
         pdf.setFont('helvetica', 'bold');
         pdf.setFontSize(14);
-        pdf.text('6. PERFORMANCE METRICS', contentPadding, yOffset);
+        pdf.text('7. PERFORMANCE METRICS', contentPadding, yOffset);
         yOffset += 8;
 
         const totalHedgedCost = report.results?.reduce((sum: number, r: any) => sum + r.hedgedCost, 0) || 0;
@@ -1225,12 +1606,12 @@ const Reports = () => {
 
         const metricsData = [
           ['Metric', 'Value', 'Description'],
-          ['Total Hedged Cost', totalHedgedCost.toFixed(2), 'Total cost with hedging strategy'],
-          ['Total Unhedged Cost', totalUnhedgedCost.toFixed(2), 'Total cost without hedging'],
-          ['Total P&L', totalPnL.toFixed(2), 'Net profit/loss from hedging'],
-          ['Total Strategy Premium', totalStrategyPremium.toFixed(2), 'Total premium paid for strategy'],
-          ['Strike Target', strikeTarget.toFixed(4), 'Effective strike rate achieved'],
-          ['Cost Reduction %', costReduction.toFixed(2) + '%', 'Percentage cost reduction achieved']
+          ['Total Hedged Cost', formatCurrency(totalHedgedCost), 'Total cost with hedging strategy'],
+          ['Total Unhedged Cost', formatCurrency(totalUnhedgedCost), 'Total cost without hedging'],
+          ['Total P&L', formatCurrency(totalPnL), 'Net profit/loss from hedging'],
+          ['Total Strategy Premium', formatCurrency(totalStrategyPremium), 'Total premium paid for strategy'],
+          ['Strike Target', formatNumber(strikeTarget, 4), 'Effective strike rate achieved'],
+          ['Cost Reduction %', formatPercentage(costReduction), 'Percentage cost reduction achieved']
         ];
 
         pdf.autoTable({
@@ -1242,21 +1623,31 @@ const Reports = () => {
 
         yOffset = (pdf as any).lastAutoTable.finalY + 10;
 
-        // 7. Summary Statistics
+        // 8. Summary Statistics
         checkPageBreak(30);
         pdf.setFont('helvetica', 'bold');
         pdf.setFontSize(14);
-        pdf.text('7. SUMMARY STATISTICS', contentPadding, yOffset);
+        pdf.text('8. SUMMARY STATISTICS', contentPadding, yOffset);
         yOffset += 8;
+
+        const avgMonthlyVolume = totalVolume > 0 ? totalVolume / (report.results?.length || 1) : 0;
+        const avgStrategyPrice = report.results?.length > 0 
+          ? report.results.reduce((sum: number, r: any) => sum + r.strategyPrice, 0) / report.results.length 
+          : 0;
+        const bestMonthPnL = report.results?.length > 0 ? Math.max(...report.results.map((r: any) => r.deltaPnL)) : 0;
+        const worstMonthPnL = report.results?.length > 0 ? Math.min(...report.results.map((r: any) => r.deltaPnL)) : 0;
+        const pnlVolatility = report.results?.length > 1 
+          ? calculateVolatility(report.results.map((r: any) => r.deltaPnL)) 
+          : 0;
 
         const summaryData = [
           ['Statistic', 'Value'],
-          ['Total Periods', report.results?.length || 0],
-          ['Average Monthly Volume', totalVolume > 0 ? (totalVolume / (report.results?.length || 1)).toLocaleString() : 'N/A'],
-          ['Average Strategy Price', report.results?.length > 0 ? (report.results.reduce((sum: number, r: any) => sum + r.strategyPrice, 0) / report.results.length).toFixed(4) : 'N/A'],
-          ['Best Month P&L', report.results?.length > 0 ? Math.max(...report.results.map((r: any) => r.deltaPnL)).toFixed(2) : 'N/A'],
-          ['Worst Month P&L', report.results?.length > 0 ? Math.min(...report.results.map((r: any) => r.deltaPnL)).toFixed(2) : 'N/A'],
-          ['Volatility of P&L', report.results?.length > 1 ? calculateVolatility(report.results.map((r: any) => r.deltaPnL)).toFixed(2) : 'N/A']
+          ['Total Periods', (report.results?.length || 0).toString()],
+          ['Average Monthly Volume', formatVolume(avgMonthlyVolume)],
+          ['Average Strategy Price', formatNumber(avgStrategyPrice, 4)],
+          ['Best Month P&L', formatCurrency(bestMonthPnL)],
+          ['Worst Month P&L', formatCurrency(worstMonthPnL)],
+          ['Volatility of P&L', formatCurrency(pnlVolatility)]
         ];
 
         pdf.autoTable({
@@ -1267,16 +1658,26 @@ const Reports = () => {
           tableWidth: pageWidth / 2 - contentPadding
         });
 
-        // Footer avec informations de page
-        const addFooter = () => {
-          pdf.setFont('helvetica', 'normal');
+        // Footer professionnel sur toutes les pages
+        const totalPages = pdf.getNumberOfPages();
+        for (let i = 1; i <= totalPages; i++) {
+          pdf.setPage(i);
+          
+          // Ligne de séparation
+          pdf.setDrawColor(200, 200, 200);
+          pdf.line(contentPadding, pageHeight - 10, pageWidth - contentPadding, pageHeight - 10);
+          
+          // Texte du pied de page
           pdf.setFontSize(8);
-          pdf.setTextColor(100, 100, 100);
-          pdf.text(`Page ${currentPage}`, pageWidth - 30, pageHeight - 10);
-          pdf.text('FX Hedging Platform - Professional Report', contentPadding, pageHeight - 10);
-        };
-
-        addFooter();
+          pdf.setTextColor(100);
+          const footerText = `${cleanTitle} | Page ${i} of ${totalPages} | Commodity Risk Manager`;
+          pdf.text(
+            footerText, 
+            pageWidth / 2, 
+            pageHeight - 5, 
+            { align: 'center' }
+          );
+        }
 
         pdf.save(`${report.name.replace(/[^a-z0-9]/gi, '_')}_professional_report.pdf`);
       };
@@ -1741,6 +2142,16 @@ const Reports = () => {
                           >
                             <Download className="h-4 w-4" />
                           </Button>
+                          {report.type === 'scenario' && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => loadScenario(report as SavedScenario)}
+                              title="Load this scenario in Strategy Builder"
+                            >
+                              <Upload className="h-4 w-4" />
+                            </Button>
+                          )}
                           <Button
                             size="sm"
                             variant="outline"
@@ -1814,8 +2225,8 @@ const Reports = () => {
                               <li>Interest Rate: {scenario.params.interestRate}%</li>
                               {scenario.params.baseVolume && scenario.params.quoteVolume ? (
                                 <>
-                                  <li>Base Volume ({scenario.params.currencyPair?.base || 'BASE'}): {scenario.params.baseVolume.toLocaleString()}</li>
-                                  <li>Quote Volume ({scenario.params.currencyPair?.quote || 'QUOTE'}): {Math.round(scenario.params.quoteVolume).toLocaleString()}</li>
+                                  <li>Base Volume ({scenario.params.commodity?.base || (scenario.params as any).currencyPair?.base || 'BASE'}): {scenario.params.baseVolume.toLocaleString()}</li>
+                                  <li>Quote Volume ({scenario.params.commodity?.quote || (scenario.params as any).currencyPair?.quote || 'QUOTE'}): {Math.round(scenario.params.quoteVolume).toLocaleString()}</li>
                                   <li>Rate: {scenario.params.spotPrice?.toFixed(4)}</li>
                                 </>
                               ) : (
@@ -1880,86 +2291,24 @@ const Reports = () => {
                             </ResponsiveContainer>
                           </div>
 
-                          <div className="h-80" id={`fx-hedging-chart-${scenario.id}`}>
-                            <h3 className="font-semibold mb-2">Commodity Hedging Profile</h3>
-                            <div className="text-sm text-muted-foreground mb-2">
-                              Hedged vs Unhedged {scenario.params.currencyPair?.symbol || 'FX'} rates across market scenarios
-                            </div>
-                            <ResponsiveContainer width="100%" height="100%">
-                              <LineChart 
-                                data={generateCommodityHedgingData(scenario.strategy, scenario.params.spotPrice, false)}
-                                margin={{ top: 20, right: 30, left: 20, bottom: 20 }}
-                              >
-                                <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
-                                <XAxis
-                                  dataKey="spot"
-                                  domain={["dataMin", "dataMax"]}
-                                  tickFormatter={(value) => value.toFixed(3)}
-                                  label={{
-                                    value: `${scenario.params.currencyPair?.symbol || 'FX'} Rate`,
-                                    position: "insideBottom",
-                                    offset: -10,
-                                  }}
-                                />
-                                <YAxis
-                                  tickFormatter={(value) => value.toFixed(3)}
-                                  label={{
-                                    value: `Effective Rate (${scenario.params.currencyPair?.quote || 'Quote Currency'})`,
-                                    angle: -90,
-                                    position: "insideLeft",
-                                  }}
-                                />
-                                <Tooltip />
-                                <Legend 
-                                  verticalAlign="top" 
-                                  height={36}
-                                />
-                                
-                                {/* Unhedged rate line (reference) */}
-                                <Line
-                                  type="monotone"
-                                  dataKey="unhedgedRate"
-                                  stroke="#9CA3AF"
-                                  strokeWidth={2}
-                                  strokeDasharray="4 4"
-                                  dot={false}
-                                  name="Unhedged Rate"
-                                />
-                                
-                                {/* Hedged rate line */}
-                                <Line
-                                  type="monotone"
-                                  dataKey="hedgedRate"
-                                  stroke="#3B82F6"
-                                  strokeWidth={3}
-                                  dot={false}
-                                  activeDot={{ r: 6, fill: "#3B82F6" }}
-                                  name="Hedged Rate"
-                                />
-                                
-                                {/* Reference line for current spot */}
-                                <ReferenceLine
-                                  x={scenario.params.spotPrice}
-                                  stroke="#059669"
-                                  strokeWidth={2}
-                                  strokeDasharray="5 5"
-                                  label={{
-                                    value: "Current Spot",
-                                    position: "top",
-                                    fill: "#059669",
-                                    fontSize: 11,
-                                  }}
-                                />
-                              </LineChart>
-                            </ResponsiveContainer>
+                          <div className="mb-8" id={`commodity-hedging-chart-${scenario.id}`}>
+                            <PayoffChart
+                              data={scenario.payoffData || []}
+                              strategy={scenario.strategy}
+                              spot={scenario.params.spotPrice}
+                              currencyPair={scenario.params.commodity || (scenario.params as any).currencyPair}
+                              includePremium={false}
+                              showPremiumToggle={false}
+                              defaultTab="hedging"
+                            />
                           </div>
                         </div>
 
-                        <div className="mt-6">
+                        <div className="mt-6 relative z-10">
                           <Button
                             variant="outline"
                             onClick={() => toggleSection(scenario.id, 'detailedResults')}
-                            className="flex items-center gap-2 mb-2"
+                            className="flex items-center gap-2 mb-2 relative z-10"
                           >
                             {expandedSections[scenario.id]?.detailedResults ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
                             Detailed Results
@@ -1974,7 +2323,18 @@ const Reports = () => {
                                     <th className="border p-2">Time to Maturity</th>
                                     <th className="border p-2">Forward Price</th>
                                     <th className="border p-2">Real Price</th>
-                                    <th className="border p-2">IV (%)</th>
+                                    {/* Afficher les colonnes IV individuelles si useImpliedVol est activé */}
+                                    {scenario.useImpliedVol && scenario.results[0]?.optionPrices?.map((option, idx) => (
+                                      option.type !== 'swap' && option.type !== 'forward' && (
+                                        <th key={`iv-${idx}`} className="border p-2 bg-amber-500/5">
+                                          IV {option.label} (%)
+                                        </th>
+                                      )
+                                    ))}
+                                    {/* Colonne IV globale si useImpliedVol n'est pas activé ou s'il n'y a pas d'options */}
+                                    {(!scenario.useImpliedVol || !scenario.results[0]?.optionPrices || scenario.results[0].optionPrices.length === 0) && (
+                                      <th className="border p-2">IV (%)</th>
+                                    )}
                                     {scenario.results[0]?.optionPrices?.map((option, idx) => (
                                       <th key={idx} className="border p-2">{option.label || `${option.type.charAt(0).toUpperCase() + option.type.slice(1)} Price ${idx + 1}`}</th>
                                     ))}
@@ -1989,15 +2349,34 @@ const Reports = () => {
                                 <tbody>
                                   {scenario.results.map((row, i) => {
                                     // Récupération de la volatilité implicite pour cette date
-                                    const date = row.date;
+                                    const date = new Date(row.date);
+                                    const monthKey = `${date.getFullYear()}-${date.getMonth() + 1}`;
                                     let impliedVol = null;
                                     
                                     // 1. Vérifier si l'utilisateur a entré des valeurs manuelles d'IV
-                                    if (scenario.useImpliedVol && scenario.impliedVolatilities && scenario.impliedVolatilities[date]) {
-                                      impliedVol = scenario.impliedVolatilities[date];
+                                    if (scenario.useImpliedVol && scenario.impliedVolatilities && scenario.impliedVolatilities[monthKey]) {
+                                      const monthIV = scenario.impliedVolatilities[monthKey];
+                                      // Vérifier si c'est un objet (nouveau format) ou un nombre (ancien format)
+                                      if (typeof monthIV === 'object' && monthIV !== null) {
+                                        // Essayer d'abord la volatilité globale du mois
+                                        if ((monthIV as any).global !== undefined) {
+                                          impliedVol = (monthIV as any).global;
+                                        }
+                                        // Sinon, utiliser la volatilité de la première option si disponible
+                                        else if (row.optionPrices && row.optionPrices.length > 0) {
+                                          const firstOption = row.optionPrices[0];
+                                          const optionKey = `${firstOption.type}-0`;
+                                          if ((monthIV as any)[optionKey] !== undefined) {
+                                            impliedVol = (monthIV as any)[optionKey];
+                                          }
+                                        }
+                                      } else if (typeof monthIV === 'number') {
+                                        // Ancien format : valeur directe
+                                        impliedVol = monthIV;
+                                      }
                                     }
                                     // 2. Utiliser la volatilité de la stratégie comme dernier recours
-                                    else if (scenario.strategy && scenario.strategy.length > 0) {
+                                    if (impliedVol === null && scenario.strategy && scenario.strategy.length > 0) {
                                       impliedVol = scenario.strategy[0].volatility / 100;
                                     }
                                     
@@ -2007,11 +2386,38 @@ const Reports = () => {
                                         <td className="border p-2">{row.timeToMaturity.toFixed(4)}</td>
                                         <td className="border p-2">{row.forward.toFixed(4)}</td>
                                         <td className="border p-2">{row.realPrice.toFixed(4)}</td>
-                                        <td className="border p-2">
-                                          {impliedVol !== null 
-                                            ? (impliedVol * 100).toFixed(0) 
-                                            : ""}
-                                        </td>
+                                        {/* Afficher les IV individuelles pour chaque option si useImpliedVol est activé */}
+                                        {scenario.useImpliedVol && row.optionPrices && row.optionPrices.map((option, idx) => {
+                                          if (option.type === 'swap' || option.type === 'forward') return null;
+                                          const optionKey = `${option.type}-${idx}`;
+                                          const monthIV = scenario.impliedVolatilities?.[monthKey];
+                                          let optionIV = null;
+                                          if (typeof monthIV === 'object' && monthIV !== null) {
+                                            optionIV = (monthIV as any)[optionKey] || (monthIV as any).global;
+                                          } else if (typeof monthIV === 'number') {
+                                            optionIV = monthIV;
+                                          }
+                                          if (optionIV === null || optionIV === undefined) {
+                                            optionIV = scenario.strategy && scenario.strategy.length > 0 ? scenario.strategy[0].volatility : null;
+                                          }
+                                          return (
+                                            <td key={`iv-${idx}`} className="border p-2 bg-amber-500/5">
+                                              {optionIV !== null && optionIV !== undefined 
+                                                ? (typeof optionIV === 'number' ? optionIV : parseFloat(optionIV)).toFixed(1)
+                                                : ""}
+                                            </td>
+                                          );
+                                        })}
+                                        {/* Colonne IV globale si useImpliedVol n'est pas activé */}
+                                        {(!scenario.useImpliedVol || !row.optionPrices || row.optionPrices.length === 0) && (
+                                          <td className="border p-2">
+                                            {impliedVol !== null 
+                                              ? (typeof impliedVol === 'number' ? impliedVol : parseFloat(impliedVol)).toFixed(1)
+                                              : (scenario.strategy && scenario.strategy.length > 0 
+                                                  ? scenario.strategy[0].volatility.toFixed(1) 
+                                                  : "")}
+                                          </td>
+                                        )}
                                         {/* S'assurer que toutes les options sont affichées */}
                                         {row.optionPrices && Array.isArray(row.optionPrices) 
                                           ? row.optionPrices.map((option, idx) => (
@@ -2272,40 +2678,6 @@ const Reports = () => {
                             </div>
                           )}
                         </div>
-
-                        <Button
-                          onClick={() => {
-                            localStorage.setItem('calculatorState', JSON.stringify({
-                              params: scenario.params,
-                              strategy: scenario.strategy,
-                              results: scenario.results,
-                              payoffData: scenario.payoffData,
-                              // Récupérer les paramètres personnalisés du scénario sauvegardé ou utiliser des valeurs par défaut
-                              manualForwards: scenario.manualForwards || {},
-                              realPrices: scenario.realPrices || {},
-                              realPriceParams: {
-                                useSimulation: false,
-                                volatility: 0.3,
-                                drift: 0.01,
-                                numSimulations: 1000
-                              },
-                              barrierOptionSimulations: 1000,
-                              useClosedFormBarrier: false,
-                              activeTab: 'parameters',
-                              customScenario: scenario.stressTest,
-                              stressTestScenarios: {}, // You might want to save this too
-                              // Récupérer les paramètres de volatilité implicite
-                              useImpliedVol: scenario.useImpliedVol || false,
-                              impliedVolatilities: scenario.impliedVolatilities || {},
-                              // Récupérer les prix personnalisés des options
-                              customOptionPrices: scenario.customOptionPrices || {}
-                            }));
-                            navigate('/strategy-builder');
-                          }}
-                          className="mt-4"
-                        >
-                          Load This Scenario
-                        </Button>
                       </CardContent>
                     </Card>
                   ))}

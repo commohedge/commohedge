@@ -550,20 +550,25 @@ const Pricers = () => {
         const r = getRiskFreeRate();
         const t = pricingInputs.timeToMaturity;
         const sigma = strategyComponent.volatility / 100;
+        const b = calculateCostOfCarry(); // Cost of carry pour commodities
         
         let price = 0;
         let greeks: Greeks | undefined;
         
         if (strategyComponent.type === 'forward') {
-          const forward = spot * Math.exp(calculateCostOfCarry() * pricingInputs.timeToMaturity);
+          const forward = spot * Math.exp(b * pricingInputs.timeToMaturity);
           price = forward - strike;
+          // Les forwards n'ont pas de grecques (dérivées linéaires)
+          greeks = { delta: 1, gamma: 0, theta: 0, vega: 0, rho: 0 };
         } else if (strategyComponent.type === 'swap') {
-          const forward = spot * Math.exp(calculateCostOfCarry() * pricingInputs.timeToMaturity);
+          const forward = spot * Math.exp(b * pricingInputs.timeToMaturity);
           price = PricingService.calculateSwapPrice(
             [forward],
             [pricingInputs.timeToMaturity],
             getRiskFreeRate()
           );
+          // Les swaps n'ont pas de grecques significatives
+          greeks = { delta: 0, gamma: 0, theta: 0, vega: 0, rho: 0 };
         } else if (strategyComponent.type === 'call' || strategyComponent.type === 'put') {
           // ✅ VANILLAS — STRICTEMENT COMME STRATEGY BUILDER
           if (optionPricingModel === 'monte-carlo') {
@@ -572,10 +577,20 @@ const Pricers = () => {
               S,
               K,
               r,
-              0,
+              b,
               t,
               sigma,
               1000
+            );
+            // Pour Monte Carlo, calculer les grecques avec Black-76
+            greeks = PricingService.calculateGreeks(
+              strategyComponent.type,
+              S,
+              K,
+              r,
+              b,
+              t,
+              sigma
             );
           } else {
             // Black-Scholes EXACT comme Strategy Builder
@@ -589,6 +604,16 @@ const Pricers = () => {
             } else {
               price = K * Math.exp(-r * t) * (1 - Nd2) - S * (1 - Nd1);
             }
+            // Calculer les grecques avec Black-76 (commodity)
+            greeks = PricingService.calculateGreeks(
+              strategyComponent.type,
+              S,
+              K,
+              r,
+              b,
+              t,
+              sigma
+            );
           }
         } else if (strategyComponent.type.includes('knockout') || strategyComponent.type.includes('knockin')) {
           // ✅ BARRIER OPTIONS — STRICTEMENT COMME STRATEGY BUILDER
@@ -602,7 +627,7 @@ const Pricers = () => {
               sigma,
               barrier || 0,
               secondBarrier,
-              0, // r_f = 0 pour commodities
+              b, // Cost of carry
               barrierOptionSimulations || 1000
             );
           } else {
@@ -618,6 +643,18 @@ const Pricers = () => {
               barrierOptionSimulations || 1000
             );
           }
+          // Calculer les grecques pour les options barrières
+          greeks = PricingService.calculateGreeks(
+            strategyComponent.type,
+            S,
+            K,
+            r,
+            b,
+            t,
+            sigma,
+            barrier,
+            secondBarrier
+          );
         } else {
           // ✅ DIGITAL OPTIONS — STRICTEMENT COMME STRATEGY BUILDER
           const rebate = strategyComponent.rebate !== undefined ? strategyComponent.rebate : 1;
@@ -634,21 +671,44 @@ const Pricers = () => {
             numSimulations,
             rebate
           );
+          // Calculer les grecques pour les options digitales
+          greeks = PricingService.calculateGreeks(
+            strategyComponent.type,
+            S,
+            K,
+            r,
+            b,
+            t,
+            sigma,
+            barrier,
+            secondBarrier,
+            rebate
+          );
         }
         
         price = Math.max(0, price); // Strategy Builder assure que le prix n'est jamais négatif
         
-        // Ajuster le prix par la quantité
-        const adjustedPrice = price * strategyComponent.quantity / 100;
+        // Ajuster le prix et les grecques par la quantité
+        const quantity = strategyComponent.quantity / 100;
+        const adjustedPrice = price * quantity;
+        
+        // Ajuster les grecques par la quantité (sauf pour forward/swap)
+        const adjustedGreeks = greeks ? {
+          delta: greeks.delta * quantity,
+          gamma: greeks.gamma * quantity,
+          theta: greeks.theta * quantity,
+          vega: greeks.vega * quantity,
+          rho: greeks.rho * quantity
+        } : { delta: 0, gamma: 0, theta: 0, vega: 0, rho: 0 };
         
         return { 
           spot: parseFloat(spot.toFixed(4)), 
           price: adjustedPrice,
-          delta: greeks?.delta || 0,
-          gamma: greeks?.gamma || 0,
-          theta: greeks?.theta || 0,
-          vega: greeks?.vega || 0,
-          rho: greeks?.rho || 0
+          delta: adjustedGreeks.delta,
+          gamma: adjustedGreeks.gamma,
+          theta: adjustedGreeks.theta,
+          vega: adjustedGreeks.vega,
+          rho: adjustedGreeks.rho
         };
       } catch (error) {
         console.warn('Error calculating price/greeks at spot', spot, error);
