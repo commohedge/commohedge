@@ -87,91 +87,6 @@ const INSTRUMENT_TYPES = [
   { value: 'outside-binary', label: 'Outside Binary (beta)', category: 'digital' }
 ];
 
-// Helper function to get unit from commodity name/symbol (same as Index.tsx)
-function getUnitFromCommodity(commodity: Commodity): string {
-  const name = commodity.name.toLowerCase();
-  const symbol = commodity.symbol.toLowerCase();
-  
-  // Energy
-  if (name.includes('crude') || name.includes('oil') || symbol.includes('wti') || symbol.includes('brent') || symbol.includes('cl')) {
-    return 'BBL';
-  }
-  if (name.includes('natural gas') || name.includes('natgas') || symbol.includes('ng')) {
-    return 'MMBTU';
-  }
-  if (name.includes('heating oil') || name.includes('heating')) {
-    return 'GAL';
-  }
-  if (name.includes('gasoline') || name.includes('rbob') || symbol.includes('rb')) {
-    return 'GAL';
-  }
-  
-  // Metals
-  if (name.includes('gold') || symbol.includes('au') || symbol.includes('gc')) {
-    return 'OZ';
-  }
-  if (name.includes('silver') || symbol.includes('ag') || symbol.includes('si')) {
-    return 'OZ';
-  }
-  if (name.includes('platinum') || symbol.includes('pl')) {
-    return 'OZ';
-  }
-  if (name.includes('palladium') || symbol.includes('pa')) {
-    return 'OZ';
-  }
-  if (name.includes('copper') || symbol.includes('cu') || symbol.includes('hg')) {
-    return 'LB';
-  }
-  if (name.includes('aluminum') || name.includes('aluminium') || symbol.includes('al')) {
-    return 'MT';
-  }
-  if (name.includes('zinc') || symbol.includes('zn')) {
-    return 'MT';
-  }
-  if (name.includes('nickel') || symbol.includes('ni')) {
-    return 'MT';
-  }
-  
-  // Agriculture
-  if (name.includes('corn') || symbol.includes('zc')) {
-    return 'BU';
-  }
-  if (name.includes('wheat') || symbol.includes('zw')) {
-    return 'BU';
-  }
-  if (name.includes('soybean') || name.includes('soy') || symbol.includes('zs')) {
-    return 'BU';
-  }
-  if (name.includes('coffee') || symbol.includes('kc')) {
-    return 'LB';
-  }
-  if (name.includes('sugar') || symbol.includes('sb')) {
-    return 'LB';
-  }
-  if (name.includes('cotton') || symbol.includes('ct')) {
-    return 'LB';
-  }
-  if (name.includes('cocoa') || symbol.includes('cc')) {
-    return 'MT';
-  }
-  
-  // Livestock
-  if (name.includes('cattle') || symbol.includes('le')) {
-    return 'CWT';
-  }
-  if (name.includes('hog') || symbol.includes('he')) {
-    return 'CWT';
-  }
-  
-  // Freight and Bunker
-  if (commodity.category === 'freight' || commodity.category === 'bunker') {
-    return 'MT';
-  }
-  
-  // Default
-  return 'MT';
-}
-
 const Pricers = () => {
   const { toast } = useToast();
   
@@ -277,7 +192,9 @@ const Pricers = () => {
     interestRate: 5.0, // Risk-free rate (en pourcentage)
     timeToMaturity: 1.0,
     volatility: 25.0, // Commodity volatility (en pourcentage)
-    numSimulations: 1000 // ✅ 1000 comme Strategy Builder
+    numSimulations: 1000, // ✅ 1000 comme Strategy Builder
+    storageCost: 0.0, // Storage cost (en pourcentage)
+    convenienceYield: 0.0 // Convenience yield (en pourcentage)
   });
 
   // Volume principal (simplifié)
@@ -319,7 +236,7 @@ const Pricers = () => {
     setPricingInputs(prev => ({ ...prev, timeToMaturity }));
   }, [pricingInputs.startDate, pricingInputs.maturityDate]);
 
-  // Mettre à jour le spot price quand la paire de devises change
+  // Mettre à jour le spot price quand la commodity change
   useEffect(() => {
     if (useRealData && realCommodities.length > 0) {
       // Use real commodities from Commodity Market
@@ -330,9 +247,14 @@ const Pricers = () => {
           title: "Real Price Updated",
           description: `${selectedCommodity.name}: $${selectedCommodity.price.toFixed(2)}`,
         });
+      } else if (realCommodities.length > 0 && !realCommodities.find(c => c.symbol === selectedCurrencyPair)) {
+        // If selected symbol doesn't exist in real commodities, select first one
+        const firstCommodity = realCommodities[0];
+        setSelectedCurrencyPair(firstCommodity.symbol);
+        setPricingInputs(prev => ({ ...prev, spotPrice: firstCommodity.price }));
       }
     } else {
-      // Use default commodities list
+      // Use default commodities list (CURRENCY_PAIRS)
       const pair = CURRENCY_PAIRS.find(p => p.symbol === selectedCurrencyPair);
       if (pair) {
         setPricingInputs(prev => ({ ...prev, spotPrice: pair.defaultSpotRate }));
@@ -653,14 +575,22 @@ const Pricers = () => {
     return 'text-gray-900 dark:text-gray-100';
   };
 
-  // Obtenir la paire de devises sélectionnée
-  const selectedPair = CURRENCY_PAIRS.find(p => p.symbol === selectedCurrencyPair);
+  // Obtenir la commodity sélectionnée (réelle ou par défaut)
+  const selectedCommodity = useRealData && realCommodities.length > 0
+    ? realCommodities.find(c => c.symbol === selectedCurrencyPair)
+    : null;
+  const selectedPair = useRealData && selectedCommodity
+    ? {
+        symbol: selectedCommodity.symbol,
+        name: selectedCommodity.name,
+        category: 'others' as const,
+        defaultSpotRate: selectedCommodity.price
+      }
+    : CURRENCY_PAIRS.find(p => p.symbol === selectedCurrencyPair);
 
   // Calculs complémentaires pour l'affichage des résultats
   // Volume principal pour les calculs
   const spot = pricingInputs.spotPrice;
-  const base = selectedPair?.base || 'EUR';
-  const quote = selectedPair?.quote || 'USD';
   const premium = pricingResults.length > 0 ? pricingResults[0].price * volume : 0;
   const strikeAbs = strategyComponent.strikeType === 'percent' ? spot * (strategyComponent.strike / 100) : strategyComponent.strike;
   const barrierAbs = strategyComponent.barrierType === 'percent' && strategyComponent.barrier ? spot * strategyComponent.barrier / 100 : (strategyComponent.barrier || undefined);
@@ -1675,7 +1605,7 @@ const Pricers = () => {
                   </div>
                   <div className="p-4 bg-muted/30 rounded-lg">
                     <span className="font-semibold text-sm text-muted-foreground">Spot Price</span><br/>
-                    <span className="text-lg font-semibold">{spot} {quote}/{base}</span>
+                    <span className="text-lg font-semibold">{spot}</span>
                   </div>
                   {(selectedInstrument !== 'forward' && selectedInstrument !== 'swap') && (
                     <div className="p-4 bg-muted/30 rounded-lg">
@@ -1690,7 +1620,7 @@ const Pricers = () => {
                   )}
                   <div className="p-4 bg-muted/30 rounded-lg">
                     <span className="font-semibold text-sm text-muted-foreground">Absolute Strike</span><br/>
-                    <span className="text-lg font-semibold">{strikeAbs.toFixed(4)} {quote}</span>
+                    <span className="text-lg font-semibold">{strikeAbs.toFixed(4)}</span>
                   </div>
                   {/* ✅ Afficher les barrières selon le type d'option */}
                   {(selectedInstrument.includes('knockout') || selectedInstrument.includes('knockin') || selectedInstrument.includes('touch') || selectedInstrument.includes('binary')) && (
@@ -1698,14 +1628,14 @@ const Pricers = () => {
                       {/* ✅ Barrier 1 - toujours affiché pour les options avec barrières */}
                       <div className="p-4 bg-muted/30 rounded-lg">
                         <span className="font-semibold text-sm text-muted-foreground">Barrier 1</span><br/>
-                        <span className="text-lg font-semibold">{barrierAbs ? barrierAbs.toFixed(4) + ' ' + quote : '-'}</span>
+                        <span className="text-lg font-semibold">{barrierAbs ? barrierAbs.toFixed(4) : '-'}</span>
                       </div>
                       
                       {/* ✅ Barrier 2 - seulement pour les options double barrière */}
                       {selectedInstrument.includes('double') && (
                         <div className="p-4 bg-muted/30 rounded-lg">
                           <span className="font-semibold text-sm text-muted-foreground">Barrier 2</span><br/>
-                          <span className="text-lg font-semibold">{secondBarrierAbs ? secondBarrierAbs.toFixed(4) + ' ' + quote : '-'}</span>
+                          <span className="text-lg font-semibold">{secondBarrierAbs ? secondBarrierAbs.toFixed(4) : '-'}</span>
                         </div>
                       )}
                     </>
@@ -1716,11 +1646,11 @@ const Pricers = () => {
                   </div>
                   <div className="p-4 bg-muted/30 rounded-lg">
                     <span className="font-semibold text-sm text-muted-foreground">Storage Cost</span><br/>
-                    <span className="text-lg font-semibold">{pricingInputs.storageCost}%</span>
+                    <span className="text-lg font-semibold">{(pricingInputs.storageCost || 0).toFixed(2)}%</span>
                   </div>
                   <div className="p-4 bg-muted/30 rounded-lg">
                     <span className="font-semibold text-sm text-muted-foreground">Convenience Yield</span><br/>
-                    <span className="text-lg font-semibold">{pricingInputs.convenienceYield}%</span>
+                    <span className="text-lg font-semibold">{(pricingInputs.convenienceYield || 0).toFixed(2)}%</span>
                   </div>
                   <div className="p-4 bg-muted/30 rounded-lg">
                     <span className="font-semibold text-sm text-muted-foreground">Volatility</span><br/>
