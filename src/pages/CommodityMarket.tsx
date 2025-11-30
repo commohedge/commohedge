@@ -312,7 +312,14 @@ export default function CommodityMarket() {
                               </div>
                               <div className="flex items-center gap-2 shrink-0">
                                 <span className="text-xs rounded-full px-2 py-0.5 bg-slate-100 text-slate-700 border">{sug.category}</span>
-                                <div className="font-mono text-sm text-slate-700">{sug.price.toFixed(2)}</div>
+                                <div className="font-mono text-sm text-slate-700">
+                                  {sug.price.toFixed(2)}
+                                  {sug.currency && (
+                                    <span className="text-xs text-muted-foreground ml-1">
+                                      {sug.currency}{sug.unit ? `/${sug.unit}` : ''}
+                                    </span>
+                                  )}
+                                </div>
                               </div>
                             </div>
                           </li>
@@ -488,7 +495,14 @@ export default function CommodityMarket() {
                             >
                               <TableCell className="font-medium">{commodity.symbol}</TableCell>
                               <TableCell className="max-w-xs truncate">{commodity.name}</TableCell>
-                              <TableCell className="text-right font-mono">{commodity.price.toFixed(2)}</TableCell>
+                              <TableCell className="text-right font-mono">
+                                {commodity.price.toFixed(2)}
+                                {commodity.currency && (
+                                  <span className="text-xs text-muted-foreground ml-1">
+                                    {commodity.currency}{commodity.unit ? `/${commodity.unit}` : ''}
+                                  </span>
+                                )}
+                              </TableCell>
                               <TableCell className="text-right">
                                 <PriceChangeBadge value={commodity.absoluteChange} />
                               </TableCell>
@@ -552,7 +566,14 @@ export default function CommodityMarket() {
                             >
                               <TableCell className="font-medium">{commodity.symbol}</TableCell>
                               <TableCell className="max-w-xs truncate">{commodity.name}</TableCell>
-                              <TableCell className="text-right font-mono">{commodity.price.toFixed(2)}</TableCell>
+                              <TableCell className="text-right font-mono">
+                                {commodity.price.toFixed(2)}
+                                {commodity.currency && (
+                                  <span className="text-xs text-muted-foreground ml-1">
+                                    {commodity.currency}{commodity.unit ? `/${commodity.unit}` : ''}
+                                  </span>
+                                )}
+                              </TableCell>
                               <TableCell className="text-right">
                                 <PriceChangeBadge value={commodity.absoluteChange} />
                               </TableCell>
@@ -616,7 +637,14 @@ export default function CommodityMarket() {
                             >
                               <TableCell className="font-medium">{commodity.symbol}</TableCell>
                               <TableCell className="max-w-xs truncate">{commodity.name}</TableCell>
-                              <TableCell className="text-right font-mono">{commodity.price.toFixed(2)}</TableCell>
+                              <TableCell className="text-right font-mono">
+                                {commodity.price.toFixed(2)}
+                                {commodity.currency && (
+                                  <span className="text-xs text-muted-foreground ml-1">
+                                    {commodity.currency}{commodity.unit ? `/${commodity.unit}` : ''}
+                                  </span>
+                                )}
+                              </TableCell>
                               <TableCell className="text-right">
                                 <PriceChangeBadge value={commodity.absoluteChange} />
                               </TableCell>
@@ -680,7 +708,14 @@ export default function CommodityMarket() {
                             >
                               <TableCell className="font-medium">{commodity.symbol}</TableCell>
                               <TableCell className="max-w-xs truncate">{commodity.name}</TableCell>
-                              <TableCell className="text-right font-mono">{commodity.price.toFixed(2)}</TableCell>
+                              <TableCell className="text-right font-mono">
+                                {commodity.price.toFixed(2)}
+                                {commodity.currency && (
+                                  <span className="text-xs text-muted-foreground ml-1">
+                                    {commodity.currency}{commodity.unit ? `/${commodity.unit}` : ''}
+                                  </span>
+                                )}
+                              </TableCell>
                               <TableCell className="text-right">
                                 <PriceChangeBadge value={commodity.absoluteChange} />
                               </TableCell>
@@ -744,7 +779,14 @@ export default function CommodityMarket() {
                             >
                               <TableCell className="font-medium">{commodity.symbol}</TableCell>
                               <TableCell className="max-w-xs truncate">{commodity.name}</TableCell>
-                              <TableCell className="text-right font-mono">{commodity.price.toFixed(2)}</TableCell>
+                              <TableCell className="text-right font-mono">
+                                {commodity.price.toFixed(2)}
+                                {commodity.currency && (
+                                  <span className="text-xs text-muted-foreground ml-1">
+                                    {commodity.currency}{commodity.unit ? `/${commodity.unit}` : ''}
+                                  </span>
+                                )}
+                              </TableCell>
                               <TableCell className="text-right">
                                 <PriceChangeBadge value={commodity.absoluteChange} />
                               </TableCell>

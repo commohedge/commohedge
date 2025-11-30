@@ -6741,9 +6741,9 @@ const pricingFunctions = {
             <CardHeader className="pb-2 border-b">
               <CardTitle className="text-xl font-bold text-primary">Commodity Options Strategy Parameters</CardTitle>
             </CardHeader>
-            <CardContent className="pt-6">
+            <CardContent className="pt-4 space-y-4">
               {/* Section 1: Use Real Data Toggle */}
-              <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+              <div className="p-2.5 bg-blue-50 border border-blue-200 rounded-lg">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <Switch
@@ -6789,8 +6789,8 @@ const pricingFunctions = {
               </div>
 
               {/* Section 1: Commodity & Dates */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                <div className="space-y-1.5">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div className="space-y-1">
                   <label className="text-sm font-medium text-foreground">Commodity</label>
                   <div className="relative">
                   <Select 
@@ -6852,7 +6852,7 @@ const pricingFunctions = {
                     }}
                     disabled={useRealData && loadingRealCommodities}
                   >
-                    <SelectTrigger className="h-10">
+                    <SelectTrigger className="h-9">
                       <SelectValue placeholder={useRealData && loadingRealCommodities ? "Loading commodities..." : "Select commodity"} />
                     </SelectTrigger>
                     <SelectContent>
@@ -7218,35 +7218,35 @@ const pricingFunctions = {
                   </div>
                 </div>
                 
-                <div className="space-y-1.5">
+                <div className="space-y-1">
                   <label className="text-sm font-medium text-foreground">Strategy Start Date</label>
                   <Input
                     type="date"
                     value={params.strategyStartDate}
                     onChange={(e) => setParams({...params, strategyStartDate: e.target.value})}
-                    className="h-10"
+                    className="h-9"
                   />
                 </div>
                 
-                <div className="space-y-1.5">
+                <div className="space-y-1">
                   <label className="text-sm font-medium text-foreground">Hedging Start Date</label>
                   <Input
                     type="date"
                     value={params.startDate}
                     onChange={(e) => setParams({...params, startDate: e.target.value})}
-                    className="h-10"
+                    className="h-9"
                   />
                 </div>
               </div>
 
               {/* Section 2: Hedging Parameters */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6 p-4 bg-muted/30 rounded-lg border">
-                <div className="space-y-1.5">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-3 bg-muted/30 rounded-lg border">
+                <div className="space-y-1">
                   <label className="text-sm font-medium text-foreground flex items-center justify-between">
                     <span>Months to Hedge</span>
                     <span className="text-xs text-muted-foreground font-mono">{params.monthsToHedge} months</span>
                   </label>
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2">
                     <Slider 
                       value={[params.monthsToHedge]} 
                       min={1} 
@@ -7259,19 +7259,19 @@ const pricingFunctions = {
                       type="number"
                       value={params.monthsToHedge}
                       onChange={(e) => setParams({...params, monthsToHedge: Number(e.target.value)})}
-                      className="w-20 h-9 text-center"
+                      className="w-16 h-8 text-center text-sm"
                       min={1}
                       max={36}
                     />
                   </div>
                 </div>
                 
-                <div className="space-y-1.5">
+                <div className="space-y-1">
                   <label className="text-sm font-medium text-foreground flex items-center justify-between">
                     <span>Risk-free Rate (r) %</span>
                     <span className="text-xs text-muted-foreground font-mono">{(params.interestRate || 0).toFixed(2)}%</span>
                   </label>
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2">
                     <Slider 
                       value={[params.interestRate]} 
                       min={0} 
@@ -7284,7 +7284,7 @@ const pricingFunctions = {
                       type="number"
                       value={params.interestRate}
                       onChange={(e) => setParams({...params, interestRate: Number(e.target.value)})}
-                      className="w-20 h-9 text-center"
+                      className="w-16 h-8 text-center text-sm"
                       min={0}
                       max={15}
                       step={0.1}
@@ -7293,144 +7293,136 @@ const pricingFunctions = {
                 </div>
               </div>
 
-              {/* Section 3: Volume, Position & Spot Price */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+              {/* Section 3: Volume, Position, Spot Price & Price Differential */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
                 {/* Commodity Volume */}
-                <div className="space-y-1.5">
+                <div className="space-y-1">
                   <label className="text-sm font-medium text-foreground">Commodity Volume (Units)</label>
                   <Input
                     type="number"
                     value={params.totalVolume}
                     onChange={(e) => handleVolumeChange(Number(e.target.value))}
-                    className="h-10"
+                    className="h-9"
                     placeholder="Enter volume"
                   />
                 </div>
 
-                {/* Position Type */}
-                <div className="space-y-1.5">
-                  <label className="text-sm font-medium text-foreground">Position Type</label>
-                  <Select
-                    value={params.volumeType}
-                    onValueChange={(value: 'long' | 'short') => 
-                      setParams(prev => ({ ...prev, volumeType: value }))
-                    }
-                  >
-                    <SelectTrigger className="h-10">
-                      <SelectValue placeholder="Select position type" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="long">
-                        <div className="flex items-center gap-2">
-                          <span className="text-green-600">📈</span>
-                          <span>Long Position</span>
-                        </div>
-                      </SelectItem>
-                      <SelectItem value="short">
-                        <div className="flex items-center gap-2">
-                          <span className="text-red-600">📉</span>
-                          <span>Short Position</span>
-                        </div>
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <div className="text-xs text-muted-foreground mt-1">
-                    {params.volumeType === 'long' || params.volumeType === 'receivable' ? (
-                      <span className="text-green-600 flex items-center gap-1">
-                        <span>📈</span>
-                        <span>You own or will buy the commodity</span>
-                      </span>
-                    ) : (
-                      <span className="text-red-600 flex items-center gap-1">
-                        <span>📉</span>
-                        <span>You need to deliver or sell the commodity</span>
-                      </span>
-                    )}
-                  </div>
-                </div>
-                
-                {/* Spot Price */}
-                <div className="space-y-1.5">
-                  <label className="text-sm font-medium text-foreground">
-                    Spot Price {params.currencyPair?.symbol && (
-                      <span className="ml-1 text-xs text-muted-foreground font-normal">
-                        ({params.currencyPair.symbol})
-                      </span>
-                    )}
-                  </label>
-                  <div className="flex items-center gap-2">
-                    <Input
-                      type="number"
-                      value={params.spotPrice}
-                      onChange={(e) => handleSpotPriceChange(Number(e.target.value))}
-                      className="h-10 text-base font-mono flex-1"
-                      step="0.0001"
-                      placeholder={`${params.currencyPair?.defaultSpotRate || 1.0850}`}
-                    />
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        if (params.currencyPair) {
-                          setParams({...params, spotPrice: params.currencyPair.defaultSpotRate});
-                          setInitialSpotPrice(params.currencyPair.defaultSpotRate);
-                        }
-                      }}
-                      className="h-10 px-4 whitespace-nowrap"
-                      title="Reset to default market rate"
-                    >
-                      Reset
-                    </Button>
-                  </div>
-                  <div className="text-xs text-muted-foreground flex items-center gap-1 bg-primary/5 p-2 rounded border border-primary/10">
-                    <span>💱</span>
-                    <span>Current: <span className="font-mono font-medium">${(params.spotPrice || 0).toFixed(2)}</span></span>
-                    {params.currencyPair?.base && (
-                      <span className="text-muted-foreground">/{params.currencyPair.base}</span>
-                    )}
-                  </div>
-                </div>
-              </div>
+                 {/* Position Type */}
+                 <div className="space-y-1">
+                   <label className="text-sm font-medium text-foreground">Position Type</label>
+                   <Select
+                     value={params.volumeType}
+                     onValueChange={(value: 'long' | 'short') => 
+                       setParams(prev => ({ ...prev, volumeType: value }))
+                     }
+                   >
+                     <SelectTrigger className="h-9">
+                       <SelectValue placeholder="Select position type" />
+                     </SelectTrigger>
+                     <SelectContent>
+                       <SelectItem value="long">
+                         <div className="flex items-center gap-2">
+                           <span className="text-green-600">📈</span>
+                           <span>Long Position</span>
+                         </div>
+                       </SelectItem>
+                       <SelectItem value="short">
+                         <div className="flex items-center gap-2">
+                           <span className="text-red-600">📉</span>
+                           <span>Short Position</span>
+                         </div>
+                       </SelectItem>
+                     </SelectContent>
+                   </Select>
+                   <div className="text-xs text-muted-foreground">
+                     {params.volumeType === 'long' || params.volumeType === 'receivable' ? (
+                       <span className="text-green-600 flex items-center gap-1">
+                         <span>📈</span>
+                         <span>You own or will buy the commodity</span>
+                       </span>
+                     ) : (
+                       <span className="text-red-600 flex items-center gap-1">
+                         <span>📉</span>
+                         <span>You need to deliver or sell the commodity</span>
+                       </span>
+                     )}
+                   </div>
+                 </div>
+                 
+                 {/* Spot Price */}
+                 <div className="space-y-1">
+                   <label className="text-sm font-medium text-foreground">
+                     Spot Price {params.currencyPair?.symbol && (
+                       <span className="ml-1 text-xs text-muted-foreground font-normal">
+                         ({params.currencyPair.symbol})
+                       </span>
+                     )}
+                   </label>
+                   <div className="flex items-center gap-2">
+                     <Input
+                       type="number"
+                       value={params.spotPrice}
+                       onChange={(e) => handleSpotPriceChange(Number(e.target.value))}
+                       className="h-9 text-sm font-mono flex-1"
+                       step="0.0001"
+                       placeholder={`${params.currencyPair?.defaultSpotRate || 1.0850}`}
+                     />
+                     <Button
+                       variant="outline"
+                       size="sm"
+                       onClick={() => {
+                         if (params.currencyPair) {
+                           setParams({...params, spotPrice: params.currencyPair.defaultSpotRate});
+                           setInitialSpotPrice(params.currencyPair.defaultSpotRate);
+                         }
+                       }}
+                       className="h-9 px-2 whitespace-nowrap text-xs"
+                       title="Reset to default market rate"
+                     >
+                       Reset
+                     </Button>
+                   </div>
+                   <div className="text-xs text-muted-foreground flex items-center gap-1 bg-primary/5 px-2 py-1 rounded border border-primary/10">
+                     <span>💱</span>
+                     <span>Current: <span className="font-mono font-medium">${(params.spotPrice || 0).toFixed(2)}</span></span>
+                     {params.currencyPair?.base && (
+                       <span className="text-muted-foreground">/{params.currencyPair.base}</span>
+                     )}
+                   </div>
+                 </div>
 
-              {/* Section 3b: Price Differential */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                {/* Price Differential */}
-                <div className="space-y-1.5">
-                  <label className="text-sm font-medium text-foreground">
-                    Price Differential (Basis)
-                    <span className="ml-1 text-xs text-muted-foreground font-normal">
-                      ({params.currencyPair?.quote || 'USD'})
-                    </span>
-                  </label>
-                  <Input
-                    type="number"
-                    value={params.priceDifferential || 0}
-                    onChange={(e) => setParams({...params, priceDifferential: Number(e.target.value) || 0})}
-                    className="h-10 text-base font-mono"
-                    step="0.01"
-                    placeholder="0.00"
-                  />
-                  <div className="text-xs text-muted-foreground flex items-center gap-1 bg-blue-50 p-2 rounded border border-blue-100">
-                    <span>📊</span>
-                    <span>Effective Price for Costs: <span className="font-mono font-medium">${((params.spotPrice || 0) + (params.priceDifferential || 0)).toFixed(2)}</span></span>
-                    {params.currencyPair?.base && (
-                      <span className="text-muted-foreground">/{params.currencyPair.base}</span>
-                    )}
-                    {params.priceDifferential !== 0 && (
-                      <span className={`ml-1 ${params.priceDifferential > 0 ? 'text-red-600' : 'text-green-600'}`}>
-                        ({params.priceDifferential > 0 ? '+' : ''}{(params.priceDifferential || 0).toFixed(2)})
-                      </span>
-                    )}
-                  </div>
-                  <div className="text-xs text-muted-foreground mt-1">
-                    <span className="font-medium">ℹ️</span> Applied only to costs (hedged/unhedged), not to options/swaps/forwards payoffs
-                  </div>
-                </div>
+                 {/* Price Differential */}
+                 <div className="space-y-1">
+                   <label className="text-sm font-medium text-foreground">
+                     Price Differential (Basis)
+                     <span className="ml-1 text-xs text-muted-foreground font-normal">
+                       ({params.currencyPair?.quote || 'USD'})
+                     </span>
+                   </label>
+                   <Input
+                     type="number"
+                     value={params.priceDifferential || 0}
+                     onChange={(e) => setParams({...params, priceDifferential: Number(e.target.value) || 0})}
+                     className="h-9 text-sm font-mono"
+                     step="0.01"
+                     placeholder="0.00"
+                   />
+                   <div className="text-xs text-muted-foreground flex items-center gap-1 bg-blue-50 px-2 py-1 rounded border border-blue-100">
+                     <span>📊</span>
+                     <span>Effective: <span className="font-mono font-medium">${((params.spotPrice || 0) + (params.priceDifferential || 0)).toFixed(2)}</span></span>
+                     {params.currencyPair?.base && (
+                       <span className="text-muted-foreground">/{params.currencyPair.base}</span>
+                     )}
+                   </div>
+                   <div className="text-xs text-muted-foreground">
+                     <span className="font-medium">ℹ️</span> Applied only to costs
+                   </div>
+                 </div>
               </div>
 
               {/* Custom Periods - Compact Toggle */}
-              <div className="mt-6">
-                <div className="bg-muted/20 p-3 rounded-lg">
+              <div>
+                <div className="bg-muted/20 p-2.5 rounded-lg">
                 <div className="flex items-center gap-2">
                   <Switch
                     checked={params.useCustomPeriods}
