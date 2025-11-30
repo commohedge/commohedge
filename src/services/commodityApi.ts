@@ -70,8 +70,6 @@ export interface Commodity {
   symbol: string;
   name: string;
   price: number;
-  currency?: string; // Currency code (USD, EUR, etc.)
-  unit?: string; // Unit of measure (OZ, BBL, MT, etc.)
   percentChange: number;
   absoluteChange: number;
   high: number;
@@ -83,6 +81,7 @@ export interface Commodity {
         'container' | 'freight_route' | 'lng_freight' | 'dirty_freight' |
         'vlsfo' | 'mgo' | 'ifo380';
   category: CommodityCategory;
+  unit?: string; // Unit of measure (e.g., "OZ", "BBL", "MT", "BU", "LB", "MMBTU", "GAL", "CWT")
 }
 
 // Function to get cache key for a category
@@ -263,6 +262,100 @@ function getCommodityType(symbol: string, name: string, category: CommodityCateg
 }
 
 /**
+ * Infers unit of measure from commodity symbol, name, category, and type
+ */
+function inferUnitFromCommodity(symbol: string, name: string, category: CommodityCategory, type: Commodity['type']): string {
+  const symbolLower = symbol.toLowerCase();
+  const nameLower = name.toLowerCase();
+  
+  // Energy commodities
+  if (category === 'energy') {
+    if (symbolLower.includes('wti') || symbolLower.includes('brent') || symbolLower.includes('cl') || 
+        nameLower.includes('crude') || nameLower.includes('oil')) {
+      return 'BBL';
+    }
+    if (symbolLower.includes('ng') || symbolLower.includes('natgas') || nameLower.includes('natural gas')) {
+      return 'MMBTU';
+    }
+    if (symbolLower.includes('ho') || nameLower.includes('heating oil') || nameLower.includes('heating')) {
+      return 'GAL';
+    }
+    if (symbolLower.includes('rb') || symbolLower.includes('rbob') || nameLower.includes('gasoline')) {
+      return 'GAL';
+    }
+  }
+  
+  // Metals
+  if (category === 'metals') {
+    if (type === 'gold' || symbolLower.includes('au') || symbolLower.includes('gc') || nameLower.includes('gold')) {
+      return 'OZ';
+    }
+    if (type === 'silver' || symbolLower.includes('ag') || symbolLower.includes('si') || nameLower.includes('silver')) {
+      return 'OZ';
+    }
+    if (type === 'platinum' || symbolLower.includes('pl') || nameLower.includes('platinum')) {
+      return 'OZ';
+    }
+    if (type === 'palladium' || symbolLower.includes('pa') || nameLower.includes('palladium')) {
+      return 'OZ';
+    }
+    if (type === 'copper' || symbolLower.includes('cu') || symbolLower.includes('hg') || nameLower.includes('copper')) {
+      return 'LB';
+    }
+    if (type === 'aluminum' || symbolLower.includes('al') || nameLower.includes('aluminum') || nameLower.includes('aluminium')) {
+      return 'MT';
+    }
+    if (symbolLower.includes('zn') || nameLower.includes('zinc')) {
+      return 'MT';
+    }
+    if (symbolLower.includes('ni') || nameLower.includes('nickel')) {
+      return 'MT';
+    }
+  }
+  
+  // Agricultural
+  if (category === 'agricultural') {
+    if (type === 'corn' || symbolLower.includes('zc') || nameLower.includes('corn')) {
+      return 'BU';
+    }
+    if (type === 'wheat' || symbolLower.includes('zw') || nameLower.includes('wheat')) {
+      return 'BU';
+    }
+    if (type === 'soybean' || symbolLower.includes('zs') || nameLower.includes('soybean') || nameLower.includes('soy')) {
+      return 'BU';
+    }
+    if (type === 'coffee' || symbolLower.includes('kc') || nameLower.includes('coffee')) {
+      return 'LB';
+    }
+    if (type === 'sugar' || symbolLower.includes('sb') || nameLower.includes('sugar')) {
+      return 'LB';
+    }
+    if (type === 'cotton' || symbolLower.includes('ct') || nameLower.includes('cotton')) {
+      return 'LB';
+    }
+    if (type === 'cocoa' || symbolLower.includes('cc') || nameLower.includes('cocoa')) {
+      return 'MT';
+    }
+  }
+  
+  // Livestock (if added to category)
+  if (type === 'cattle' || symbolLower.includes('le') || nameLower.includes('cattle')) {
+    return 'CWT';
+  }
+  if (symbolLower.includes('he') || nameLower.includes('hog')) {
+    return 'CWT';
+  }
+  
+  // Freight and Bunker
+  if (category === 'freight' || category === 'bunker') {
+    return 'MT';
+  }
+  
+  // Default
+  return '';
+}
+
+/**
  * Parses HTML data to extract commodity information
  */
 function parseCommoditiesData(data: any, category: CommodityCategory): Commodity[] {
@@ -374,100 +467,7 @@ function parseCommoditiesData(data: any, category: CommodityCategory): Commodity
           return parseFloat(cleanText) || 0;
         };
         
-        const priceText = cells[1]?.text.trim() || '';
-        const price = parseNumber(priceText);
-        
-        // Extract currency and unit from price cell or name
-        // Common patterns: "USD / OZ", "USD/OZ", "$/BBL", "USD", etc.
-        let currency = 'USD'; // Default to USD
-        let unit = '';
-        
-        // Try to extract from price cell HTML (check attributes first, then text)
-        const priceCellHTML = cells[1]?.toString() || '';
-        const priceCellText = cells[1]?.text.trim() || '';
-        
-        // Check data attributes first
-        const currencyAttr = cells[1]?.getAttribute('data-currency') || 
-                            cells[1]?.getAttribute('data-quote-currency');
-        const unitAttr = cells[1]?.getAttribute('data-unit') ||
-                        cells[1]?.getAttribute('data-base-currency');
-        
-        if (currencyAttr) {
-          currency = currencyAttr.toUpperCase();
-        }
-        if (unitAttr) {
-          unit = unitAttr.toUpperCase();
-        }
-        
-        // Try to extract from price cell text or HTML
-        if (!currencyAttr || !unitAttr) {
-          const searchText = priceCellHTML || priceCellText || priceText;
-          const currencyMatch = searchText.match(/(USD|EUR|GBP|JPY|CNY|CHF|CAD|AUD|NZD|SGD|HKD|SEK|NOK|DKK|PLN|CZK|HUF|RUB|BRL|MXN|ZAR|INR|KRW|TRY|ILS|AED|SAR|QAR|KWD|BHD|OMR|JOD|LBP|EGP|MAD|TND|DZD|LYD|IQD|IRR|PKR|BDT|LKR|NPR|MMK|THB|VND|IDR|PHP|MYR|BND|CLP|COP|PEN|ARS|UYU|PYG|BOB|VES|GTQ|HNL|NIO|CRC|PAB|BZD|JMD|TTD|BBD|XCD|AWG|ANG|SRD|GYD|SBD|FJD|PGK|VUV|WST|TOP|XPF|\$|€|£|¥)\s*\/?\s*([A-Z]{2,4})?/i);
-          if (currencyMatch) {
-            const currencyCode = currencyMatch[1].toUpperCase();
-            if (currencyCode === '$') {
-              currency = 'USD';
-            } else if (currencyCode === '€') {
-              currency = 'EUR';
-            } else if (currencyCode === '£') {
-              currency = 'GBP';
-            } else if (currencyCode === '¥') {
-              currency = 'JPY';
-            } else {
-              currency = currencyCode;
-            }
-            if (currencyMatch[2] && !unitAttr) {
-              unit = currencyMatch[2].toUpperCase();
-            }
-          }
-        }
-        
-        // Fallback: Try to extract from symbol or name
-        if (!currency || currency === 'USD') {
-          // Try to extract from symbol or name
-          const nameText = (name || symbol || '').toUpperCase();
-          // Common currency patterns in names
-          if (nameText.includes('USD') || nameText.includes('$')) {
-            currency = 'USD';
-          } else if (nameText.includes('EUR') || nameText.includes('€')) {
-            currency = 'EUR';
-          } else if (nameText.includes('GBP') || nameText.includes('£')) {
-            currency = 'GBP';
-          } else if (nameText.includes('JPY') || nameText.includes('¥')) {
-            currency = 'JPY';
-          }
-          
-          // Try to extract unit from name
-          const unitPatterns = [
-            /(OZ|OUNCE|OUNCES)/i,
-            /(BBL|BARREL|BARRELS)/i,
-            /(MT|METRIC\s*TON|TONNE)/i,
-            /(LB|POUND|POUNDS)/i,
-            /(BU|BUSHEL|BUSHELS)/i,
-            /(GAL|GALLON|GALLONS)/i,
-            /(MMBTU|MM\s*BTU)/i,
-            /(CWT|HUNDREDWEIGHT)/i,
-            /(KG|KILOGRAM)/i,
-            /(T|TON)/i
-          ];
-          
-          for (const pattern of unitPatterns) {
-            const match = nameText.match(pattern);
-            if (match) {
-              unit = match[1].toUpperCase();
-              // Normalize units
-              if (unit.includes('OUNCE')) unit = 'OZ';
-              else if (unit.includes('BARREL')) unit = 'BBL';
-              else if (unit.includes('METRIC') || unit.includes('TONNE')) unit = 'MT';
-              else if (unit.includes('POUND')) unit = 'LB';
-              else if (unit.includes('BUSHEL')) unit = 'BU';
-              else if (unit.includes('GALLON')) unit = 'GAL';
-              else if (unit.includes('HUNDREDWEIGHT')) unit = 'CWT';
-              else if (unit === 'T' && !unit.includes('TON')) unit = 'MT';
-              break;
-            }
-          }
-        }
+        const price = parseNumber(cells[1]?.text.trim());
         
         // Check for negative class indicators
         const percentCell = cells[2];
@@ -494,19 +494,83 @@ function parseCommoditiesData(data: any, category: CommodityCategory): Commodity
         
         const type = getCommodityType(symbol, name, category);
         
+        // Extract unit of measure from name or price cell
+        let unit = '';
+        const nameLower = name.toLowerCase();
+        const priceCellText = cells[1]?.text.trim() || '';
+        
+        // Try to extract unit from price cell (e.g., "USD / OZ", "USD / BBL", "$/BBL")
+        const unitMatch = priceCellText.match(/\/(\s*)?([A-Z]{2,5}|OZ|BBL|MT|BU|LB|MMBTU|GAL|CWT|MMBtu|MMBTU|MMBtu|MMBTU|APZ|TROY\s*OZ)/i);
+        if (unitMatch) {
+          let extractedUnit = unitMatch[2].toUpperCase().trim();
+          // Normalize common variations
+          if (extractedUnit === 'APZ' || extractedUnit.includes('TROY')) {
+            unit = 'OZ';
+          } else if (extractedUnit.includes('MMBTU') || extractedUnit.includes('MMBTU')) {
+            unit = 'MMBTU';
+          } else {
+            unit = extractedUnit;
+          }
+        } else {
+          // Try to extract from name
+          const unitPatterns = [
+            /\b(OZ|OUNCE|OUNCES|APZ|TROY\s*OZ|TROY\s*OUNCE)\b/i,
+            /\b(BBL|BARREL|BARRELS)\b/i,
+            /\b(MT|METRIC\s*TON|TONS?)\b/i,
+            /\b(BU|BUSHEL|BUSHELS)\b/i,
+            /\b(LB|POUND|POUNDS)\b/i,
+            /\b(MMBTU|MMBtu|BTU)\b/i,
+            /\b(GAL|GALLON|GALLONS)\b/i,
+            /\b(CWT|HUNDREDWEIGHT)\b/i,
+            /\b(KG|KILOGRAM|KILOGRAMS)\b/i
+          ];
+          
+          for (const pattern of unitPatterns) {
+            const match = name.match(pattern);
+            if (match) {
+              const matchedUnit = match[1].toUpperCase();
+              // Normalize units
+              if (matchedUnit.includes('OUNCE') || matchedUnit.includes('OZ') || matchedUnit === 'APZ' || matchedUnit.includes('TROY')) {
+                unit = 'OZ';
+              } else if (matchedUnit.includes('BARREL') || matchedUnit === 'BBL') {
+                unit = 'BBL';
+              } else if (matchedUnit.includes('TON') || matchedUnit === 'MT') {
+                unit = 'MT';
+              } else if (matchedUnit.includes('BUSHEL') || matchedUnit === 'BU') {
+                unit = 'BU';
+              } else if (matchedUnit.includes('POUND') || matchedUnit === 'LB') {
+                unit = 'LB';
+              } else if (matchedUnit.includes('BTU') || matchedUnit.includes('MMBTU')) {
+                unit = 'MMBTU';
+              } else if (matchedUnit.includes('GALLON') || matchedUnit === 'GAL') {
+                unit = 'GAL';
+              } else if (matchedUnit.includes('HUNDREDWEIGHT') || matchedUnit === 'CWT') {
+                unit = 'CWT';
+              } else {
+                unit = matchedUnit;
+              }
+              break;
+            }
+          }
+        }
+        
+        // Fallback: infer unit from commodity type/category if not found
+        if (!unit) {
+          unit = inferUnitFromCommodity(symbol, name, category, type);
+        }
+        
         commodities.push({
           symbol,
           name,
           price,
-          currency,
-          unit,
           percentChange,
           absoluteChange,
           high,
           low,
           technicalEvaluation,
           type,
-          category
+          category,
+          unit: unit || undefined
         });
         
       } catch (err) {
@@ -643,8 +707,6 @@ async function fetchFreightSymbolData(symbol: string, name: string, type: Commod
     
     // Extract the main price
     let price = 0;
-    let currency = 'USD'; // Default currency
-    let unit = '';
     let percentChange = 0;
     let absoluteChange = 0;
     let high = 0;
@@ -714,30 +776,11 @@ async function fetchFreightSymbolData(symbol: string, name: string, type: Commod
           
           console.log(`Raw price text for ${symbol} (${selector}): "${rawPriceText}"`);
           
-          // Extract currency and unit before removing them
-          const currencyUnitMatch = rawPriceText.match(/(USD|EUR|GBP|JPY|CNY|CHF|CAD|AUD|NZD|SGD|HKD|SEK|NOK|DKK|PLN|CZK|HUF|RUB|BRL|MXN|ZAR|INR|KRW|TRY|ILS|AED|SAR|QAR|KWD|BHD|OMR|JOD|LBP|EGP|MAD|TND|DZD|LYD|IQD|IRR|PKR|BDT|LKR|NPR|MMK|THB|VND|IDR|PHP|MYR|BND|CLP|COP|PEN|ARS|UYU|PYG|BOB|VES|GTQ|HNL|NIO|CRC|PAB|BZD|JMD|TTD|BBD|XCD|AWG|ANG|SRD|GYD|SBD|FJD|PGK|VUV|WST|TOP|XPF|\$|€|£|¥)\s*\/?\s*([A-Z]{2,4})?/gi);
-          if (currencyUnitMatch) {
-            const match = currencyUnitMatch[0];
-            const currencyCode = match.match(/(USD|EUR|GBP|JPY|CNY|CHF|CAD|AUD|NZD|SGD|HKD|SEK|NOK|DKK|PLN|CZK|HUF|RUB|BRL|MXN|ZAR|INR|KRW|TRY|ILS|AED|SAR|QAR|KWD|BHD|OMR|JOD|LBP|EGP|MAD|TND|DZD|LYD|IQD|IRR|PKR|BDT|LKR|NPR|MMK|THB|VND|IDR|PHP|MYR|BND|CLP|COP|PEN|ARS|UYU|PYG|BOB|VES|GTQ|HNL|NIO|CRC|PAB|BZD|JMD|TTD|BBD|XCD|AWG|ANG|SRD|GYD|SBD|FJD|PGK|VUV|WST|TOP|XPF|\$|€|£|¥)/i);
-            if (currencyCode) {
-              const code = currencyCode[0].toUpperCase();
-              if (code === '$') currency = 'USD';
-              else if (code === '€') currency = 'EUR';
-              else if (code === '£') currency = 'GBP';
-              else if (code === '¥') currency = 'JPY';
-              else currency = code;
-            }
-            const unitMatch = match.match(/\/([A-Z]{2,4})/i);
-            if (unitMatch) {
-              unit = unitMatch[1].toUpperCase();
-            }
-          }
-          
           // Parse prices correctly for TradingView format
           let priceText = rawPriceText;
           
-          // Remove units and spaces (after extracting them)
-          priceText = priceText.replace(/\s*(USD|usd|EUR|eur|GBP|gbp|JPY|jpy|CNY|cny|CHF|chf|CAD|cad|AUD|aud|NZD|nzd|SGD|sgd|HKD|hkd|SEK|sek|NOK|nok|DKK|dkk|PLN|pln|CZK|czk|HUF|huf|RUB|rub|BRL|brl|MXN|mxn|ZAR|zar|INR|inr|KRW|krw|TRY|try|ILS|ils|AED|aed|SAR|sar|QAR|qar|KWD|kwd|BHD|bhd|OMR|omr|JOD|jod|LBP|lbp|EGP|egp|MAD|mad|TND|tnd|DZD|dzd|LYD|lyd|IQD|iqd|IRR|irr|PKR|pkr|BDT|bdt|LKR|lkr|NPR|npr|MMK|mmk|THB|thb|VND|vnd|IDR|idr|PHP|php|MYR|myr|BND|bnd|CLP|clp|COP|cop|PEN|pen|ARS|ars|UYU|uyu|PYG|pyg|BOB|bob|VES|ves|GTQ|gtq|HNL|hnl|NIO|nio|CRC|crc|PAB|pab|BZD|bzd|JMD|jmd|TTD|ttd|BBD|bbd|XCD|xcd|AWG|awg|ANG|ang|SRD|srd|GYD|gyd|SBD|sbd|FJD|fjd|PGK|pgk|VUV|vuv|WST|wst|TOP|top|XPF|xpf|\$|€|£|¥|MMBtu|BBL|MT|OZ|LB|BU|GAL)\s*/gi, '');
+          // Remove units and spaces
+          priceText = priceText.replace(/\s*(USD|usd|$|€|EUR|eur|MMBtu|BBL|MT|OZ|LB|BU|GAL)\s*/gi, '');
           
           // Remove all non-numeric characters except commas, dots, and minus
           priceText = priceText.replace(/[^\d.,-]/g, '');
@@ -878,19 +921,21 @@ async function fetchFreightSymbolData(symbol: string, name: string, type: Commod
       return null;
     }
     
+    // Infer unit for freight
+    const unit = inferUnitFromCommodity(symbol, name, 'freight', type);
+    
     return {
       symbol,
       name,
       price,
-      currency,
-      unit,
       percentChange,
       absoluteChange,
       high: high || 0,
       low: low || 0,
       technicalEvaluation: percentChange >= 0 ? 'Positive' : 'Negative',
       type,
-      category: 'freight'
+      category: 'freight',
+      unit: unit || undefined
     };
     
   } catch (error) {
@@ -1252,6 +1297,9 @@ function createBunkerCommodity(
   high: number = 0,
   low: number = 0
 ): Commodity {
+  // Bunker commodities are typically in MT (metric tons)
+  const unit = inferUnitFromCommodity(symbol, name, 'bunker', type);
+  
   return {
     symbol,
     name,
@@ -1262,7 +1310,8 @@ function createBunkerCommodity(
     low: low > 0 ? low : (symbol.includes('Gibraltar') ? 0 : price * 0.95),
     technicalEvaluation: absoluteChange >= 0 ? 'Positive' : 'Negative',
     type,
-    category: 'bunker'
+    category: 'bunker',
+    unit: unit || 'MT' // Default to MT for bunker if not found
   };
 }
 

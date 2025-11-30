@@ -6818,7 +6818,7 @@ const pricingFunctions = {
                           const currencyPair: CurrencyPair = {
                             symbol: selectedCommodity.symbol,
                             name: selectedCommodity.name,
-                            base: getUnitFromCommodity(selectedCommodity),
+                            base: selectedCommodity.unit || getUnitFromCommodity(selectedCommodity),
                             quote: 'USD',
                             category: categoryMap[selectedCommodity.category] || 'others',
                             defaultSpotRate: selectedCommodity.price
@@ -6932,7 +6932,10 @@ const pricingFunctions = {
                                         <div className="flex flex-col">
                                           <div className="flex justify-between items-center w-full">
                                             <span>{commodity.symbol}</span>
-                                            <span className="text-xs text-muted-foreground font-mono">${commodity.price.toFixed(2)}</span>
+                                            <span className="text-xs text-muted-foreground font-mono">
+                                              ${commodity.price.toFixed(2)}
+                                              {commodity.unit && <span className="ml-1">/{commodity.unit}</span>}
+                                            </span>
                                           </div>
                                           <span className="text-xs text-muted-foreground">{commodity.name}</span>
                                         </div>
@@ -6948,7 +6951,10 @@ const pricingFunctions = {
                                         <div className="flex flex-col">
                                           <div className="flex justify-between items-center w-full">
                                             <span>{commodity.symbol}</span>
-                                            <span className="text-xs text-muted-foreground font-mono">${commodity.price.toFixed(2)}</span>
+                                            <span className="text-xs text-muted-foreground font-mono">
+                                              ${commodity.price.toFixed(2)}
+                                              {commodity.unit && <span className="ml-1">/{commodity.unit}</span>}
+                                            </span>
                                           </div>
                                           <span className="text-xs text-muted-foreground">{commodity.name}</span>
                                         </div>
@@ -6964,7 +6970,10 @@ const pricingFunctions = {
                                         <div className="flex flex-col">
                                           <div className="flex justify-between items-center w-full">
                                             <span>{commodity.symbol}</span>
-                                            <span className="text-xs text-muted-foreground font-mono">${commodity.price.toFixed(2)}</span>
+                                            <span className="text-xs text-muted-foreground font-mono">
+                                              ${commodity.price.toFixed(2)}
+                                              {commodity.unit && <span className="ml-1">/{commodity.unit}</span>}
+                                            </span>
                                           </div>
                                           <span className="text-xs text-muted-foreground">{commodity.name}</span>
                                         </div>
@@ -6980,7 +6989,10 @@ const pricingFunctions = {
                                         <div className="flex flex-col">
                                           <div className="flex justify-between items-center w-full">
                                             <span>{commodity.symbol}</span>
-                                            <span className="text-xs text-muted-foreground font-mono">${commodity.price.toFixed(2)}</span>
+                                            <span className="text-xs text-muted-foreground font-mono">
+                                              ${commodity.price.toFixed(2)}
+                                              {commodity.unit && <span className="ml-1">/{commodity.unit}</span>}
+                                            </span>
                                           </div>
                                           <span className="text-xs text-muted-foreground">{commodity.name}</span>
                                         </div>
@@ -6996,7 +7008,10 @@ const pricingFunctions = {
                                         <div className="flex flex-col">
                                           <div className="flex justify-between items-center w-full">
                                             <span>{commodity.symbol}</span>
-                                            <span className="text-xs text-muted-foreground font-mono">${commodity.price.toFixed(2)}</span>
+                                            <span className="text-xs text-muted-foreground font-mono">
+                                              ${commodity.price.toFixed(2)}
+                                              {commodity.unit && <span className="ml-1">/{commodity.unit}</span>}
+                                            </span>
                                           </div>
                                           <span className="text-xs text-muted-foreground">{commodity.name}</span>
                                         </div>
