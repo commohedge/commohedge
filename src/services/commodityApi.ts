@@ -81,7 +81,6 @@ export interface Commodity {
         'container' | 'freight_route' | 'lng_freight' | 'dirty_freight' |
         'vlsfo' | 'mgo' | 'ifo380';
   category: CommodityCategory;
-  unit?: string; // Unit of measure (e.g., "OZ", "BBL", "MT", "BU", "LB", "MMBTU", "GAL", "CWT")
 }
 
 // Function to get cache key for a category
@@ -262,100 +261,6 @@ function getCommodityType(symbol: string, name: string, category: CommodityCateg
 }
 
 /**
- * Infers unit of measure from commodity symbol, name, category, and type
- */
-function inferUnitFromCommodity(symbol: string, name: string, category: CommodityCategory, type: Commodity['type']): string {
-  const symbolLower = symbol.toLowerCase();
-  const nameLower = name.toLowerCase();
-  
-  // Energy commodities
-  if (category === 'energy') {
-    if (symbolLower.includes('wti') || symbolLower.includes('brent') || symbolLower.includes('cl') || 
-        nameLower.includes('crude') || nameLower.includes('oil')) {
-      return 'BBL';
-    }
-    if (symbolLower.includes('ng') || symbolLower.includes('natgas') || nameLower.includes('natural gas')) {
-      return 'MMBTU';
-    }
-    if (symbolLower.includes('ho') || nameLower.includes('heating oil') || nameLower.includes('heating')) {
-      return 'GAL';
-    }
-    if (symbolLower.includes('rb') || symbolLower.includes('rbob') || nameLower.includes('gasoline')) {
-      return 'GAL';
-    }
-  }
-  
-  // Metals
-  if (category === 'metals') {
-    if (type === 'gold' || symbolLower.includes('au') || symbolLower.includes('gc') || nameLower.includes('gold')) {
-      return 'OZ';
-    }
-    if (type === 'silver' || symbolLower.includes('ag') || symbolLower.includes('si') || nameLower.includes('silver')) {
-      return 'OZ';
-    }
-    if (type === 'platinum' || symbolLower.includes('pl') || nameLower.includes('platinum')) {
-      return 'OZ';
-    }
-    if (type === 'palladium' || symbolLower.includes('pa') || nameLower.includes('palladium')) {
-      return 'OZ';
-    }
-    if (type === 'copper' || symbolLower.includes('cu') || symbolLower.includes('hg') || nameLower.includes('copper')) {
-      return 'LB';
-    }
-    if (type === 'aluminum' || symbolLower.includes('al') || nameLower.includes('aluminum') || nameLower.includes('aluminium')) {
-      return 'MT';
-    }
-    if (symbolLower.includes('zn') || nameLower.includes('zinc')) {
-      return 'MT';
-    }
-    if (symbolLower.includes('ni') || nameLower.includes('nickel')) {
-      return 'MT';
-    }
-  }
-  
-  // Agricultural
-  if (category === 'agricultural') {
-    if (type === 'corn' || symbolLower.includes('zc') || nameLower.includes('corn')) {
-      return 'BU';
-    }
-    if (type === 'wheat' || symbolLower.includes('zw') || nameLower.includes('wheat')) {
-      return 'BU';
-    }
-    if (type === 'soybean' || symbolLower.includes('zs') || nameLower.includes('soybean') || nameLower.includes('soy')) {
-      return 'BU';
-    }
-    if (type === 'coffee' || symbolLower.includes('kc') || nameLower.includes('coffee')) {
-      return 'LB';
-    }
-    if (type === 'sugar' || symbolLower.includes('sb') || nameLower.includes('sugar')) {
-      return 'LB';
-    }
-    if (type === 'cotton' || symbolLower.includes('ct') || nameLower.includes('cotton')) {
-      return 'LB';
-    }
-    if (type === 'cocoa' || symbolLower.includes('cc') || nameLower.includes('cocoa')) {
-      return 'MT';
-    }
-  }
-  
-  // Livestock (if added to category)
-  if (type === 'cattle' || symbolLower.includes('le') || nameLower.includes('cattle')) {
-    return 'CWT';
-  }
-  if (symbolLower.includes('he') || nameLower.includes('hog')) {
-    return 'CWT';
-  }
-  
-  // Freight and Bunker
-  if (category === 'freight' || category === 'bunker') {
-    return 'MT';
-  }
-  
-  // Default
-  return '';
-}
-
-/**
  * Parses HTML data to extract commodity information
  */
 function parseCommoditiesData(data: any, category: CommodityCategory): Commodity[] {
@@ -494,71 +399,6 @@ function parseCommoditiesData(data: any, category: CommodityCategory): Commodity
         
         const type = getCommodityType(symbol, name, category);
         
-        // Extract unit of measure from name or price cell
-        let unit = '';
-        const nameLower = name.toLowerCase();
-        const priceCellText = cells[1]?.text.trim() || '';
-        
-        // Try to extract unit from price cell (e.g., "USD / OZ", "USD / BBL", "$/BBL")
-        const unitMatch = priceCellText.match(/\/(\s*)?([A-Z]{2,5}|OZ|BBL|MT|BU|LB|MMBTU|GAL|CWT|MMBtu|MMBTU|MMBtu|MMBTU|APZ|TROY\s*OZ)/i);
-        if (unitMatch) {
-          let extractedUnit = unitMatch[2].toUpperCase().trim();
-          // Normalize common variations
-          if (extractedUnit === 'APZ' || extractedUnit.includes('TROY')) {
-            unit = 'OZ';
-          } else if (extractedUnit.includes('MMBTU') || extractedUnit.includes('MMBTU')) {
-            unit = 'MMBTU';
-          } else {
-            unit = extractedUnit;
-          }
-        } else {
-          // Try to extract from name
-          const unitPatterns = [
-            /\b(OZ|OUNCE|OUNCES|APZ|TROY\s*OZ|TROY\s*OUNCE)\b/i,
-            /\b(BBL|BARREL|BARRELS)\b/i,
-            /\b(MT|METRIC\s*TON|TONS?)\b/i,
-            /\b(BU|BUSHEL|BUSHELS)\b/i,
-            /\b(LB|POUND|POUNDS)\b/i,
-            /\b(MMBTU|MMBtu|BTU)\b/i,
-            /\b(GAL|GALLON|GALLONS)\b/i,
-            /\b(CWT|HUNDREDWEIGHT)\b/i,
-            /\b(KG|KILOGRAM|KILOGRAMS)\b/i
-          ];
-          
-          for (const pattern of unitPatterns) {
-            const match = name.match(pattern);
-            if (match) {
-              const matchedUnit = match[1].toUpperCase();
-              // Normalize units
-              if (matchedUnit.includes('OUNCE') || matchedUnit.includes('OZ') || matchedUnit === 'APZ' || matchedUnit.includes('TROY')) {
-                unit = 'OZ';
-              } else if (matchedUnit.includes('BARREL') || matchedUnit === 'BBL') {
-                unit = 'BBL';
-              } else if (matchedUnit.includes('TON') || matchedUnit === 'MT') {
-                unit = 'MT';
-              } else if (matchedUnit.includes('BUSHEL') || matchedUnit === 'BU') {
-                unit = 'BU';
-              } else if (matchedUnit.includes('POUND') || matchedUnit === 'LB') {
-                unit = 'LB';
-              } else if (matchedUnit.includes('BTU') || matchedUnit.includes('MMBTU')) {
-                unit = 'MMBTU';
-              } else if (matchedUnit.includes('GALLON') || matchedUnit === 'GAL') {
-                unit = 'GAL';
-              } else if (matchedUnit.includes('HUNDREDWEIGHT') || matchedUnit === 'CWT') {
-                unit = 'CWT';
-              } else {
-                unit = matchedUnit;
-              }
-              break;
-            }
-          }
-        }
-        
-        // Fallback: infer unit from commodity type/category if not found
-        if (!unit) {
-          unit = inferUnitFromCommodity(symbol, name, category, type);
-        }
-        
         commodities.push({
           symbol,
           name,
@@ -569,8 +409,7 @@ function parseCommoditiesData(data: any, category: CommodityCategory): Commodity
           low,
           technicalEvaluation,
           type,
-          category,
-          unit: unit || undefined
+          category
         });
         
       } catch (err) {
@@ -921,9 +760,6 @@ async function fetchFreightSymbolData(symbol: string, name: string, type: Commod
       return null;
     }
     
-    // Infer unit for freight
-    const unit = inferUnitFromCommodity(symbol, name, 'freight', type);
-    
     return {
       symbol,
       name,
@@ -934,8 +770,7 @@ async function fetchFreightSymbolData(symbol: string, name: string, type: Commod
       low: low || 0,
       technicalEvaluation: percentChange >= 0 ? 'Positive' : 'Negative',
       type,
-      category: 'freight',
-      unit: unit || undefined
+      category: 'freight'
     };
     
   } catch (error) {
@@ -1297,9 +1132,6 @@ function createBunkerCommodity(
   high: number = 0,
   low: number = 0
 ): Commodity {
-  // Bunker commodities are typically in MT (metric tons)
-  const unit = inferUnitFromCommodity(symbol, name, 'bunker', type);
-  
   return {
     symbol,
     name,
@@ -1310,8 +1142,7 @@ function createBunkerCommodity(
     low: low > 0 ? low : (symbol.includes('Gibraltar') ? 0 : price * 0.95),
     technicalEvaluation: absoluteChange >= 0 ? 'Positive' : 'Negative',
     type,
-    category: 'bunker',
-    unit: unit || 'MT' // Default to MT for bunker if not found
+    category: 'bunker'
   };
 }
 
