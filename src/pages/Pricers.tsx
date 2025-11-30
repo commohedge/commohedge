@@ -24,6 +24,7 @@ import { useToast } from "@/hooks/use-toast";
 import { CURRENCY_PAIRS } from '@/pages/Index'; // Commodity data
 import PayoffChart from '@/components/PayoffChart';
 import { PricingService, Greeks } from '@/services/PricingService';
+import { Commodity, CommodityCategory, fetchCommoditiesData } from '@/services/commodityApi';
 
 // Interface pour les commodities (adaptée du Strategy Builder)
 interface CurrencyPair { // Renamed to Commodity in a previous step, but still named CurrencyPair here for compatibility
@@ -86,6 +87,91 @@ const INSTRUMENT_TYPES = [
   { value: 'outside-binary', label: 'Outside Binary (beta)', category: 'digital' }
 ];
 
+// Helper function to get unit from commodity name/symbol (same as Index.tsx)
+function getUnitFromCommodity(commodity: Commodity): string {
+  const name = commodity.name.toLowerCase();
+  const symbol = commodity.symbol.toLowerCase();
+  
+  // Energy
+  if (name.includes('crude') || name.includes('oil') || symbol.includes('wti') || symbol.includes('brent') || symbol.includes('cl')) {
+    return 'BBL';
+  }
+  if (name.includes('natural gas') || name.includes('natgas') || symbol.includes('ng')) {
+    return 'MMBTU';
+  }
+  if (name.includes('heating oil') || name.includes('heating')) {
+    return 'GAL';
+  }
+  if (name.includes('gasoline') || name.includes('rbob') || symbol.includes('rb')) {
+    return 'GAL';
+  }
+  
+  // Metals
+  if (name.includes('gold') || symbol.includes('au') || symbol.includes('gc')) {
+    return 'OZ';
+  }
+  if (name.includes('silver') || symbol.includes('ag') || symbol.includes('si')) {
+    return 'OZ';
+  }
+  if (name.includes('platinum') || symbol.includes('pl')) {
+    return 'OZ';
+  }
+  if (name.includes('palladium') || symbol.includes('pa')) {
+    return 'OZ';
+  }
+  if (name.includes('copper') || symbol.includes('cu') || symbol.includes('hg')) {
+    return 'LB';
+  }
+  if (name.includes('aluminum') || name.includes('aluminium') || symbol.includes('al')) {
+    return 'MT';
+  }
+  if (name.includes('zinc') || symbol.includes('zn')) {
+    return 'MT';
+  }
+  if (name.includes('nickel') || symbol.includes('ni')) {
+    return 'MT';
+  }
+  
+  // Agriculture
+  if (name.includes('corn') || symbol.includes('zc')) {
+    return 'BU';
+  }
+  if (name.includes('wheat') || symbol.includes('zw')) {
+    return 'BU';
+  }
+  if (name.includes('soybean') || name.includes('soy') || symbol.includes('zs')) {
+    return 'BU';
+  }
+  if (name.includes('coffee') || symbol.includes('kc')) {
+    return 'LB';
+  }
+  if (name.includes('sugar') || symbol.includes('sb')) {
+    return 'LB';
+  }
+  if (name.includes('cotton') || symbol.includes('ct')) {
+    return 'LB';
+  }
+  if (name.includes('cocoa') || symbol.includes('cc')) {
+    return 'MT';
+  }
+  
+  // Livestock
+  if (name.includes('cattle') || symbol.includes('le')) {
+    return 'CWT';
+  }
+  if (name.includes('hog') || symbol.includes('he')) {
+    return 'CWT';
+  }
+  
+  // Freight and Bunker
+  if (commodity.category === 'freight' || commodity.category === 'bunker') {
+    return 'MT';
+  }
+  
+  // Default
+  return 'MT';
+}
+
 const Pricers = () => {
   const { toast } = useToast();
   
@@ -96,6 +182,82 @@ const Pricers = () => {
   // État principal
   const [selectedInstrument, setSelectedInstrument] = useState('call');
   const [selectedCurrencyPair, setSelectedCurrencyPair] = useState('WTI');
+  
+  // State for using real data from Commodity Market
+  const [useRealData, setUseRealData] = useState(() => {
+    try {
+      const saved = localStorage.getItem('pricersUseRealData');
+      return saved ? JSON.parse(saved) : false;
+    } catch (error) {
+      return false;
+    }
+  });
+
+  // State for real commodities from Commodity Market
+  const [realCommodities, setRealCommodities] = useState<Commodity[]>([]);
+  const [loadingRealCommodities, setLoadingRealCommodities] = useState(false);
+  
+  // State for commodity search filter
+  const [commoditySearchQuery, setCommoditySearchQuery] = useState('');
+
+  // Function to load all commodities from Commodity Market cache
+  const loadRealCommodities = async () => {
+    setLoadingRealCommodities(true);
+    try {
+      const categories: CommodityCategory[] = ['metals', 'agricultural', 'energy', 'freight', 'bunker'];
+      const allCommodities: Commodity[] = [];
+      
+      // Load from cache first (fast)
+      for (const category of categories) {
+        try {
+          const cached = localStorage.getItem(`fx_commodities_cache_${category}`);
+          if (cached) {
+            const cacheData = JSON.parse(cached);
+            const now = Date.now();
+            const CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hours
+            const isExpired = (now - cacheData.timestamp) > CACHE_DURATION;
+            
+            if (!isExpired && cacheData.data && Array.isArray(cacheData.data)) {
+              allCommodities.push(...cacheData.data);
+            }
+          }
+        } catch (error) {
+          console.warn(`Error loading cached data for ${category}:`, error);
+        }
+      }
+
+      // If no cached data, try to fetch
+      if (allCommodities.length === 0) {
+        for (const category of categories) {
+          try {
+            const data = await fetchCommoditiesData(category, false);
+            allCommodities.push(...data);
+          } catch (error) {
+            console.warn(`Error fetching ${category} data:`, error);
+          }
+        }
+      }
+
+      setRealCommodities(allCommodities);
+      console.log(`Loaded ${allCommodities.length} real commodities from Commodity Market`);
+    } catch (error) {
+      console.error('Error loading real commodities:', error);
+      toast({
+        title: "Error",
+        description: "Failed to load commodities from Commodity Market. Using default list.",
+        variant: "destructive"
+      });
+    } finally {
+      setLoadingRealCommodities(false);
+    }
+  };
+
+  // Load real commodities when useRealData is enabled
+  useEffect(() => {
+    if (useRealData) {
+      loadRealCommodities();
+    }
+  }, [useRealData]);
   
   // ✅ AJOUT: Sélection du modèle de pricing pour les barrières
   const [barrierPricingModel, setBarrierPricingModel] = useState<'closed-form' | 'monte-carlo'>('closed-form');
@@ -159,11 +321,24 @@ const Pricers = () => {
 
   // Mettre à jour le spot price quand la paire de devises change
   useEffect(() => {
-    const pair = CURRENCY_PAIRS.find(p => p.symbol === selectedCurrencyPair);
-    if (pair) {
-      setPricingInputs(prev => ({ ...prev, spotPrice: pair.defaultSpotRate }));
+    if (useRealData && realCommodities.length > 0) {
+      // Use real commodities from Commodity Market
+      const selectedCommodity = realCommodities.find(c => c.symbol === selectedCurrencyPair);
+      if (selectedCommodity) {
+        setPricingInputs(prev => ({ ...prev, spotPrice: selectedCommodity.price }));
+        toast({
+          title: "Real Price Updated",
+          description: `${selectedCommodity.name}: $${selectedCommodity.price.toFixed(2)}`,
+        });
+      }
+    } else {
+      // Use default commodities list
+      const pair = CURRENCY_PAIRS.find(p => p.symbol === selectedCurrencyPair);
+      if (pair) {
+        setPricingInputs(prev => ({ ...prev, spotPrice: pair.defaultSpotRate }));
+      }
     }
-  }, [selectedCurrencyPair]);
+  }, [selectedCurrencyPair, useRealData, realCommodities]);
 
   // Mettre à jour le type d'instrument dans le composant stratégie
   useEffect(() => {
@@ -880,19 +1055,216 @@ const Pricers = () => {
                   </div>
                 )}
 
+                {/* Use Real Data Toggle */}
+                <div className="p-2.5 bg-blue-50 border border-blue-200 rounded-lg">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Switch
+                        checked={useRealData}
+                        onCheckedChange={(checked) => {
+                          setUseRealData(checked);
+                          localStorage.setItem('pricersUseRealData', JSON.stringify(checked));
+                        }}
+                      />
+                      <label className="text-sm font-medium text-foreground cursor-pointer" onClick={() => {
+                        setUseRealData(!useRealData);
+                        localStorage.setItem('pricersUseRealData', JSON.stringify(!useRealData));
+                      }}>
+                        Use Real Data from Commodity Market
+                      </label>
+                    </div>
+                    {useRealData && (
+                      <span className="text-xs text-muted-foreground">
+                        {loadingRealCommodities ? 'Loading...' : `${realCommodities.length} commodities available`}
+                      </span>
+                    )}
+                  </div>
+                  {useRealData && (
+                    <p className="text-xs text-muted-foreground mt-2">
+                      Real-time prices from Commodity Market will be used. Prices update automatically when you select a commodity.
+                    </p>
+                  )}
+                </div>
+
                 {/* Paire de devises */}
                 <div className="space-y-2">
                   <Label>Commodity</Label>
-                  <Select value={selectedCurrencyPair} onValueChange={setSelectedCurrencyPair}>
+                  <Select 
+                    value={selectedCurrencyPair} 
+                    onValueChange={setSelectedCurrencyPair}
+                    onOpenChange={(open) => {
+                      if (!open) {
+                        setCommoditySearchQuery('');
+                      }
+                    }}
+                    disabled={useRealData && loadingRealCommodities}
+                  >
                     <SelectTrigger>
-                      <SelectValue />
+                      <SelectValue placeholder={useRealData && loadingRealCommodities ? "Loading commodities..." : "Select commodity"} />
                     </SelectTrigger>
                     <SelectContent>
-                      {CURRENCY_PAIRS.map((pair) => (
-                        <SelectItem key={pair.symbol} value={pair.symbol}>
-                          {pair.name}
-                        </SelectItem>
-                      ))}
+                      {useRealData && realCommodities.length > 0 ? (
+                        // Real commodities from Commodity Market
+                        <>
+                          {/* Search Input */}
+                          <div className="p-2 border-b sticky top-0 bg-white z-10">
+                            <Input
+                              placeholder="Search by symbol or name..."
+                              value={commoditySearchQuery}
+                              onChange={(e) => setCommoditySearchQuery(e.target.value)}
+                              className="h-8 text-sm"
+                              onClick={(e) => e.stopPropagation()}
+                              onKeyDown={(e) => e.stopPropagation()}
+                            />
+                          </div>
+                          
+                          {/* Filtered commodities by category */}
+                          {(() => {
+                            const searchLower = commoditySearchQuery.toLowerCase().trim();
+                            const filteredEnergy = searchLower 
+                              ? realCommodities.filter(c => 
+                                  c.category === 'energy' && 
+                                  (c.symbol.toLowerCase().includes(searchLower) || 
+                                   c.name.toLowerCase().includes(searchLower))
+                                )
+                              : realCommodities.filter(c => c.category === 'energy');
+                            const filteredMetals = searchLower
+                              ? realCommodities.filter(c => 
+                                  c.category === 'metals' && 
+                                  (c.symbol.toLowerCase().includes(searchLower) || 
+                                   c.name.toLowerCase().includes(searchLower))
+                                )
+                              : realCommodities.filter(c => c.category === 'metals');
+                            const filteredAgricultural = searchLower
+                              ? realCommodities.filter(c => 
+                                  c.category === 'agricultural' && 
+                                  (c.symbol.toLowerCase().includes(searchLower) || 
+                                   c.name.toLowerCase().includes(searchLower))
+                                )
+                              : realCommodities.filter(c => c.category === 'agricultural');
+                            const filteredFreight = searchLower
+                              ? realCommodities.filter(c => 
+                                  c.category === 'freight' && 
+                                  (c.symbol.toLowerCase().includes(searchLower) || 
+                                   c.name.toLowerCase().includes(searchLower))
+                                )
+                              : realCommodities.filter(c => c.category === 'freight');
+                            const filteredBunker = searchLower
+                              ? realCommodities.filter(c => 
+                                  c.category === 'bunker' && 
+                                  (c.symbol.toLowerCase().includes(searchLower) || 
+                                   c.name.toLowerCase().includes(searchLower))
+                                )
+                              : realCommodities.filter(c => c.category === 'bunker');
+                            
+                            const hasResults = filteredEnergy.length > 0 || filteredMetals.length > 0 || 
+                                              filteredAgricultural.length > 0 || filteredFreight.length > 0 || 
+                                              filteredBunker.length > 0;
+                            
+                            if (searchLower && !hasResults) {
+                              return (
+                                <div className="p-4 text-center text-sm text-muted-foreground">
+                                  No commodities found matching "{commoditySearchQuery}"
+                                </div>
+                              );
+                            }
+                            
+                            return (
+                              <>
+                                {filteredEnergy.length > 0 && (
+                                  <>
+                                    <div className="p-2 text-xs font-medium text-muted-foreground border-b border-t">⚡ Energy</div>
+                                    {filteredEnergy.map(commodity => (
+                                      <SelectItem key={commodity.symbol} value={commodity.symbol}>
+                                        <div className="flex flex-col">
+                                          <div className="flex justify-between items-center w-full">
+                                            <span>{commodity.symbol}</span>
+                                            <span className="text-xs text-muted-foreground font-mono">${commodity.price.toFixed(2)}</span>
+                                          </div>
+                                          <span className="text-xs text-muted-foreground">{commodity.name}</span>
+                                        </div>
+                                      </SelectItem>
+                                    ))}
+                                  </>
+                                )}
+                                {filteredMetals.length > 0 && (
+                                  <>
+                                    <div className="p-2 text-xs font-medium text-muted-foreground border-b border-t">🔩 Metals</div>
+                                    {filteredMetals.map(commodity => (
+                                      <SelectItem key={commodity.symbol} value={commodity.symbol}>
+                                        <div className="flex flex-col">
+                                          <div className="flex justify-between items-center w-full">
+                                            <span>{commodity.symbol}</span>
+                                            <span className="text-xs text-muted-foreground font-mono">${commodity.price.toFixed(2)}</span>
+                                          </div>
+                                          <span className="text-xs text-muted-foreground">{commodity.name}</span>
+                                        </div>
+                                      </SelectItem>
+                                    ))}
+                                  </>
+                                )}
+                                {filteredAgricultural.length > 0 && (
+                                  <>
+                                    <div className="p-2 text-xs font-medium text-muted-foreground border-b border-t">🌾 Agriculture</div>
+                                    {filteredAgricultural.map(commodity => (
+                                      <SelectItem key={commodity.symbol} value={commodity.symbol}>
+                                        <div className="flex flex-col">
+                                          <div className="flex justify-between items-center w-full">
+                                            <span>{commodity.symbol}</span>
+                                            <span className="text-xs text-muted-foreground font-mono">${commodity.price.toFixed(2)}</span>
+                                          </div>
+                                          <span className="text-xs text-muted-foreground">{commodity.name}</span>
+                                        </div>
+                                      </SelectItem>
+                                    ))}
+                                  </>
+                                )}
+                                {filteredFreight.length > 0 && (
+                                  <>
+                                    <div className="p-2 text-xs font-medium text-muted-foreground border-b border-t">🚢 Freight</div>
+                                    {filteredFreight.map(commodity => (
+                                      <SelectItem key={commodity.symbol} value={commodity.symbol}>
+                                        <div className="flex flex-col">
+                                          <div className="flex justify-between items-center w-full">
+                                            <span>{commodity.symbol}</span>
+                                            <span className="text-xs text-muted-foreground font-mono">${commodity.price.toFixed(2)}</span>
+                                          </div>
+                                          <span className="text-xs text-muted-foreground">{commodity.name}</span>
+                                        </div>
+                                      </SelectItem>
+                                    ))}
+                                  </>
+                                )}
+                                {filteredBunker.length > 0 && (
+                                  <>
+                                    <div className="p-2 text-xs font-medium text-muted-foreground border-b border-t">⛽ Bunker</div>
+                                    {filteredBunker.map(commodity => (
+                                      <SelectItem key={commodity.symbol} value={commodity.symbol}>
+                                        <div className="flex flex-col">
+                                          <div className="flex justify-between items-center w-full">
+                                            <span>{commodity.symbol}</span>
+                                            <span className="text-xs text-muted-foreground font-mono">${commodity.price.toFixed(2)}</span>
+                                          </div>
+                                          <span className="text-xs text-muted-foreground">{commodity.name}</span>
+                                        </div>
+                                      </SelectItem>
+                                    ))}
+                                  </>
+                                )}
+                              </>
+                            );
+                          })()}
+                        </>
+                      ) : (
+                        // Default commodities list
+                        <>
+                          {CURRENCY_PAIRS.map((pair) => (
+                            <SelectItem key={pair.symbol} value={pair.symbol}>
+                              {pair.name}
+                            </SelectItem>
+                          ))}
+                        </>
+                      )}
                     </SelectContent>
                   </Select>
                 </div>
