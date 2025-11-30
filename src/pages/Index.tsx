@@ -886,7 +886,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { Plus, Trash2, Save, X, AlertTriangle, Table, PlusCircle, Trash, Upload, BarChart3, Calculator, Shield, Calendar, ChevronDown } from 'lucide-react';
+import { Plus, Trash2, Save, X, AlertTriangle, Table, PlusCircle, Trash, Upload, BarChart3, Calculator, Shield, Calendar, ChevronDown, RefreshCw } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Link } from 'react-router-dom';
 import { CalculatorState, CustomPeriod } from '@/types/CalculatorState';
@@ -1306,8 +1306,8 @@ const Index = () => {
   const [allCommodities, setAllCommodities] = useState<Commodity[]>([]);
   const [loadingCommodities, setLoadingCommodities] = useState<boolean>(false);
 
-  // Function to load all commodities from cache
-  const loadAllCommodities = async () => {
+  // Function to load all commodities from cache or API
+  const loadAllCommodities = async (forceRefresh: boolean = false) => {
     setLoadingCommodities(true);
     try {
       const categories: CommodityCategory[] = ['metals', 'agricultural', 'energy', 'freight', 'bunker'];
@@ -1315,17 +1315,40 @@ const Index = () => {
       
       for (const category of categories) {
         try {
-          const commodities = await fetchCommoditiesData(category, false); // Use cache
-          allCommoditiesData.push(...commodities);
+          // Try cache first, then API if cache is empty or forceRefresh is true
+          let commodities = await fetchCommoditiesData(category, forceRefresh);
+          
+          // If no data from cache and not forcing refresh, try API
+          if (commodities.length === 0 && !forceRefresh) {
+            console.log(`No cache for ${category}, trying API...`);
+            commodities = await fetchCommoditiesData(category, true);
+          }
+          
+          if (commodities.length > 0) {
+            allCommoditiesData.push(...commodities);
+          }
         } catch (error) {
           console.warn(`Failed to load ${category} commodities:`, error);
         }
       }
       
       setAllCommodities(allCommoditiesData);
-      console.log(`Loaded ${allCommoditiesData.length} commodities from cache`);
+      console.log(`Loaded ${allCommoditiesData.length} commodities`);
+      
+      if (allCommoditiesData.length === 0) {
+        toast({
+          title: "No commodities found",
+          description: "Please visit the Commodity Market page first to load data, or click Refresh to load now.",
+          variant: "default"
+        });
+      }
     } catch (error) {
       console.error('Error loading commodities:', error);
+      toast({
+        title: "Error loading commodities",
+        description: "Failed to load commodities. Please try again or visit Commodity Market page first.",
+        variant: "destructive"
+      });
     } finally {
       setLoadingCommodities(false);
     }
@@ -7108,9 +7131,30 @@ const pricingFunctions = {
                   
                   {useRealData && (
                     <div className="mt-3 space-y-2">
-                      <label className="text-sm font-medium text-foreground">
-                        Select Commodity
-                      </label>
+                      <div className="flex items-center justify-between">
+                        <label className="text-sm font-medium text-foreground">
+                          Select Commodity
+                        </label>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => loadAllCommodities(true)}
+                          disabled={loadingCommodities}
+                          className="h-7 px-2 text-xs"
+                        >
+                          {loadingCommodities ? (
+                            <>
+                              <RefreshCw className="h-3 w-3 mr-1 animate-spin" />
+                              Loading...
+                            </>
+                          ) : (
+                            <>
+                              <RefreshCw className="h-3 w-3 mr-1" />
+                              Refresh
+                            </>
+                          )}
+                        </Button>
+                      </div>
                       <Select
                         value={selectedCommodity?.symbol || ''}
                         onValueChange={(value) => {
@@ -7121,15 +7165,16 @@ const pricingFunctions = {
                             setInitialSpotPrice(commodity.price);
                           }
                         }}
-                        disabled={loadingCommodities || allCommodities.length === 0}
+                        disabled={loadingCommodities}
                       >
                         <SelectTrigger className="w-full">
-                          <SelectValue placeholder={loadingCommodities ? "Loading commodities..." : "Select a commodity"} />
+                          <SelectValue placeholder={loadingCommodities ? "Loading commodities..." : allCommodities.length === 0 ? "No commodities available. Click Refresh to load." : "Select a commodity"} />
                         </SelectTrigger>
                         <SelectContent className="max-h-[300px]">
                           {allCommodities.length === 0 && !loadingCommodities && (
                             <div className="p-2 text-sm text-muted-foreground">
-                              No commodities available. Please visit Commodity Market page first to load data.
+                              <div className="mb-2">No commodities available.</div>
+                              <div className="text-xs">Click "Refresh" above to load from API, or visit the Commodity Market page first.</div>
                             </div>
                           )}
                           {allCommodities.map((commodity) => (
