@@ -879,7 +879,7 @@ export const calculateStrategyPayoffAtPrice = (components: any[], price: number,
   return totalPayoff;
 };
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import StrategyImportService from '../services/StrategyImportService';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -1384,6 +1384,9 @@ const Index = () => {
   // State for real commodities from Commodity Market
   const [realCommodities, setRealCommodities] = useState<Commodity[]>([]);
   const [loadingRealCommodities, setLoadingRealCommodities] = useState(false);
+  
+  // State for commodity search filter
+  const [commoditySearchQuery, setCommoditySearchQuery] = useState('');
 
   // Function to load all commodities from Commodity Market cache
   const loadRealCommodities = async () => {
@@ -6792,6 +6795,12 @@ const pricingFunctions = {
                   <div className="relative">
                   <Select 
                     value={params.currencyPair?.symbol || (useRealData && realCommodities.length > 0 ? realCommodities[0].symbol : CURRENCY_PAIRS[0].symbol)} 
+                    onOpenChange={(open) => {
+                      if (!open) {
+                        // Reset search when dropdown closes
+                        setCommoditySearchQuery('');
+                      }
+                    }}
                     onValueChange={(value) => {
                       if (useRealData && realCommodities.length > 0) {
                         // Use real commodities from Commodity Market
@@ -6850,66 +6859,154 @@ const pricingFunctions = {
                       {useRealData && realCommodities.length > 0 ? (
                         // Real commodities from Commodity Market
                         <>
-                          <div className="p-2 text-xs font-medium text-muted-foreground border-b">⚡ Energy</div>
-                          {realCommodities.filter(c => c.category === 'energy').map(commodity => (
-                            <SelectItem key={commodity.symbol} value={commodity.symbol}>
-                              <div className="flex flex-col">
-                                <div className="flex justify-between items-center w-full">
-                                  <span>{commodity.symbol}</span>
-                                  <span className="text-xs text-muted-foreground font-mono">${commodity.price.toFixed(2)}</span>
+                          {/* Search Input */}
+                          <div className="p-2 border-b sticky top-0 bg-white z-10">
+                            <Input
+                              placeholder="Search by symbol or name..."
+                              value={commoditySearchQuery}
+                              onChange={(e) => setCommoditySearchQuery(e.target.value)}
+                              className="h-8 text-sm"
+                              onClick={(e) => e.stopPropagation()}
+                              onKeyDown={(e) => e.stopPropagation()}
+                            />
+                          </div>
+                          
+                          {/* Filtered commodities by category */}
+                          {(() => {
+                            const searchLower = commoditySearchQuery.toLowerCase().trim();
+                            const filteredEnergy = searchLower 
+                              ? realCommodities.filter(c => 
+                                  c.category === 'energy' && 
+                                  (c.symbol.toLowerCase().includes(searchLower) || 
+                                   c.name.toLowerCase().includes(searchLower))
+                                )
+                              : realCommodities.filter(c => c.category === 'energy');
+                            const filteredMetals = searchLower
+                              ? realCommodities.filter(c => 
+                                  c.category === 'metals' && 
+                                  (c.symbol.toLowerCase().includes(searchLower) || 
+                                   c.name.toLowerCase().includes(searchLower))
+                                )
+                              : realCommodities.filter(c => c.category === 'metals');
+                            const filteredAgricultural = searchLower
+                              ? realCommodities.filter(c => 
+                                  c.category === 'agricultural' && 
+                                  (c.symbol.toLowerCase().includes(searchLower) || 
+                                   c.name.toLowerCase().includes(searchLower))
+                                )
+                              : realCommodities.filter(c => c.category === 'agricultural');
+                            const filteredFreight = searchLower
+                              ? realCommodities.filter(c => 
+                                  c.category === 'freight' && 
+                                  (c.symbol.toLowerCase().includes(searchLower) || 
+                                   c.name.toLowerCase().includes(searchLower))
+                                )
+                              : realCommodities.filter(c => c.category === 'freight');
+                            const filteredBunker = searchLower
+                              ? realCommodities.filter(c => 
+                                  c.category === 'bunker' && 
+                                  (c.symbol.toLowerCase().includes(searchLower) || 
+                                   c.name.toLowerCase().includes(searchLower))
+                                )
+                              : realCommodities.filter(c => c.category === 'bunker');
+                            
+                            const hasResults = filteredEnergy.length > 0 || filteredMetals.length > 0 || 
+                                              filteredAgricultural.length > 0 || filteredFreight.length > 0 || 
+                                              filteredBunker.length > 0;
+                            
+                            if (searchLower && !hasResults) {
+                              return (
+                                <div className="p-4 text-center text-sm text-muted-foreground">
+                                  No commodities found matching "{commoditySearchQuery}"
                                 </div>
-                                <span className="text-xs text-muted-foreground">{commodity.name}</span>
-                              </div>
-                            </SelectItem>
-                          ))}
-                          <div className="p-2 text-xs font-medium text-muted-foreground border-b border-t">🔩 Metals</div>
-                          {realCommodities.filter(c => c.category === 'metals').map(commodity => (
-                            <SelectItem key={commodity.symbol} value={commodity.symbol}>
-                              <div className="flex flex-col">
-                                <div className="flex justify-between items-center w-full">
-                                  <span>{commodity.symbol}</span>
-                                  <span className="text-xs text-muted-foreground font-mono">${commodity.price.toFixed(2)}</span>
-                                </div>
-                                <span className="text-xs text-muted-foreground">{commodity.name}</span>
-                              </div>
-                            </SelectItem>
-                          ))}
-                          <div className="p-2 text-xs font-medium text-muted-foreground border-b border-t">🌾 Agriculture</div>
-                          {realCommodities.filter(c => c.category === 'agricultural').map(commodity => (
-                            <SelectItem key={commodity.symbol} value={commodity.symbol}>
-                              <div className="flex flex-col">
-                                <div className="flex justify-between items-center w-full">
-                                  <span>{commodity.symbol}</span>
-                                  <span className="text-xs text-muted-foreground font-mono">${commodity.price.toFixed(2)}</span>
-                                </div>
-                                <span className="text-xs text-muted-foreground">{commodity.name}</span>
-                              </div>
-                            </SelectItem>
-                          ))}
-                          <div className="p-2 text-xs font-medium text-muted-foreground border-b border-t">🚢 Freight</div>
-                          {realCommodities.filter(c => c.category === 'freight').map(commodity => (
-                            <SelectItem key={commodity.symbol} value={commodity.symbol}>
-                              <div className="flex flex-col">
-                                <div className="flex justify-between items-center w-full">
-                                  <span>{commodity.symbol}</span>
-                                  <span className="text-xs text-muted-foreground font-mono">${commodity.price.toFixed(2)}</span>
-                                </div>
-                                <span className="text-xs text-muted-foreground">{commodity.name}</span>
-                              </div>
-                            </SelectItem>
-                          ))}
-                          <div className="p-2 text-xs font-medium text-muted-foreground border-b border-t">⛽ Bunker</div>
-                          {realCommodities.filter(c => c.category === 'bunker').map(commodity => (
-                            <SelectItem key={commodity.symbol} value={commodity.symbol}>
-                              <div className="flex flex-col">
-                                <div className="flex justify-between items-center w-full">
-                                  <span>{commodity.symbol}</span>
-                                  <span className="text-xs text-muted-foreground font-mono">${commodity.price.toFixed(2)}</span>
-                                </div>
-                                <span className="text-xs text-muted-foreground">{commodity.name}</span>
-                              </div>
-                            </SelectItem>
-                          ))}
+                              );
+                            }
+                            
+                            return (
+                              <>
+                                {filteredEnergy.length > 0 && (
+                                  <>
+                                    <div className="p-2 text-xs font-medium text-muted-foreground border-b border-t">⚡ Energy</div>
+                                    {filteredEnergy.map(commodity => (
+                                      <SelectItem key={commodity.symbol} value={commodity.symbol}>
+                                        <div className="flex flex-col">
+                                          <div className="flex justify-between items-center w-full">
+                                            <span>{commodity.symbol}</span>
+                                            <span className="text-xs text-muted-foreground font-mono">${commodity.price.toFixed(2)}</span>
+                                          </div>
+                                          <span className="text-xs text-muted-foreground">{commodity.name}</span>
+                                        </div>
+                                      </SelectItem>
+                                    ))}
+                                  </>
+                                )}
+                                {filteredMetals.length > 0 && (
+                                  <>
+                                    <div className="p-2 text-xs font-medium text-muted-foreground border-b border-t">🔩 Metals</div>
+                                    {filteredMetals.map(commodity => (
+                                      <SelectItem key={commodity.symbol} value={commodity.symbol}>
+                                        <div className="flex flex-col">
+                                          <div className="flex justify-between items-center w-full">
+                                            <span>{commodity.symbol}</span>
+                                            <span className="text-xs text-muted-foreground font-mono">${commodity.price.toFixed(2)}</span>
+                                          </div>
+                                          <span className="text-xs text-muted-foreground">{commodity.name}</span>
+                                        </div>
+                                      </SelectItem>
+                                    ))}
+                                  </>
+                                )}
+                                {filteredAgricultural.length > 0 && (
+                                  <>
+                                    <div className="p-2 text-xs font-medium text-muted-foreground border-b border-t">🌾 Agriculture</div>
+                                    {filteredAgricultural.map(commodity => (
+                                      <SelectItem key={commodity.symbol} value={commodity.symbol}>
+                                        <div className="flex flex-col">
+                                          <div className="flex justify-between items-center w-full">
+                                            <span>{commodity.symbol}</span>
+                                            <span className="text-xs text-muted-foreground font-mono">${commodity.price.toFixed(2)}</span>
+                                          </div>
+                                          <span className="text-xs text-muted-foreground">{commodity.name}</span>
+                                        </div>
+                                      </SelectItem>
+                                    ))}
+                                  </>
+                                )}
+                                {filteredFreight.length > 0 && (
+                                  <>
+                                    <div className="p-2 text-xs font-medium text-muted-foreground border-b border-t">🚢 Freight</div>
+                                    {filteredFreight.map(commodity => (
+                                      <SelectItem key={commodity.symbol} value={commodity.symbol}>
+                                        <div className="flex flex-col">
+                                          <div className="flex justify-between items-center w-full">
+                                            <span>{commodity.symbol}</span>
+                                            <span className="text-xs text-muted-foreground font-mono">${commodity.price.toFixed(2)}</span>
+                                          </div>
+                                          <span className="text-xs text-muted-foreground">{commodity.name}</span>
+                                        </div>
+                                      </SelectItem>
+                                    ))}
+                                  </>
+                                )}
+                                {filteredBunker.length > 0 && (
+                                  <>
+                                    <div className="p-2 text-xs font-medium text-muted-foreground border-b border-t">⛽ Bunker</div>
+                                    {filteredBunker.map(commodity => (
+                                      <SelectItem key={commodity.symbol} value={commodity.symbol}>
+                                        <div className="flex flex-col">
+                                          <div className="flex justify-between items-center w-full">
+                                            <span>{commodity.symbol}</span>
+                                            <span className="text-xs text-muted-foreground font-mono">${commodity.price.toFixed(2)}</span>
+                                          </div>
+                                          <span className="text-xs text-muted-foreground">{commodity.name}</span>
+                                        </div>
+                                      </SelectItem>
+                                    ))}
+                                  </>
+                                )}
+                              </>
+                            );
+                          })()}
                         </>
                       ) : (
                         // Default commodities list
