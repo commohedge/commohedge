@@ -895,10 +895,12 @@ import html2canvas from 'html2canvas';
 import { Slider } from "@/components/ui/slider";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
+import { Checkbox } from "@/components/ui/checkbox";
 import MonteCarloVisualization from '../components/MonteCarloVisualization';
 import PayoffChart from '../components/PayoffChart';
+import { Commodity, fetchCommoditiesData, CommodityCategory } from '@/services/commodityApi';
 import { SimulationData } from '../components/MonteCarloVisualization';
-import { Switch } from "@/components/ui/switch";
 import { v4 as uuidv4 } from 'uuid';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
@@ -1280,6 +1282,82 @@ const Index = () => {
 
   // Keep track of initial spot price
   const [initialSpotPrice, setInitialSpotPrice] = useState<number>(params.spotPrice);
+
+  // Real data from Commodity Market
+  const [useRealData, setUseRealData] = useState<boolean>(() => {
+    try {
+      const savedState = localStorage.getItem('calculatorState');
+      return savedState ? JSON.parse(savedState).useRealData || false : false;
+    } catch (error) {
+      return false;
+    }
+  });
+
+  const [selectedCommodity, setSelectedCommodity] = useState<Commodity | null>(() => {
+    try {
+      const savedState = localStorage.getItem('calculatorState');
+      const savedCommodity = savedState ? JSON.parse(savedState).selectedCommodity : null;
+      return savedCommodity;
+    } catch (error) {
+      return null;
+    }
+  });
+
+  const [allCommodities, setAllCommodities] = useState<Commodity[]>([]);
+  const [loadingCommodities, setLoadingCommodities] = useState<boolean>(false);
+
+  // Function to load all commodities from cache
+  const loadAllCommodities = async () => {
+    setLoadingCommodities(true);
+    try {
+      const categories: CommodityCategory[] = ['metals', 'agricultural', 'energy', 'freight', 'bunker'];
+      const allCommoditiesData: Commodity[] = [];
+      
+      for (const category of categories) {
+        try {
+          const commodities = await fetchCommoditiesData(category, false); // Use cache
+          allCommoditiesData.push(...commodities);
+        } catch (error) {
+          console.warn(`Failed to load ${category} commodities:`, error);
+        }
+      }
+      
+      setAllCommodities(allCommoditiesData);
+      console.log(`Loaded ${allCommoditiesData.length} commodities from cache`);
+    } catch (error) {
+      console.error('Error loading commodities:', error);
+    } finally {
+      setLoadingCommodities(false);
+    }
+  };
+
+  // Load commodities on mount
+  useEffect(() => {
+    loadAllCommodities();
+  }, []);
+
+  // Save useRealData and selectedCommodity to localStorage
+  useEffect(() => {
+    try {
+      const savedState = localStorage.getItem('calculatorState');
+      if (savedState) {
+        const state = JSON.parse(savedState);
+        state.useRealData = useRealData;
+        state.selectedCommodity = selectedCommodity;
+        localStorage.setItem('calculatorState', JSON.stringify(state));
+      }
+    } catch (error) {
+      console.warn('Error saving useRealData to localStorage:', error);
+    }
+  }, [useRealData, selectedCommodity]);
+
+  // Get current spot price (real data or manual)
+  const getCurrentSpotPrice = (): number => {
+    if (useRealData && selectedCommodity && selectedCommodity.price > 0) {
+      return selectedCommodity.price;
+    }
+    return params.spotPrice;
+  };
 
   // Strategy components state
   const [strategy, setStrategy] = useState(() => {
@@ -4310,7 +4388,9 @@ const Index = () => {
       },
       stressTestScenarios: DEFAULT_SCENARIOS,
       useImpliedVol: false,
-      impliedVolatilities: {}
+      impliedVolatilities: {},
+      useRealData: false,
+      selectedCommodity: null
     };
     localStorage.setItem('calculatorState', JSON.stringify(state));
     
@@ -6947,38 +7027,138 @@ const pricingFunctions = {
                         ({params.currencyPair.symbol})
                       </span>
                     )}
+                    {useRealData && selectedCommodity && (
+                      <span className="ml-2 text-xs text-green-600 font-normal">
+                        (Real: {selectedCommodity.symbol})
+                      </span>
+                    )}
                   </label>
                   <div className="flex items-center gap-2">
                     <Input
                       type="number"
-                      value={params.spotPrice}
-                      onChange={(e) => handleSpotPriceChange(Number(e.target.value))}
+                      value={getCurrentSpotPrice()}
+                      onChange={(e) => {
+                        if (!useRealData) {
+                          handleSpotPriceChange(Number(e.target.value));
+                        }
+                      }}
                       className="h-10 text-base font-mono flex-1"
                       step="0.0001"
                       placeholder={`${params.currencyPair?.defaultSpotRate || 1.0850}`}
+                      disabled={useRealData && selectedCommodity !== null}
                     />
                     <Button
                       variant="outline"
                       size="sm"
                       onClick={() => {
-                        if (params.currencyPair) {
+                        if (useRealData && selectedCommodity) {
+                          setParams({...params, spotPrice: selectedCommodity.price});
+                          setInitialSpotPrice(selectedCommodity.price);
+                        } else if (params.currencyPair) {
                           setParams({...params, spotPrice: params.currencyPair.defaultSpotRate});
                           setInitialSpotPrice(params.currencyPair.defaultSpotRate);
                         }
                       }}
                       className="h-10 px-4 whitespace-nowrap"
                       title="Reset to default market rate"
+                      disabled={useRealData && selectedCommodity !== null}
                     >
                       Reset
                     </Button>
                   </div>
                   <div className="text-xs text-muted-foreground flex items-center gap-1 bg-primary/5 p-2 rounded border border-primary/10">
                     <span>💱</span>
-                    <span>Current: <span className="font-mono font-medium">${(params.spotPrice || 0).toFixed(2)}</span></span>
+                    <span>Current: <span className="font-mono font-medium">${(getCurrentSpotPrice() || 0).toFixed(2)}</span></span>
                     {params.currencyPair?.base && (
                       <span className="text-muted-foreground">/{params.currencyPair.base}</span>
                     )}
+                    {useRealData && selectedCommodity && (
+                      <span className="ml-2 text-green-600">(Real-time from {selectedCommodity.symbol})</span>
+                    )}
                   </div>
+                </div>
+              </div>
+
+              {/* Section: Use Real Data from Commodity Market */}
+              <div className="grid grid-cols-1 gap-4 mb-4">
+                <div className="bg-muted/20 p-4 rounded-lg border">
+                  <div className="flex items-center gap-3 mb-3">
+                    <Switch
+                      checked={useRealData}
+                      onCheckedChange={(checked) => {
+                        setUseRealData(checked);
+                        if (checked && selectedCommodity) {
+                          setParams({...params, spotPrice: selectedCommodity.price});
+                          setInitialSpotPrice(selectedCommodity.price);
+                        } else if (!checked) {
+                          // Reset to default when unchecking
+                          if (params.currencyPair) {
+                            setParams({...params, spotPrice: params.currencyPair.defaultSpotRate});
+                            setInitialSpotPrice(params.currencyPair.defaultSpotRate);
+                          }
+                        }
+                      }}
+                      id="useRealData"
+                    />
+                    <label htmlFor="useRealData" className="text-sm font-medium cursor-pointer flex items-center gap-2">
+                      <span>📊</span>
+                      Use Real Data from Commodity Market
+                    </label>
+                  </div>
+                  
+                  {useRealData && (
+                    <div className="mt-3 space-y-2">
+                      <label className="text-sm font-medium text-foreground">
+                        Select Commodity
+                      </label>
+                      <Select
+                        value={selectedCommodity?.symbol || ''}
+                        onValueChange={(value) => {
+                          const commodity = allCommodities.find(c => c.symbol === value);
+                          if (commodity) {
+                            setSelectedCommodity(commodity);
+                            setParams({...params, spotPrice: commodity.price});
+                            setInitialSpotPrice(commodity.price);
+                          }
+                        }}
+                        disabled={loadingCommodities || allCommodities.length === 0}
+                      >
+                        <SelectTrigger className="w-full">
+                          <SelectValue placeholder={loadingCommodities ? "Loading commodities..." : "Select a commodity"} />
+                        </SelectTrigger>
+                        <SelectContent className="max-h-[300px]">
+                          {allCommodities.length === 0 && !loadingCommodities && (
+                            <div className="p-2 text-sm text-muted-foreground">
+                              No commodities available. Please visit Commodity Market page first to load data.
+                            </div>
+                          )}
+                          {allCommodities.map((commodity) => (
+                            <SelectItem key={commodity.symbol} value={commodity.symbol}>
+                              <div className="flex items-center justify-between w-full">
+                                <div className="flex flex-col">
+                                  <span className="font-medium">{commodity.symbol}</span>
+                                  <span className="text-xs text-muted-foreground">{commodity.name}</span>
+                                </div>
+                                <span className="ml-4 font-mono text-sm">${commodity.price.toFixed(2)}</span>
+                              </div>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {selectedCommodity && (
+                        <div className="text-xs text-muted-foreground flex items-center gap-1 bg-green-50 p-2 rounded border border-green-100">
+                          <span>✅</span>
+                          <span>Selected: <span className="font-mono font-medium">{selectedCommodity.symbol}</span> - {selectedCommodity.name}</span>
+                          <span className="ml-2">Price: <span className="font-mono font-medium">${selectedCommodity.price.toFixed(2)}</span></span>
+                          {selectedCommodity.percentChange !== 0 && (
+                            <span className={`ml-2 ${selectedCommodity.percentChange > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                              ({selectedCommodity.percentChange > 0 ? '+' : ''}{selectedCommodity.percentChange.toFixed(2)}%)
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
 
