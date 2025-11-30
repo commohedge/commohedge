@@ -3388,13 +3388,15 @@ const Index = () => {
               ? iv / 100
               : option.volatility / 100;
           // For standard options, use appropriate pricing model
+          // Use forward price as underlying for commodities (Black-76 model)
+          const underlyingPrice = forward; // Use forward price for commodity options
           if (optionPricingModel === 'monte-carlo') {
             // Use Monte Carlo for vanilla options with cost of carry
             const r = getRiskFreeRate(params);
             const b = calculateCostOfCarry(params);
             price = calculateVanillaOptionMonteCarlo(
               option.type,
-              params.spotPrice,
+              underlyingPrice,
               strike,
               r,
               b,
@@ -3403,18 +3405,18 @@ const Index = () => {
               1000 // Number of simulations for vanilla options
             );
           } else {
-            // Black-Scholes (default)
+            // Black-76 (default for commodities - uses forward price)
             const r = getRiskFreeRate(params);
-            const d1 = (Math.log(params.spotPrice/strike) + (r + effectiveSigma**2/2)*t) / (effectiveSigma*Math.sqrt(t));
+            const d1 = (Math.log(underlyingPrice/strike) + (r + effectiveSigma**2/2)*t) / (effectiveSigma*Math.sqrt(t));
             const d2 = d1 - effectiveSigma*Math.sqrt(t);
             
             const Nd1 = (1 + erf(d1/Math.sqrt(2)))/2;
             const Nd2 = (1 + erf(d2/Math.sqrt(2)))/2;
             
             if (option.type === 'call') {
-              price = params.spotPrice*Nd1 - strike*Math.exp(-r*t)*Nd2;
+              price = underlyingPrice*Nd1 - strike*Math.exp(-r*t)*Nd2;
             } else { // put
-              price = strike*Math.exp(-r*t)*(1-Nd2) - params.spotPrice*(1-Nd1);
+              price = strike*Math.exp(-r*t)*(1-Nd2) - underlyingPrice*(1-Nd1);
             }
           }
         } else if (option.type.includes('knockout') || option.type.includes('knockin')) {
@@ -8646,6 +8648,8 @@ const pricingFunctions = {
                                 ...prev,
                                 [monthKey]: newValue
                               }));
+                              // Recalculate immediately when Forward Price changes
+                              setTimeout(() => calculateResults(), 100);
                             }}
                             onBlur={() => calculateResults()}
                                   className="compact-input w-32 text-right"
