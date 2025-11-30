@@ -1306,41 +1306,79 @@ const Index = () => {
   const [allCommodities, setAllCommodities] = useState<Commodity[]>([]);
   const [loadingCommodities, setLoadingCommodities] = useState<boolean>(false);
 
+  // Function to load all commodities directly from cache (synchronous, fast)
+  const loadAllCommoditiesFromCache = () => {
+    const CACHE_PREFIX = 'fx_commodities_cache_';
+    const CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hours
+    
+    const categories: CommodityCategory[] = ['metals', 'agricultural', 'energy', 'freight', 'bunker'];
+    const allCommoditiesData: Commodity[] = [];
+    
+    for (const category of categories) {
+      try {
+        const cacheKey = `${CACHE_PREFIX}${category}`;
+        const cached = localStorage.getItem(cacheKey);
+        
+        if (cached) {
+          const cacheData = JSON.parse(cached);
+          const now = Date.now();
+          const isExpired = (now - cacheData.timestamp) > CACHE_DURATION;
+          
+          if (!isExpired && cacheData.data && Array.isArray(cacheData.data)) {
+            allCommoditiesData.push(...cacheData.data);
+            console.log(`Loaded ${cacheData.data.length} ${category} commodities from cache`);
+          } else if (isExpired) {
+            console.log(`Cache expired for ${category}`);
+          }
+        }
+      } catch (error) {
+        console.warn(`Error loading ${category} from cache:`, error);
+      }
+    }
+    
+    return allCommoditiesData;
+  };
+
   // Function to load all commodities from cache or API
   const loadAllCommodities = async (forceRefresh: boolean = false) => {
     setLoadingCommodities(true);
     try {
-      const categories: CommodityCategory[] = ['metals', 'agricultural', 'energy', 'freight', 'bunker'];
-      const allCommoditiesData: Commodity[] = [];
+      // First, try to load from cache synchronously (fast)
+      const cachedCommodities = loadAllCommoditiesFromCache();
       
-      for (const category of categories) {
-        try {
-          // Try cache first, then API if cache is empty or forceRefresh is true
-          let commodities = await fetchCommoditiesData(category, forceRefresh);
-          
-          // If no data from cache and not forcing refresh, try API
-          if (commodities.length === 0 && !forceRefresh) {
-            console.log(`No cache for ${category}, trying API...`);
-            commodities = await fetchCommoditiesData(category, true);
-          }
-          
-          if (commodities.length > 0) {
-            allCommoditiesData.push(...commodities);
-          }
-        } catch (error) {
-          console.warn(`Failed to load ${category} commodities:`, error);
-        }
+      if (cachedCommodities.length > 0 && !forceRefresh) {
+        setAllCommodities(cachedCommodities);
+        console.log(`Loaded ${cachedCommodities.length} commodities from cache (instant)`);
+        setLoadingCommodities(false);
+        return;
       }
       
-      setAllCommodities(allCommoditiesData);
-      console.log(`Loaded ${allCommoditiesData.length} commodities`);
-      
-      if (allCommoditiesData.length === 0) {
-        toast({
-          title: "No commodities found",
-          description: "Please visit the Commodity Market page first to load data, or click Refresh to load now.",
-          variant: "default"
-        });
+      // If no cache or force refresh, load from API
+      if (forceRefresh || cachedCommodities.length === 0) {
+        const categories: CommodityCategory[] = ['metals', 'agricultural', 'energy', 'freight', 'bunker'];
+        const allCommoditiesData: Commodity[] = [];
+        
+        for (const category of categories) {
+          try {
+            const commodities = await fetchCommoditiesData(category, forceRefresh);
+            if (commodities.length > 0) {
+              allCommoditiesData.push(...commodities);
+            }
+          } catch (error) {
+            console.warn(`Failed to load ${category} commodities:`, error);
+          }
+        }
+        
+        setAllCommodities(allCommoditiesData);
+        console.log(`Loaded ${allCommoditiesData.length} commodities from API`);
+        
+        if (allCommoditiesData.length === 0 && cachedCommodities.length === 0) {
+          toast({
+            title: "No commodities found",
+            description: "Please visit the Commodity Market page first to load data, or click Refresh to load now.",
+            variant: "default"
+          });
+        }
       }
     } catch (error) {
       console.error('Error loading commodities:', error);
@@ -1354,9 +1392,18 @@ const Index = () => {
     }
   };
 
-  // Load commodities on mount
+  // Load commodities on mount (from cache only, instant)
   useEffect(() => {
-    loadAllCommodities();
+    // Load from cache synchronously first (instant)
+    const cachedCommodities = loadAllCommoditiesFromCache();
+    if (cachedCommodities.length > 0) {
+      setAllCommodities(cachedCommodities);
+      console.log(`Loaded ${cachedCommodities.length} commodities from cache on mount`);
+    } else {
+      // If no cache, try to load from API (but this should be rare)
+      console.log('No cache found, loading from API...');
+      loadAllCommodities(false);
+    }
   }, []);
 
   // Save useRealData and selectedCommodity to localStorage
