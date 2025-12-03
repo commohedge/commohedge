@@ -582,7 +582,7 @@ const HedgingInstruments = () => {
     }
     
     console.log(`[DEBUG] ${instrument.id}: Forward calculation - Current: ${S.toFixed(6)}, Export: ${instrument.exportForwardPrice || 'N/A'}`);
-    console.log(`[DEBUG] ${instrument.id}: PRICING PARAMETERS - Spot: ${spotRate.toFixed(6)}, Forward: ${S.toFixed(6)} - Using SPOT for vanilla options (Strategy Builder logic)`);
+    console.log(`[DEBUG] ${instrument.id}: PRICING PARAMETERS - Spot: ${spotRate.toFixed(6)}, Forward: ${S.toFixed(6)} - Using FORWARD PRICE for vanilla options (Strategy Builder logic - Black-76 model)`);
     
     // 5. STRIKE ANALYSIS : Vérifier la cohérence du strike
     console.log(`[DEBUG] ${instrument.id}: Strike analysis - Strike: ${instrument.strike}, Type: ${instrument.originalComponent?.strikeType || 'unknown'}, Original Strike: ${instrument.originalComponent?.strike || 'N/A'}, Spot: ${spotRate}`);
@@ -666,7 +666,7 @@ const HedgingInstruments = () => {
     console.log(`[DEBUG] Instrument ${instrument.id}: ==================== PRICING COMPARISON ====================`);
     console.log(`[DEBUG] Instrument ${instrument.id}: Type: ${instrument.type}`);
     console.log(`[DEBUG] Instrument ${instrument.id}: Original/Export Price: ${instrument.realOptionPrice || instrument.premium || 'N/A'}`);
-         console.log(`[DEBUG] Instrument ${instrument.id}: Current Spot: ${spotRate.toFixed(6)}, Forward: ${S.toFixed(6)}`);
+         console.log(`[DEBUG] Instrument ${instrument.id}: Current Spot: ${spotRate.toFixed(6)}, Forward: ${S.toFixed(6)} (USING FORWARD FOR PRICING)`);
      console.log(`[DEBUG] Instrument ${instrument.id}: Strike: ${K.toFixed(6)}`);
      console.log(`[DEBUG] Instrument ${instrument.id}: Barrier: ${instrument.barrier?.toFixed(6) || 'N/A'}, SecondBarrier: ${instrument.secondBarrier?.toFixed(6) || 'N/A'}`);
      console.log(`[DEBUG] Instrument ${instrument.id}: Rebate: ${instrument.rebate || 'N/A'}%`);
@@ -676,7 +676,8 @@ const HedgingInstruments = () => {
      console.log(`[DEBUG] Instrument ${instrument.id}: Using timeToMaturity for calculation: ${calculationTimeToMaturity.toFixed(6)} (source: ${instrument.timeToMaturity ? 'Strategy' : 'Calculated'})`);
     
     // ✅ UTILISER EXACTEMENT LA MÊME FONCTION DE PRICING QUE STRATEGY BUILDER
-    console.log(`[DEBUG] ${instrument.id}: Using Strategy Builder pricing function with parameters: S=${spotRate.toFixed(6)}, K=${K.toFixed(6)}, r=${r_d.toFixed(6)}, t=${calculationTimeToMaturity.toFixed(6)}, sigma=${sigma.toFixed(6)}`);
+    // ✅ Utiliser le forward price (S) comme dans Strategy Builder (Black-76 model for commodities)
+    console.log(`[DEBUG] ${instrument.id}: Using Strategy Builder pricing function with parameters: S (forward)=${S.toFixed(6)}, K=${K.toFixed(6)}, r=${r_d.toFixed(6)}, t=${calculationTimeToMaturity.toFixed(6)}, sigma=${sigma.toFixed(6)}`);
     
     // ✅ UTILISATION DIRECTE DE LA FONCTION STRATEGY BUILDER - MÊME LOGIQUE EXACTE
     // Mapper le type d'instrument vers le type reconnu par calculateOptionPrice
@@ -795,14 +796,16 @@ const HedgingInstruments = () => {
     let price = 0;
     
     // ✅ OPTIONS VANILLES (call/put) - UTILISER LA MÊME LOGIQUE EXACTE QUE STRATEGY BUILDER
+    // ✅ CORRECTION : Utiliser le forward price (S) comme dans Strategy Builder (Black-76 model for commodities)
     if (mappedType === 'call' || mappedType === 'put') {
-      console.log(`[DEBUG] ${instrument.id}: VANILLA OPTION - Using Strategy Builder pricing logic`);
-      console.log(`[DEBUG] ${instrument.id}: Parameters - S: ${spotRate.toFixed(6)}, K: ${K.toFixed(6)}, r: ${r_d.toFixed(6)}, t: ${calculationTimeToMaturity.toFixed(6)}, sigma: ${sigma.toFixed(6)}`);
+      console.log(`[DEBUG] ${instrument.id}: VANILLA OPTION - Using Strategy Builder pricing logic with FORWARD PRICE`);
+      console.log(`[DEBUG] ${instrument.id}: Parameters - S (forward): ${S.toFixed(6)}, K: ${K.toFixed(6)}, r: ${r_d.toFixed(6)}, t: ${calculationTimeToMaturity.toFixed(6)}, sigma: ${sigma.toFixed(6)}`);
       
       // Utiliser la fonction unifiée qui correspond exactement à Strategy Builder
+      // ✅ Utiliser le forward price (S) au lieu du spot price pour les commodities (Black-76 model)
       price = calculateOptionPriceStrategyBuilder(
         mappedType,
-        spotRate,
+        S, // ✅ Forward price (comme Strategy Builder)
         K,
         r_d, // Risk-free rate (domestic rate for commodities)
         calculationTimeToMaturity,
@@ -810,12 +813,13 @@ const HedgingInstruments = () => {
         optionPricingModel === 'monte-carlo' ? 'monte-carlo' : 'black-scholes'
       );
       
-      console.log(`[DEBUG] ${instrument.id}: VANILLA PRICING RESULT - Model: ${optionPricingModel}, Price: ${price.toFixed(6)}`);
+      console.log(`[DEBUG] ${instrument.id}: VANILLA PRICING RESULT - Model: ${optionPricingModel}, Price: ${price.toFixed(6)} (using forward price ${S.toFixed(6)})`);
     } else {
       // ✅ OPTIONS AVEC BARRIÈRES ET DIGITALES - UTILISER LA FONCTION EXPORTÉE
+      // ✅ Utiliser le forward price (S) pour la cohérence avec Strategy Builder
       price = calculateOptionPrice(
         mappedType,
-        spotRate,
+        S, // ✅ Forward price (comme Strategy Builder)
         K,
         r_d, // Risk-free rate domestique
         r_d, // Risk-free rate étranger (même valeur pour les commodités)

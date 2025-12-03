@@ -110,6 +110,11 @@ interface AppSettings {
     exportFormat: string;
   };
 
+  // Domain selection settings
+  domains: {
+    selectedDomains: ('metals' | 'agricultural' | 'energy' | 'freight' | 'bunker')[];
+  };
+
   // Commodity Exposures settings
   commodityExposures: {
     autoDetection: boolean;
@@ -197,6 +202,9 @@ const Settings = () => {
       backupFrequency: "daily",
       dataRetention: 365,
       exportFormat: "xlsx"
+    },
+    domains: {
+      selectedDomains: ['metals', 'agricultural', 'energy', 'freight', 'bunker'] // All domains selected by default
     },
     commodityExposures: {
       autoDetection: true,
@@ -1527,6 +1535,70 @@ const Settings = () => {
                       <SelectItem value="pdf">PDF (.pdf)</SelectItem>
                     </SelectContent>
                   </Select>
+                </div>
+              </div>
+
+              <Separator />
+
+              <div className="space-y-4">
+                <h4 className="text-lg font-medium">Commodity Domains</h4>
+                <div className="p-4 border rounded-lg bg-muted/30">
+                  <p className="text-sm text-muted-foreground mb-4">
+                    Select the commodity domains you want to work with. Only selected domains will be displayed in Commodity Market, Strategy Builder, and Pricers.
+                  </p>
+                  <div className="space-y-3">
+                    {(['metals', 'agricultural', 'energy', 'freight', 'bunker'] as const).map((domain) => {
+                      const domainLabels: Record<typeof domain, string> = {
+                        metals: 'Metals',
+                        agricultural: 'Agricultural',
+                        energy: 'Energy',
+                        freight: 'Freight',
+                        bunker: 'Bunker'
+                      };
+                      const isSelected = settings.domains.selectedDomains.includes(domain);
+                      return (
+                        <div key={domain} className="flex items-center space-x-2">
+                          <Checkbox
+                            id={`domain-${domain}`}
+                            checked={isSelected}
+                            onCheckedChange={(checked) => {
+                              const currentDomains = settings.domains.selectedDomains;
+                              if (checked) {
+                                // Add domain if not already present
+                                if (!currentDomains.includes(domain)) {
+                                  updateSettings('domains', {
+                                    selectedDomains: [...currentDomains, domain]
+                                  });
+                                }
+                              } else {
+                                // Remove domain, but ensure at least one domain is selected
+                                if (currentDomains.length > 1) {
+                                  updateSettings('domains', {
+                                    selectedDomains: currentDomains.filter(d => d !== domain)
+                                  });
+                                } else {
+                                  toast({
+                                    title: "Cannot deselect all domains",
+                                    description: "At least one domain must be selected.",
+                                    variant: "destructive",
+                                  });
+                                }
+                              }
+                            }}
+                          />
+                          <Label 
+                            htmlFor={`domain-${domain}`} 
+                            className="text-sm font-normal cursor-pointer flex-1"
+                          >
+                            {domainLabels[domain]}
+                          </Label>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-3">
+                    Selected: {settings.domains.selectedDomains.length} of 5 domains
+                  </p>
                 </div>
               </div>
 

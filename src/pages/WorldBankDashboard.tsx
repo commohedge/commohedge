@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
@@ -15,12 +15,17 @@ import {
   hasWorldBankData,
   getCurrentWorldBankData
 } from '@/services/worldBankApi';
+import { CommodityCategory } from '@/services/commodityApi';
 import WorldBankTable from '@/components/WorldBankTable';
 import WorldBankChart from '@/components/WorldBankChart';
 import WorldBankFileImport from '@/components/WorldBankFileImport';
 import WorldBankHistoricalData from '@/components/WorldBankHistoricalData';
 
-export default function WorldBankDashboard() {
+interface WorldBankDashboardProps {
+  selectedDomains?: CommodityCategory[];
+}
+
+export default function WorldBankDashboard({ selectedDomains }: WorldBankDashboardProps = {}) {
   const [commodities, setCommodities] = useState<WorldBankCommodity[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -29,7 +34,51 @@ export default function WorldBankDashboard() {
   const [showImport, setShowImport] = useState(false);
   const [currentData, setCurrentData] = useState(getCurrentWorldBankData());
 
-  const categories = getWorldBankCategories();
+  // ✅ Get selected domains from preferences if not provided as prop
+  const getSelectedDomains = (): CommodityCategory[] => {
+    if (selectedDomains && selectedDomains.length > 0) {
+      return selectedDomains;
+    }
+    try {
+      const savedSettings = localStorage.getItem('fxRiskManagerSettings');
+      if (savedSettings) {
+        const parsed = JSON.parse(savedSettings);
+        if (parsed?.domains?.selectedDomains && Array.isArray(parsed.domains.selectedDomains) && parsed.domains.selectedDomains.length > 0) {
+          return parsed.domains.selectedDomains;
+        }
+      }
+    } catch (error) {
+      console.warn('Error parsing domain preferences:', error);
+    }
+    return ['metals', 'agricultural', 'energy', 'freight', 'bunker']; // Default: all domains
+  };
+
+  const activeSelectedDomains = getSelectedDomains();
+
+  // ✅ Mapping entre CommodityCategory et World Bank categories
+  const domainToWorldBankCategory = (domain: CommodityCategory): string[] => {
+    const mapping: Record<CommodityCategory, string[]> = {
+      'metals': [WORLD_BANK_CATEGORIES.METALS],
+      'agricultural': [WORLD_BANK_CATEGORIES.AGRICULTURAL, WORLD_BANK_CATEGORIES.FERTILIZERS], // Fertilizers are agricultural-related
+      'energy': [WORLD_BANK_CATEGORIES.ENERGY],
+      'freight': [], // World Bank doesn't have freight category
+      'bunker': [WORLD_BANK_CATEGORIES.ENERGY] // Bunker is energy-related
+    };
+    return mapping[domain] || [];
+  };
+
+  // ✅ Get allowed World Bank categories based on selected domains
+  const allowedWorldBankCategories = useMemo(() => {
+    const categories = new Set<string>();
+    activeSelectedDomains.forEach(domain => {
+      domainToWorldBankCategory(domain).forEach(cat => categories.add(cat));
+    });
+    return Array.from(categories);
+  }, [activeSelectedDomains]);
+
+  const categories = getWorldBankCategories().filter(cat => 
+    allowedWorldBankCategories.length === 0 || allowedWorldBankCategories.includes(cat)
+  );
 
   const loadData = async (forceRefresh: boolean = false) => {
     setLoading(true);
@@ -72,17 +121,30 @@ export default function WorldBankDashboard() {
   }, []);
 
   const getFilteredCommodities = () => {
-    if (activeCategory === 'all') {
-      return commodities;
+    let filtered = commodities;
+    
+    // ✅ First filter by selected domains (World Bank categories)
+    if (allowedWorldBankCategories.length > 0) {
+      filtered = filtered.filter(commodity => 
+        allowedWorldBankCategories.includes(commodity.category)
+      );
     }
-    return commodities.filter(commodity => commodity.category === activeCategory);
+    
+    // Then filter by active category
+    if (activeCategory === 'all') {
+      return filtered;
+    }
+    return filtered.filter(commodity => commodity.category === activeCategory);
   };
 
   const filteredCommodities = getFilteredCommodities();
 
-  // Group commodities by category for summary cards
+  // Group commodities by category for summary cards - only for allowed categories
   const categoryStats = categories.map(category => {
-    const categoryCommodities = commodities.filter(c => c.category === category);
+    const categoryCommodities = commodities.filter(c => 
+      c.category === category && 
+      (allowedWorldBankCategories.length === 0 || allowedWorldBankCategories.includes(category))
+    );
     const avgChange = categoryCommodities.length > 0 
       ? categoryCommodities.reduce((sum, c) => sum + (c.changePercent || 0), 0) / categoryCommodities.length
       : 0;
@@ -92,7 +154,7 @@ export default function WorldBankDashboard() {
       count: categoryCommodities.length,
       avgChange
     };
-  });
+  }).filter(stat => stat.count > 0); // Only show categories with commodities
 
   // Loading skeleton component
   const LoadingSkeleton = () => (

@@ -39,8 +39,28 @@ export default function CommodityMarket() {
   const [error, setError] = useState<{[key in 'metals' | 'agricultural' | 'energy' | 'freight' | 'bunker']?: string | null}>({});
   const [lastUpdated, setLastUpdated] = useState<{[key in 'metals' | 'agricultural' | 'energy' | 'freight' | 'bunker']?: Date | null}>({});
 
-  // État pour la catégorie active
-  const [activeCategory, setActiveCategory] = useState<'metals' | 'agricultural' | 'energy' | 'freight' | 'bunker'>('metals');
+  // ✅ Get selected domains from preferences
+  const getSelectedDomains = (): CommodityCategory[] => {
+    try {
+      const savedSettings = localStorage.getItem('fxRiskManagerSettings');
+      if (savedSettings) {
+        const parsed = JSON.parse(savedSettings);
+        if (parsed?.domains?.selectedDomains && Array.isArray(parsed.domains.selectedDomains) && parsed.domains.selectedDomains.length > 0) {
+          return parsed.domains.selectedDomains;
+        }
+      }
+    } catch (error) {
+      console.warn('Error parsing domain preferences:', error);
+    }
+    return ['metals', 'agricultural', 'energy', 'freight', 'bunker']; // Default: all domains
+  };
+
+  const selectedDomains = getSelectedDomains();
+  
+  // État pour la catégorie active - utiliser le premier domaine sélectionné par défaut
+  const [activeCategory, setActiveCategory] = useState<'metals' | 'agricultural' | 'energy' | 'freight' | 'bunker' | 'worldbank'>(
+    selectedDomains[0] || 'metals'
+  );
 
   // Global intelligent search state
   const [searchQuery, setSearchQuery] = useState("");
@@ -97,18 +117,16 @@ export default function CommodityMarket() {
     }
   };
 
-  // Charger toutes les données en parallèle
+  // Charger toutes les données en parallèle - uniquement pour les domaines sélectionnés
   const loadAllData = async (forceRefresh: boolean = false) => {
     console.log('🚀 Starting parallel data loading...');
     const startTime = Date.now();
     
-    await Promise.all([
-      loadCategoryData('metals', forceRefresh),
-      loadCategoryData('agricultural', forceRefresh), 
-      loadCategoryData('energy', forceRefresh),
-      loadCategoryData('freight', forceRefresh),
-      loadCategoryData('bunker', forceRefresh),
-    ]);
+    // ✅ Charger uniquement les domaines sélectionnés
+    const domainsToLoad = getSelectedDomains();
+    await Promise.all(
+      domainsToLoad.map(category => loadCategoryData(category, forceRefresh))
+    );
     
     const endTime = Date.now();
     const loadTime = endTime - startTime;
@@ -118,6 +136,17 @@ export default function CommodityMarket() {
       toast.success(`Data loaded in ${(loadTime/1000).toFixed(1)}s`);
     }
   };
+
+  // ✅ Mettre à jour la catégorie active si elle n'est plus dans les domaines sélectionnés
+  useEffect(() => {
+    const domains = getSelectedDomains();
+    if (!domains.includes(activeCategory as CommodityCategory) && activeCategory !== 'worldbank') {
+      // Si la catégorie active n'est plus sélectionnée, passer à la première catégorie disponible
+      if (domains.length > 0) {
+        setActiveCategory(domains[0]);
+      }
+    }
+  }, [activeCategory]);
 
   // Charger les données initiales
   useEffect(() => {
@@ -154,16 +183,17 @@ export default function CommodityMarket() {
   const currentError = error[activeCategory];
   const currentLastUpdated = lastUpdated[activeCategory];
 
-  // Aggregate all commodities for cross-tab search
-  const allCommodities: Commodity[] = useMemo(() => (
-    [
-      ...metalsCommodities,
-      ...agriculturalCommodities,
-      ...energyCommodities,
-      ...freightCommodities,
-      ...bunkerCommodities
-    ]
-  ), [metalsCommodities, agriculturalCommodities, energyCommodities, freightCommodities, bunkerCommodities]);
+  // Aggregate all commodities for cross-tab search - uniquement pour les domaines sélectionnés
+  const allCommodities: Commodity[] = useMemo(() => {
+    const domains = getSelectedDomains();
+    const commodities: Commodity[] = [];
+    if (domains.includes('metals')) commodities.push(...metalsCommodities);
+    if (domains.includes('agricultural')) commodities.push(...agriculturalCommodities);
+    if (domains.includes('energy')) commodities.push(...energyCommodities);
+    if (domains.includes('freight')) commodities.push(...freightCommodities);
+    if (domains.includes('bunker')) commodities.push(...bunkerCommodities);
+    return commodities;
+  }, [metalsCommodities, agriculturalCommodities, energyCommodities, freightCommodities, bunkerCommodities]);
 
   // Compute suggestions with light fuzzy logic
   const suggestions = useMemo(() => {
@@ -209,16 +239,23 @@ export default function CommodityMarket() {
     }, 100);
   };
 
-  // Calculate market statistics
+  // Calculate market statistics - uniquement pour les domaines sélectionnés
   const marketStats = useMemo(() => {
-    const allCommodities = [...metalsCommodities, ...agriculturalCommodities, ...energyCommodities, ...freightCommodities, ...bunkerCommodities];
-    const positive = allCommodities.filter(c => c.percentChange > 0).length;
-    const negative = allCommodities.filter(c => c.percentChange < 0).length;
-    const avgChange = allCommodities.length > 0 
-      ? allCommodities.reduce((sum, c) => sum + c.percentChange, 0) / allCommodities.length 
+    const domains = getSelectedDomains();
+    const commodities: Commodity[] = [];
+    if (domains.includes('metals')) commodities.push(...metalsCommodities);
+    if (domains.includes('agricultural')) commodities.push(...agriculturalCommodities);
+    if (domains.includes('energy')) commodities.push(...energyCommodities);
+    if (domains.includes('freight')) commodities.push(...freightCommodities);
+    if (domains.includes('bunker')) commodities.push(...bunkerCommodities);
+    
+    const positive = commodities.filter(c => c.percentChange > 0).length;
+    const negative = commodities.filter(c => c.percentChange < 0).length;
+    const avgChange = commodities.length > 0 
+      ? commodities.reduce((sum, c) => sum + c.percentChange, 0) / commodities.length 
       : 0;
     
-    return { total: allCommodities.length, positive, negative, avgChange };
+    return { total: commodities.length, positive, negative, avgChange };
   }, [metalsCommodities, agriculturalCommodities, energyCommodities, freightCommodities, bunkerCommodities]);
 
   // Render price change badge
@@ -327,7 +364,14 @@ export default function CommodityMarket() {
             </div>
 
             <Button
-              onClick={() => loadCategoryData(activeCategory, true)}
+              onClick={() => {
+                if (activeCategory === 'worldbank') {
+                  // World Bank doesn't use loadCategoryData, refresh all data instead
+                  loadAllData(true);
+                } else {
+                  loadCategoryData(activeCategory as CommodityCategory, true);
+                }
+              }}
               disabled={isLoading}
               className="bg-gradient-to-r from-blue-900 to-indigo-700 hover:from-blue-800 hover:to-indigo-600 text-white shadow-lg hover:shadow-xl transition-all duration-200"
             >
@@ -409,41 +453,53 @@ export default function CommodityMarket() {
           >
             <div className="border-b border-slate-100 bg-slate-50/80 rounded-t-xl">
               <TabsList className="h-auto p-2 bg-transparent w-full justify-start gap-2">
-                <TabsTrigger 
-                  value="metals" 
-                  className="data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:border data-[state=active]:border-slate-200 rounded-lg px-4 py-3 font-medium transition-all duration-200 flex items-center gap-2"
-                >
-                  <Factory size={16} />
-                  <span>Metals</span>
-                </TabsTrigger>
-                <TabsTrigger 
-                  value="agricultural" 
-                  className="data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:border data-[state=active]:border-slate-200 rounded-lg px-4 py-3 font-medium transition-all duration-200 flex items-center gap-2"
-                >
-                  <Wheat size={16} />
-                  <span>Agricultural</span>
-                </TabsTrigger>
-                <TabsTrigger 
-                  value="energy" 
-                  className="data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:border data-[state=active]:border-slate-200 rounded-lg px-4 py-3 font-medium transition-all duration-200 flex items-center gap-2"
-                >
-                  <Zap size={16} />
-                  <span>Energy</span>
-                </TabsTrigger>
-                <TabsTrigger 
-                  value="freight" 
-                  className="data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:border data-[state=active]:border-slate-200 rounded-lg px-4 py-3 font-medium transition-all duration-200 flex items-center gap-2"
-                >
-                  <Ship size={16} />
-                  <span>Freight</span>
-                </TabsTrigger>
-                <TabsTrigger 
-                  value="bunker" 
-                  className="data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:border data-[state=active]:border-slate-200 rounded-lg px-4 py-3 font-medium transition-all duration-200 flex items-center gap-2"
-                >
-                  <Fuel size={16} />
-                  <span>Bunker</span>
-                </TabsTrigger>
+                {/* ✅ Afficher uniquement les onglets pour les domaines sélectionnés */}
+                {selectedDomains.includes('metals') && (
+                  <TabsTrigger 
+                    value="metals" 
+                    className="data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:border data-[state=active]:border-slate-200 rounded-lg px-4 py-3 font-medium transition-all duration-200 flex items-center gap-2"
+                  >
+                    <Factory size={16} />
+                    <span>Metals</span>
+                  </TabsTrigger>
+                )}
+                {selectedDomains.includes('agricultural') && (
+                  <TabsTrigger 
+                    value="agricultural" 
+                    className="data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:border data-[state=active]:border-slate-200 rounded-lg px-4 py-3 font-medium transition-all duration-200 flex items-center gap-2"
+                  >
+                    <Wheat size={16} />
+                    <span>Agricultural</span>
+                  </TabsTrigger>
+                )}
+                {selectedDomains.includes('energy') && (
+                  <TabsTrigger 
+                    value="energy" 
+                    className="data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:border data-[state=active]:border-slate-200 rounded-lg px-4 py-3 font-medium transition-all duration-200 flex items-center gap-2"
+                  >
+                    <Zap size={16} />
+                    <span>Energy</span>
+                  </TabsTrigger>
+                )}
+                {selectedDomains.includes('freight') && (
+                  <TabsTrigger 
+                    value="freight" 
+                    className="data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:border data-[state=active]:border-slate-200 rounded-lg px-4 py-3 font-medium transition-all duration-200 flex items-center gap-2"
+                  >
+                    <Ship size={16} />
+                    <span>Freight</span>
+                  </TabsTrigger>
+                )}
+                {selectedDomains.includes('bunker') && (
+                  <TabsTrigger 
+                    value="bunker" 
+                    className="data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:border data-[state=active]:border-slate-200 rounded-lg px-4 py-3 font-medium transition-all duration-200 flex items-center gap-2"
+                  >
+                    <Fuel size={16} />
+                    <span>Bunker</span>
+                  </TabsTrigger>
+                )}
+                {/* World Bank est toujours disponible */}
                 <TabsTrigger 
                   value="worldbank" 
                   className="data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:border data-[state=active]:border-slate-200 rounded-lg px-4 py-3 font-medium transition-all duration-200 flex items-center gap-2"
@@ -775,9 +831,9 @@ export default function CommodityMarket() {
                 </Card>
               </TabsContent>
               
-              <TabsContent value="worldbank" className="space-y-4 mt-0">
-                <WorldBankDashboard />
-              </TabsContent>
+                <TabsContent value="worldbank" className="space-y-4 mt-0">
+                 <WorldBankDashboard selectedDomains={selectedDomains} />
+                </TabsContent>
             </div>
           </Tabs>
         </CardContent>

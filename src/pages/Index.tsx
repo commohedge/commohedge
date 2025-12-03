@@ -1388,15 +1388,60 @@ const Index = () => {
   // State for commodity search filter
   const [commoditySearchQuery, setCommoditySearchQuery] = useState('');
 
+  // ✅ Helper function to map CURRENCY_PAIRS category to CommodityCategory
+  const mapCurrencyPairCategoryToDomain = (category: string): CommodityCategory | null => {
+    const mapping: Record<string, CommodityCategory> = {
+      'energy': 'energy',
+      'metals': 'metals',
+      'agriculture': 'agricultural',
+      'livestock': 'agricultural', // Livestock is agricultural-related
+    };
+    return mapping[category] || null;
+  };
+
+  // ✅ Get filtered default commodities based on selected domains
+  const getFilteredDefaultCommodities = (): CurrencyPair[] => {
+    const savedSettings = localStorage.getItem('fxRiskManagerSettings');
+    let selectedCategories: CommodityCategory[] = ['metals', 'agricultural', 'energy', 'freight', 'bunker'];
+    if (savedSettings) {
+      try {
+        const parsed = JSON.parse(savedSettings);
+        if (parsed?.domains?.selectedDomains && Array.isArray(parsed.domains.selectedDomains) && parsed.domains.selectedDomains.length > 0) {
+          selectedCategories = parsed.domains.selectedDomains;
+        }
+      } catch (error) {
+        console.warn('Error parsing domain preferences:', error);
+      }
+    }
+    
+    return CURRENCY_PAIRS.filter(pair => {
+      const domain = mapCurrencyPairCategoryToDomain(pair.category);
+      return domain !== null && selectedCategories.includes(domain);
+    });
+  };
+
   // Function to load all commodities from Commodity Market cache
   const loadRealCommodities = async () => {
     setLoadingRealCommodities(true);
     try {
-      const categories: CommodityCategory[] = ['metals', 'agricultural', 'energy', 'freight', 'bunker'];
+      // ✅ Get selected domains from preferences
+      const savedSettings = localStorage.getItem('fxRiskManagerSettings');
+      let selectedCategories: CommodityCategory[] = ['metals', 'agricultural', 'energy', 'freight', 'bunker'];
+      if (savedSettings) {
+        try {
+          const parsed = JSON.parse(savedSettings);
+          if (parsed?.domains?.selectedDomains && Array.isArray(parsed.domains.selectedDomains)) {
+            selectedCategories = parsed.domains.selectedDomains;
+          }
+        } catch (error) {
+          console.warn('Error parsing domain preferences:', error);
+        }
+      }
+      
       const allCommodities: Commodity[] = [];
       
-      // Load from cache first (fast)
-      for (const category of categories) {
+      // Load from cache first (fast) - only for selected domains
+      for (const category of selectedCategories) {
         try {
           const cached = localStorage.getItem(`fx_commodities_cache_${category}`);
           if (cached) {
@@ -1414,9 +1459,9 @@ const Index = () => {
         }
       }
 
-      // If no cached data, try to fetch
+      // If no cached data, try to fetch - only for selected domains
       if (allCommodities.length === 0) {
-        for (const category of categories) {
+        for (const category of selectedCategories) {
           try {
             const data = await fetchCommoditiesData(category, false);
             allCommodities.push(...data);
@@ -3438,16 +3483,12 @@ const Index = () => {
             option.volatility / 100;
             
           // Use closed-form solution if enabled (for both simple and double barrier options)
+          // ✅ CORRECTION : Utiliser le forward price (comme pour les options vanilles) au lieu du spot
           if (barrierPricingModel === 'closed-form') {
-            const underlyingResult = PricingService.calculateUnderlyingPrice(
-              params.spotPrice,
-              getRiskFreeRate(params),
-              calculateCostOfCarry(params),
-              t
-            );
+            // ✅ Utiliser le forward price (S) comme dans Strategy Builder pour les options vanilles
             price = calculateBarrierOptionClosedForm(
               option.type,
-              underlyingResult.price,
+              forward, // ✅ Forward price (comme Strategy Builder - Black-76 model for commodities)
               strike,
               getRiskFreeRate(params),
               t,
@@ -3463,15 +3504,9 @@ const Index = () => {
             const numSteps = maturityIndex;
             const dt = t / numSteps;
             
-            const underlyingResult = PricingService.calculateUnderlyingPrice(
-              params.spotPrice,
-              getRiskFreeRate(params),
-              calculateCostOfCarry(params),
-              t
-            );
-            
+            // ✅ Utiliser le forward price comme point de départ pour les chemins Monte Carlo
             for (let i = 0; i < numLocalSims; i++) {
-              const path = [underlyingResult.price]; // Start with configured underlying price
+              const path = [forward]; // ✅ Start with forward price (comme Strategy Builder)
               
               for (let step = 0; step < numSteps; step++) {
                 const prevPrice = path[path.length - 1];
@@ -6839,8 +6874,9 @@ const pricingFunctions = {
                           });
                         }
                       } else {
-                        // Use default commodities list
-                        const allPairs = [...CURRENCY_PAIRS, ...customCurrencyPairs];
+                        // Use default commodities list - filtered by selected domains
+                        const filteredPairs = getFilteredDefaultCommodities();
+                        const allPairs = [...filteredPairs, ...customCurrencyPairs];
                         const selectedPair = allPairs.find(pair => pair.symbol === value);
                         if (selectedPair) {
                           setParams({
@@ -7011,73 +7047,107 @@ const pricingFunctions = {
                           })()}
                         </>
                       ) : (
-                        // Default commodities list
-                        <>
-                          <div className="p-2 text-xs font-medium text-muted-foreground border-b">⚡ Energy</div>
-                          {CURRENCY_PAIRS.filter(pair => pair.category === 'energy').map(pair => (
-                            <SelectItem key={pair.symbol} value={pair.symbol}>
-                              <div className="flex flex-col">
-                                <div className="flex justify-between items-center w-full">
-                                  <span>{pair.symbol}</span>
-                                  <span className="text-xs text-muted-foreground font-mono">${pair.defaultSpotRate}/{pair.base}</span>
-                                </div>
-                                <span className="text-xs text-muted-foreground">{pair.name}</span>
+                        // Default commodities list - filtered by selected domains
+                        (() => {
+                          const filteredPairs = getFilteredDefaultCommodities();
+                          const energyPairs = filteredPairs.filter(pair => pair.category === 'energy');
+                          const metalsPairs = filteredPairs.filter(pair => pair.category === 'metals');
+                          const agriculturePairs = filteredPairs.filter(pair => pair.category === 'agriculture');
+                          const livestockPairs = filteredPairs.filter(pair => pair.category === 'livestock');
+                          
+                          if (filteredPairs.length === 0) {
+                            return (
+                              <div className="p-4 text-center text-sm text-muted-foreground">
+                                No commodities available for selected domains.
                               </div>
-                            </SelectItem>
-                          ))}
-                          <div className="p-2 text-xs font-medium text-muted-foreground border-b border-t">🔩 Metals</div>
-                          {CURRENCY_PAIRS.filter(pair => pair.category === 'metals').map(pair => (
-                            <SelectItem key={pair.symbol} value={pair.symbol}>
-                              <div className="flex flex-col">
-                                <div className="flex justify-between items-center w-full">
-                                  <span>{pair.symbol}</span>
-                                  <span className="text-xs text-muted-foreground font-mono">${pair.defaultSpotRate}/{pair.base}</span>
-                                </div>
-                                <span className="text-xs text-muted-foreground">{pair.name}</span>
-                              </div>
-                            </SelectItem>
-                          ))}
-                          <div className="p-2 text-xs font-medium text-muted-foreground border-b border-t">🌾 Agriculture</div>
-                          {CURRENCY_PAIRS.filter(pair => pair.category === 'agriculture').map(pair => (
-                            <SelectItem key={pair.symbol} value={pair.symbol}>
-                              <div className="flex flex-col">
-                                <div className="flex justify-between items-center w-full">
-                                  <span>{pair.symbol}</span>
-                                  <span className="text-xs text-muted-foreground font-mono">${pair.defaultSpotRate}/{pair.base}</span>
-                                </div>
-                                <span className="text-xs text-muted-foreground">{pair.name}</span>
-                              </div>
-                            </SelectItem>
-                          ))}
-                          <div className="p-2 text-xs font-medium text-muted-foreground border-b border-t">🐄 Livestock</div>
-                          {CURRENCY_PAIRS.filter(pair => pair.category === 'livestock').map(pair => (
-                            <SelectItem key={pair.symbol} value={pair.symbol}>
-                              <div className="flex flex-col">
-                                <div className="flex justify-between items-center w-full">
-                                  <span>{pair.symbol}</span>
-                                  <span className="text-xs text-muted-foreground font-mono">${pair.defaultSpotRate}/{pair.base}</span>
-                                </div>
-                                <span className="text-xs text-muted-foreground">{pair.name}</span>
-                              </div>
-                            </SelectItem>
-                          ))}
-                          {customCurrencyPairs.length > 0 && (
+                            );
+                          }
+                          
+                          return (
                             <>
-                              <div className="p-2 text-xs font-medium text-muted-foreground border-b border-t">✨ Custom Commodities</div>
-                              {customCurrencyPairs.map(pair => (
-                                <SelectItem key={pair.symbol} value={pair.symbol}>
-                                  <div className="flex flex-col">
-                                    <div className="flex justify-between items-center w-full">
-                                      <span>{pair.symbol}</span>
-                                      <span className="text-xs text-muted-foreground font-mono">{pair.defaultSpotRate}</span>
-                                    </div>
-                                    <span className="text-xs text-muted-foreground">{pair.name}</span>
-                                  </div>
-                                </SelectItem>
-                              ))}
+                              {energyPairs.length > 0 && (
+                                <>
+                                  <div className="p-2 text-xs font-medium text-muted-foreground border-b">⚡ Energy</div>
+                                  {energyPairs.map(pair => (
+                                    <SelectItem key={pair.symbol} value={pair.symbol}>
+                                      <div className="flex flex-col">
+                                        <div className="flex justify-between items-center w-full">
+                                          <span>{pair.symbol}</span>
+                                          <span className="text-xs text-muted-foreground font-mono">${pair.defaultSpotRate}/{pair.base}</span>
+                                        </div>
+                                        <span className="text-xs text-muted-foreground">{pair.name}</span>
+                                      </div>
+                                    </SelectItem>
+                                  ))}
+                                </>
+                              )}
+                              {metalsPairs.length > 0 && (
+                                <>
+                                  <div className="p-2 text-xs font-medium text-muted-foreground border-b border-t">🔩 Metals</div>
+                                  {metalsPairs.map(pair => (
+                                    <SelectItem key={pair.symbol} value={pair.symbol}>
+                                      <div className="flex flex-col">
+                                        <div className="flex justify-between items-center w-full">
+                                          <span>{pair.symbol}</span>
+                                          <span className="text-xs text-muted-foreground font-mono">${pair.defaultSpotRate}/{pair.base}</span>
+                                        </div>
+                                        <span className="text-xs text-muted-foreground">{pair.name}</span>
+                                      </div>
+                                    </SelectItem>
+                                  ))}
+                                </>
+                              )}
+                              {agriculturePairs.length > 0 && (
+                                <>
+                                  <div className="p-2 text-xs font-medium text-muted-foreground border-b border-t">🌾 Agriculture</div>
+                                  {agriculturePairs.map(pair => (
+                                    <SelectItem key={pair.symbol} value={pair.symbol}>
+                                      <div className="flex flex-col">
+                                        <div className="flex justify-between items-center w-full">
+                                          <span>{pair.symbol}</span>
+                                          <span className="text-xs text-muted-foreground font-mono">${pair.defaultSpotRate}/{pair.base}</span>
+                                        </div>
+                                        <span className="text-xs text-muted-foreground">{pair.name}</span>
+                                      </div>
+                                    </SelectItem>
+                                  ))}
+                                </>
+                              )}
+                              {livestockPairs.length > 0 && (
+                                <>
+                                  <div className="p-2 text-xs font-medium text-muted-foreground border-b border-t">🐄 Livestock</div>
+                                  {livestockPairs.map(pair => (
+                                    <SelectItem key={pair.symbol} value={pair.symbol}>
+                                      <div className="flex flex-col">
+                                        <div className="flex justify-between items-center w-full">
+                                          <span>{pair.symbol}</span>
+                                          <span className="text-xs text-muted-foreground font-mono">${pair.defaultSpotRate}/{pair.base}</span>
+                                        </div>
+                                        <span className="text-xs text-muted-foreground">{pair.name}</span>
+                                      </div>
+                                    </SelectItem>
+                                  ))}
+                                </>
+                              )}
+                              {customCurrencyPairs.length > 0 && (
+                                <>
+                                  <div className="p-2 text-xs font-medium text-muted-foreground border-b border-t">✨ Custom Commodities</div>
+                                  {customCurrencyPairs.map(pair => (
+                                    <SelectItem key={pair.symbol} value={pair.symbol}>
+                                      <div className="flex flex-col">
+                                        <div className="flex justify-between items-center w-full">
+                                          <span>{pair.symbol}</span>
+                                          <span className="text-xs text-muted-foreground font-mono">{pair.defaultSpotRate}</span>
+                                        </div>
+                                        <span className="text-xs text-muted-foreground">{pair.name}</span>
+                                      </div>
+                                    </SelectItem>
+                                  ))}
+                                </>
+                              )}
                             </>
-                          )}
-                        </>
+                          );
+                        })()
                       )}
                         
                         <div className="p-2 border-t mt-2">

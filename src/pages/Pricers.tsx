@@ -115,15 +115,60 @@ const Pricers = () => {
   // State for commodity search filter
   const [commoditySearchQuery, setCommoditySearchQuery] = useState('');
 
+  // ✅ Helper function to map CURRENCY_PAIRS category to CommodityCategory
+  const mapCurrencyPairCategoryToDomain = (category: string): CommodityCategory | null => {
+    const mapping: Record<string, CommodityCategory> = {
+      'energy': 'energy',
+      'metals': 'metals',
+      'agriculture': 'agricultural',
+      'livestock': 'agricultural', // Livestock is agricultural-related
+    };
+    return mapping[category] || null;
+  };
+
+  // ✅ Get filtered default commodities based on selected domains
+  const getFilteredDefaultCommodities = (): CurrencyPair[] => {
+    const savedSettings = localStorage.getItem('fxRiskManagerSettings');
+    let selectedCategories: CommodityCategory[] = ['metals', 'agricultural', 'energy', 'freight', 'bunker'];
+    if (savedSettings) {
+      try {
+        const parsed = JSON.parse(savedSettings);
+        if (parsed?.domains?.selectedDomains && Array.isArray(parsed.domains.selectedDomains) && parsed.domains.selectedDomains.length > 0) {
+          selectedCategories = parsed.domains.selectedDomains;
+        }
+      } catch (error) {
+        console.warn('Error parsing domain preferences:', error);
+      }
+    }
+    
+    return CURRENCY_PAIRS.filter(pair => {
+      const domain = mapCurrencyPairCategoryToDomain(pair.category);
+      return domain !== null && selectedCategories.includes(domain);
+    });
+  };
+
   // Function to load all commodities from Commodity Market cache
   const loadRealCommodities = async () => {
     setLoadingRealCommodities(true);
     try {
-      const categories: CommodityCategory[] = ['metals', 'agricultural', 'energy', 'freight', 'bunker'];
+      // ✅ Get selected domains from preferences
+      const savedSettings = localStorage.getItem('fxRiskManagerSettings');
+      let selectedCategories: CommodityCategory[] = ['metals', 'agricultural', 'energy', 'freight', 'bunker'];
+      if (savedSettings) {
+        try {
+          const parsed = JSON.parse(savedSettings);
+          if (parsed?.domains?.selectedDomains && Array.isArray(parsed.domains.selectedDomains)) {
+            selectedCategories = parsed.domains.selectedDomains;
+          }
+        } catch (error) {
+          console.warn('Error parsing domain preferences:', error);
+        }
+      }
+      
       const allCommodities: Commodity[] = [];
       
-      // Load from cache first (fast)
-      for (const category of categories) {
+      // Load from cache first (fast) - only for selected domains
+      for (const category of selectedCategories) {
         try {
           const cached = localStorage.getItem(`fx_commodities_cache_${category}`);
           if (cached) {
@@ -141,9 +186,9 @@ const Pricers = () => {
         }
       }
 
-      // If no cached data, try to fetch
+      // If no cached data, try to fetch - only for selected domains
       if (allCommodities.length === 0) {
-        for (const category of categories) {
+        for (const category of selectedCategories) {
           try {
             const data = await fetchCommoditiesData(category, false);
             allCommodities.push(...data);
@@ -1186,14 +1231,26 @@ const Pricers = () => {
                           })()}
                         </>
                       ) : (
-                        // Default commodities list
-                        <>
-                          {CURRENCY_PAIRS.map((pair) => (
-                            <SelectItem key={pair.symbol} value={pair.symbol}>
-                              {pair.name}
-                            </SelectItem>
-                          ))}
-                        </>
+                        // Default commodities list - filtered by selected domains
+                        (() => {
+                          const filteredPairs = getFilteredDefaultCommodities();
+                          if (filteredPairs.length === 0) {
+                            return (
+                              <div className="p-4 text-center text-sm text-muted-foreground">
+                                No commodities available for selected domains.
+                              </div>
+                            );
+                          }
+                          return (
+                            <>
+                              {filteredPairs.map((pair) => (
+                                <SelectItem key={pair.symbol} value={pair.symbol}>
+                                  {pair.name}
+                                </SelectItem>
+                              ))}
+                            </>
+                          );
+                        })()
                       )}
                     </SelectContent>
                   </Select>
@@ -1331,7 +1388,7 @@ const Pricers = () => {
                   
                   {/* Indicateur de prix */}
                   <div className="text-xs text-muted-foreground text-center">
-                    📊 Spot Price: {pricingInputs.spotPrice} {selectedPair?.quote || 'USD'}
+                    📊 Spot Price: {pricingInputs.spotPrice}
                   </div>
                 </div>
 
