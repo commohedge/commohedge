@@ -596,21 +596,17 @@ async function fetchFreightSymbolData(symbol: string, name: string, type: Commod
       return null;
     }
     
-    // Extract the main price
+    // Extract ONLY the price (optimized for freight - we don't need other data)
     let price = 0;
-    let percentChange = 0;
-    let absoluteChange = 0;
-    let high = 0;
-    let low = 0;
     
-    // Try to extract from JSON embedded data first (most reliable)
+    // Try to extract from JSON embedded data first (most reliable and fastest)
     try {
       // Look for JSON-LD or script tags with symbol data
       const jsonScripts = root.querySelectorAll('script[type="application/json"], script[id*="__NEXT_DATA__"], script[id*="__TV_DATA__"]');
       for (const script of jsonScripts) {
         try {
           const jsonData = JSON.parse(script.text);
-          // Navigate through possible JSON structures
+          // Navigate through possible JSON structures - ONLY look for price
           const priceData = jsonData?.props?.pageProps?.symbol || 
                            jsonData?.symbol || 
                            jsonData?.data?.symbol ||
@@ -618,13 +614,9 @@ async function fetchFreightSymbolData(symbol: string, name: string, type: Commod
           
           if (priceData?.price || priceData?.last_price) {
             price = priceData.price || priceData.last_price || 0;
-            percentChange = priceData.change_percent || priceData.changePercent || priceData.percentChange || 0;
-            absoluteChange = priceData.change || priceData.changeAbsolute || priceData.absoluteChange || 0;
-            high = priceData.high || priceData.sessionHigh || 0;
-            low = priceData.low || priceData.sessionLow || 0;
             
             if (price > 0) {
-              console.log(`Extracted price from JSON for ${symbol}: ${price}`);
+              console.log(`✅ Extracted price from JSON for ${symbol}: ${price}`);
               break;
             }
           }
@@ -633,11 +625,12 @@ async function fetchFreightSymbolData(symbol: string, name: string, type: Commod
         }
       }
     } catch (e) {
-      console.log(`JSON extraction failed for ${symbol}, trying HTML selectors`);
+      // Continue to HTML selectors
     }
     
-    // Search for price elements in different possible selectors (updated selectors)
+    // Search for price elements in different possible selectors (optimized - only price)
     if (price === 0) {
+      // Prioritized selectors (most common first for faster parsing)
       const priceSelectors = [
         '.tv-symbol-price-quote__value',
         '[data-field="last_price"]',
@@ -647,16 +640,9 @@ async function fetchFreightSymbolData(symbol: string, name: string, type: Commod
         '[class*="price-quote"]',
         '[class*="last-price"]',
         '[class*="symbol-price"]',
-        '.tv-symbol-price-quote__value',
-        'span[data-symbol-price]',
-        '[data-field="last_price"]',
-        '.tv-symbol-price-quote__value.js-symbol-last',
-        // New TradingView selectors
         '[class*="tv-symbol-price"]',
         '[class*="price-value"]',
-        '[data-field="last"]',
-        // Generic price selectors
-        '[class*="price"]'
+        '[data-field="last"]'
       ];
       
       for (const selector of priceSelectors) {
@@ -664,8 +650,6 @@ async function fetchFreightSymbolData(symbol: string, name: string, type: Commod
         for (const priceElement of priceElements) {
           const rawPriceText = priceElement.text.trim();
           if (!rawPriceText || rawPriceText.length === 0) continue;
-          
-          console.log(`Raw price text for ${symbol} (${selector}): "${rawPriceText}"`);
           
           // Parse prices correctly for TradingView format
           let priceText = rawPriceText;
@@ -697,12 +681,11 @@ async function fetchFreightSymbolData(symbol: string, name: string, type: Commod
             }
           }
           
-          console.log(`Processed price text for ${symbol}: "${priceText}"`);
           const parsedPrice = parseFloat(priceText) || 0;
           
           if (parsedPrice > 0) {
             price = parsedPrice;
-            console.log(`Successfully parsed price for ${symbol}: ${price}`);
+            console.log(`✅ Parsed price for ${symbol}: ${price}`);
             break;
           }
         }
@@ -710,43 +693,15 @@ async function fetchFreightSymbolData(symbol: string, name: string, type: Commod
       }
     }
     
-    // Try to extract change and percent change
-    if (price > 0 && (percentChange === 0 || absoluteChange === 0)) {
-      const changeSelectors = [
-        '[data-field="change"]',
-        '[data-field="change_percent"]',
-        '[class*="change"]',
-        '[class*="percent"]',
-        '.tv-symbol-price-quote__change'
-      ];
-      
-      for (const selector of changeSelectors) {
-        const changeElements = root.querySelectorAll(selector);
-        for (const changeElement of changeElements) {
-          const changeText = changeElement.text.trim();
-          const changeMatch = changeText.match(/([+-]?\d+\.?\d*)\s*\(([+-]?\d+\.?\d*)%\)/);
-          if (changeMatch) {
-            absoluteChange = parseFloat(changeMatch[1]) || 0;
-            percentChange = parseFloat(changeMatch[2]) || 0;
-            break;
-          }
-        }
-        if (percentChange !== 0 || absoluteChange !== 0) break;
-      }
-    }
-    
-    // If no price found, search in general content with improved patterns
+    // If no price found, search in general content with optimized patterns (price only)
     if (price === 0) {
+      // Simplified patterns - only looking for price
       const pricePatterns = [
-        /(?:last|price|close)[\s:]*([+-]?\d{1,3}(?:,\d{3})*\.\d{1,4})/i,
-        /(?:last|price|close)[\s:]*([+-]?\d+\.\d{1,4})/i,
-        /(\d+\.\d{1,4})\s*(?:USD|usd|$)/i,
-        /(\d{1,3}(?:,\d{3})*\.\d{1,4})\s*(?:USD|usd|$)/i,
-        /(\d{1,3}(?:,\d{3})+)\s*(?:USD|usd|$)/i,
-        /(\d+)\s*(?:USD|usd|$)/i,
         /"price":\s*(\d+\.?\d*)/i,
         /"last_price":\s*(\d+\.?\d*)/i,
-        /"lastPrice":\s*(\d+\.?\d*)/i
+        /"lastPrice":\s*(\d+\.?\d*)/i,
+        /(?:last|price|close)[\s:]*([+-]?\d{1,3}(?:,\d{3})*\.\d{1,4})/i,
+        /(?:last|price|close)[\s:]*([+-]?\d+\.\d{1,4})/i
       ];
       
       for (const pattern of pricePatterns) {
@@ -754,73 +709,37 @@ async function fetchFreightSymbolData(symbol: string, name: string, type: Commod
         if (priceMatch) {
           let matchedPrice = priceMatch[1];
           
-          if (matchedPrice.includes(',') && matchedPrice.includes('.')) {
-            const lastDotIndex = matchedPrice.lastIndexOf('.');
-            const lastCommaIndex = matchedPrice.lastIndexOf(',');
-            
-            if (lastDotIndex > lastCommaIndex) {
-              matchedPrice = matchedPrice.replace(/,/g, '');
-            } else {
-              matchedPrice = matchedPrice.replace(/\./g, '').replace(/,([^,]*)$/, '.$1');
-            }
-          } else if (matchedPrice.includes(',') && !matchedPrice.includes('.')) {
-            const parts = matchedPrice.split(',');
-            if (parts.length === 2 && parts[1].length === 3 && parts[0].length <= 3) {
-              matchedPrice = matchedPrice.replace(/,/g, '');
-            } else if (parts.length === 2 && parts[1].length <= 4) {
-              matchedPrice = matchedPrice.replace(',', '.');
-            } else {
-              matchedPrice = matchedPrice.replace(/,/g, '');
-            }
+          // Simple number format handling
+          if (matchedPrice.includes(',')) {
+            matchedPrice = matchedPrice.replace(/,/g, '');
           }
           
           const parsedPrice = parseFloat(matchedPrice) || 0;
           if (parsedPrice > 0) {
             price = parsedPrice;
-            console.log(`Found price in content for ${symbol}: ${price}`);
+            console.log(`✅ Found price in content for ${symbol}: ${price}`);
             break;
           }
         }
       }
     }
     
-    // Return null if no valid data
+    // Return null if no valid price found
     if (price === 0) {
-      // Log diagnostic information
-      const hasSymbol = htmlContent.includes('symbol') || htmlContent.includes('Symbol');
-      const hasPrice = htmlContent.includes('price') || htmlContent.includes('Price');
-      const hasTradingView = htmlContent.includes('TradingView') || htmlContent.includes('tradingview');
-      const hasChart = htmlContent.includes('chart') || htmlContent.includes('Chart');
-      const hasError = htmlContent.includes('error') || htmlContent.includes('Error') || htmlContent.includes('404');
-      
-      console.warn(`No valid price found for ${symbol}. Diagnostic info:`, {
-        htmlLength: htmlContent.length,
-        hasSymbol,
-        hasPrice,
-        hasTradingView,
-        hasChart,
-        hasError,
-        first500Chars: htmlContent.substring(0, 500)
-      });
-      
-      // Try to find any numeric value that might be a price
-      const allNumbers = htmlContent.match(/\d+\.\d{2,4}/g);
-      if (allNumbers && allNumbers.length > 0) {
-        console.log(`Found potential prices in HTML: ${allNumbers.slice(0, 5).join(', ')}`);
-      }
-      
+      console.warn(`⚠️  No valid price found for ${symbol} (HTML length: ${htmlContent.length} chars)`);
       return null;
     }
     
+    // For freight, we only keep the price - other variables are not needed (optimization)
     const result = {
       symbol,
       name,
       price,
-      percentChange,
-      absoluteChange,
-      high: high || 0,
-      low: low || 0,
-      technicalEvaluation: percentChange >= 0 ? 'Positive' : 'Negative',
+      percentChange: 0, // Not needed for freight
+      absoluteChange: 0, // Not needed for freight
+      high: 0, // Not needed for freight
+      low: 0, // Not needed for freight
+      technicalEvaluation: 'Positive' as const, // Default value, not needed for freight
       type,
       category: 'freight' as const
     };
