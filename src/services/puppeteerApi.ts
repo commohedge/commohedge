@@ -77,9 +77,9 @@ export async function scrapeTradingViewSymbol(symbol: string): Promise<ScrapingR
     // Check if response is JSON or HTML
     const contentType = response.headers.get('content-type');
     if (contentType && contentType.includes('application/json')) {
-      const data = await response.json();
-      console.log(`Successfully scraped via Vercel symbol ${symbol}: ${data.data.length} characters`);
-      return data;
+    const data = await response.json();
+    console.log(`Successfully scraped via Vercel symbol ${symbol}: ${data.data.length} characters`);
+    return data;
     } else {
       // Response is HTML (likely CAPTCHA), throw to use fallback
       throw new Error('Response is HTML, not JSON (likely CAPTCHA)');
@@ -114,9 +114,9 @@ export async function scrapeTradingViewCategory(category: string): Promise<Scrap
     // Check if response is JSON or HTML
     const contentType = response.headers.get('content-type');
     if (contentType && contentType.includes('application/json')) {
-      const data = await response.json();
-      console.log(`Successfully scraped via Vercel category ${category}: ${data.data.length} characters`);
-      return data;
+    const data = await response.json();
+    console.log(`Successfully scraped via Vercel category ${category}: ${data.data.length} characters`);
+    return data;
     } else {
       // Response is HTML (likely CAPTCHA), throw to use fallback
       throw new Error('Response is HTML, not JSON (likely CAPTCHA)');

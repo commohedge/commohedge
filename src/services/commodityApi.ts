@@ -17,8 +17,9 @@ const CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
 export type CommodityCategory = 'metals' | 'agricultural' | 'energy' | 'freight' | 'bunker';
 
 // List of freight symbols with their information
+// Extracted from TradingView widget - symbols to be scraped
 const FREIGHT_SYMBOLS = [
-  // Container Freight
+  // Container Freight (CONTAINER group)
   { symbol: 'CS61!', name: 'Container Freight (China/East Asia to Mediterranean) (FBX13) (Baltic) Futures', type: 'container' as const },
   { symbol: 'CS31!', name: 'Container Freight (China/East Asia to US East Coast) (FBX03) (Baltic) Futures', type: 'container' as const },
   { symbol: 'CS51!', name: 'Container Freight (North Europe to China/East Asia) (FBX12) (Baltic) Futures', type: 'container' as const },
@@ -26,7 +27,7 @@ const FREIGHT_SYMBOLS = [
   { symbol: 'CS21!', name: 'Container Freight (US West Coast to China/East Asia) (FBX02) (Baltic) Futures', type: 'container' as const },
   { symbol: 'CS41!', name: 'Container Freight (China/East Asia to North Europe) (FBX11) (Baltic) Futures', type: 'container' as const },
   
-  // Freight Routes
+  // Freight Routes (FREIGHT group)
   { symbol: 'TM1!', name: 'Freight Route TC2 (Baltic) Futures', type: 'freight_route' as const },
   { symbol: 'TD81!', name: 'Freight Route TD8 (Baltic) Futures', type: 'freight_route' as const },
   { symbol: 'TC71!', name: 'Freight Route TC7 (Baltic) Futures', type: 'freight_route' as const },
@@ -47,7 +48,7 @@ const FREIGHT_SYMBOLS = [
   { symbol: 'TC11!', name: 'Freight Route South Korea to Singapore (TC11) (Baltic) Futures', type: 'freight_route' as const },
   { symbol: 'TF21!', name: 'Freight Route Middle East to UK Continent (TC20) (Baltic) Futures', type: 'freight_route' as const },
   
-  // LNG Freight
+  // LNG Freight (from FREIGHT group)
   { symbol: 'BG11!', name: 'LNG Freight Australia to Japan (BLNG1-174)', type: 'lng_freight' as const },
   { symbol: 'BG31!', name: 'LNG Freight US Gulf to Japan (BLNG3-174)', type: 'lng_freight' as const },
   { symbol: 'BG21!', name: 'LNG Freight US Gulf to Continent (BLNG2-174)', type: 'lng_freight' as const },
@@ -55,12 +56,12 @@ const FREIGHT_SYMBOLS = [
   { symbol: 'BL21!', name: 'LNG Freight Route BLNG2g (LNG Fuel) (Baltic) Futures', type: 'lng_freight' as const },
   { symbol: 'BL31!', name: 'LNG Freight Route BLNG3g (LNG Fuel) (Baltic) Futures', type: 'lng_freight' as const },
   
-  // Dirty Freight
+  // Dirty Freight (from FREIGHT group)
   { symbol: 'USC1!', name: 'USGC to China (Platts) Dirty Freight Futures', type: 'dirty_freight' as const },
   { symbol: 'USE1!', name: 'USGC to UK Continent (Platts) Dirty Freight Futures', type: 'dirty_freight' as const },
   { symbol: 'XUK1!', name: 'Cross North Sea Dirty Freight 80kt (Platts) Futures', type: 'dirty_freight' as const },
   
-  // Liquid Petroleum Gas Freight
+  // Liquid Petroleum Gas Freight (from FREIGHT group)
   { symbol: 'FLJ1!', name: 'Freight Route Liquid Petroleum Gas (BLPG3) (Baltic) Futures', type: 'lng_freight' as const },
   { symbol: 'FLP1!', name: 'Freight Route Liquid Petroleum Gas (BLPG1) (Baltic) Futures', type: 'lng_freight' as const }
 ];
@@ -537,10 +538,23 @@ async function fetchFreightSymbolData(symbol: string, name: string, type: Commod
     const htmlContent = data.data;
     const root = parse(htmlContent);
     
-    // Check for CAPTCHA or protection page
-    const captchaCheck = root.querySelector('[class*="captcha"], [id*="captcha"], [class*="challenge"], [id*="challenge"]');
-    if (captchaCheck || htmlContent.includes('Complete the test below') || htmlContent.includes('Just one more step')) {
-      console.warn(`CAPTCHA or protection page detected for ${symbol}`);
+    // Enhanced CAPTCHA detection with multiple indicators
+    const captchaIndicators = [
+      htmlContent.includes('Complete the test below'),
+      htmlContent.includes('Just one more step'),
+      htmlContent.includes('challenge-platform'),
+      htmlContent.includes('cloudflare') && htmlContent.length < 20000, // Cloudflare CAPTCHA
+      root.querySelector('[class*="captcha"]') !== null,
+      root.querySelector('[id*="captcha"]') !== null,
+      root.querySelector('[class*="challenge"]') !== null,
+      root.querySelector('[id*="challenge"]') !== null,
+      root.querySelector('[class*="cf-"]') !== null, // Cloudflare classes
+    ];
+    
+    if (captchaIndicators.some(indicator => indicator === true)) {
+      console.warn(`🚫 CAPTCHA or protection page detected for ${symbol}`);
+      console.warn(`   HTML length: ${htmlContent.length} chars`);
+      console.warn(`   Indicators matched: ${captchaIndicators.filter(i => i).length}/${captchaIndicators.length}`);
       return null;
     }
     
@@ -782,15 +796,26 @@ async function fetchFreightSymbolData(symbol: string, name: string, type: Commod
 /**
  * Retrieves all freight data in parallel
  */
+/**
+ * Retrieves all freight data in parallel with improved CAPTCHA avoidance
+ */
 async function fetchFreightData(): Promise<Commodity[]> {
   console.log('Fetching freight data from individual symbol pages...');
+  console.log(`Total symbols to fetch: ${FREIGHT_SYMBOLS.length}`);
   
   // Reduce batch size and increase delays to avoid CAPTCHA
   const batchSize = 2; // Reduced from 5 to 2
   const results: Commodity[] = [];
+  let successCount = 0;
+  let captchaCount = 0;
+  let errorCount = 0;
   
   for (let i = 0; i < FREIGHT_SYMBOLS.length; i += batchSize) {
     const batch = FREIGHT_SYMBOLS.slice(i, i + batchSize);
+    const batchNumber = Math.floor(i / batchSize) + 1;
+    const totalBatches = Math.ceil(FREIGHT_SYMBOLS.length / batchSize);
+    
+    console.log(`Processing batch ${batchNumber}/${totalBatches} (${batch.length} symbols)...`);
     
     // Process sequentially within batch to reduce rate limiting
     for (const { symbol, name, type } of batch) {
@@ -798,26 +823,52 @@ async function fetchFreightData(): Promise<Commodity[]> {
         const data = await fetchFreightSymbolData(symbol, name, type);
         if (data) {
           results.push(data);
+          successCount++;
+          console.log(`✅ Successfully fetched ${symbol} (${successCount}/${FREIGHT_SYMBOLS.length})`);
+        } else {
+          captchaCount++;
+          console.warn(`⚠️ CAPTCHA or no data for ${symbol} (${captchaCount} blocked)`);
         }
-        // Delay between each symbol to avoid CAPTCHA
-        await new Promise(resolve => setTimeout(resolve, 3000)); // 3 seconds between symbols
+        
+        // Randomized delay between each symbol to avoid pattern detection
+        // Base delay: 5-8 seconds (increased from 3s)
+        const baseDelay = 5000;
+        const randomDelay = Math.random() * 3000; // 0-3 seconds random
+        const delay = baseDelay + randomDelay;
+        await new Promise(resolve => setTimeout(resolve, delay));
+        
       } catch (error) {
-        console.warn(`Failed to fetch ${symbol}:`, error);
+        errorCount++;
+        console.warn(`❌ Failed to fetch ${symbol}:`, error);
       }
     }
     
-    // Longer delay between batches to respect API limits and avoid CAPTCHA
+    // Longer randomized delay between batches to respect API limits and avoid CAPTCHA
     if (i + batchSize < FREIGHT_SYMBOLS.length) {
-      console.log(`Waiting 5 seconds before next batch to avoid CAPTCHA...`);
-      await new Promise(resolve => setTimeout(resolve, 5000)); // 5 seconds between batches
+      const batchDelay = 8000 + Math.random() * 4000; // 8-12 seconds random
+      console.log(`⏳ Waiting ${Math.round(batchDelay/1000)}s before next batch to avoid CAPTCHA...`);
+      await new Promise(resolve => setTimeout(resolve, batchDelay));
     }
   }
   
-  console.log(`Successfully fetched ${results.length} freight commodities`);
+  console.log(`\n📊 Freight Scraping Summary:`);
+  console.log(`   ✅ Success: ${successCount}/${FREIGHT_SYMBOLS.length}`);
+  console.log(`   ⚠️  CAPTCHA/No Data: ${captchaCount}`);
+  console.log(`   ❌ Errors: ${errorCount}`);
   
-  // If no data was fetched (all blocked by CAPTCHA), log warning
+  // If no data was fetched (all blocked by CAPTCHA), try to use stale cache
   if (results.length === 0) {
-    console.warn('⚠️ All freight symbols were blocked by CAPTCHA. TradingView is currently blocking automated access.');
+    console.warn('\n⚠️ All freight symbols were blocked by CAPTCHA. TradingView is currently blocking automated access.');
+    
+    // Try to return stale cache if available
+    const staleCache = loadFromCache('freight');
+    if (staleCache && staleCache.length > 0) {
+      const cacheAge = Date.now() - (staleCache as any).timestamp;
+      const cacheAgeHours = Math.floor(cacheAge / (1000 * 60 * 60));
+      console.warn(`💾 Using stale cache (${cacheAgeHours} hours old) as fallback`);
+      return staleCache as Commodity[];
+    }
+    
     console.warn('💡 Suggestions:');
     console.warn('   1. Wait a few hours and try again');
     console.warn('   2. Use the category page method (if available)');
