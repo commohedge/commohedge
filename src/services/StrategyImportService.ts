@@ -372,7 +372,8 @@ class StrategyImportService {
             realPrice: strategyDetail?.repricingData?.underlyingPrice || periodResult.realPrice,
             // INFORMATIONS COMPLÈTES DE PRICING POUR ÉLIMINER LES ÉCARTS
             exportSpotPrice: params.spotPrice, // Spot utilisé lors de l'export
-            exportDomesticRate: params.domesticRate, // Taux domestique utilisé lors de l'export
+            // ✅ CORRECTION : Utiliser interestRate si domesticRate n'est pas défini (pour cohérence avec le calcul du forward)
+            exportDomesticRate: params.domesticRate !== undefined ? params.domesticRate : params.interestRate, // Taux utilisé pour calculer le forward lors de l'export
             exportForeignRate: params.foreignRate, // Taux étranger utilisé lors de l'export
             exportVolatility: effectiveVolatility, // Volatilité utilisée lors de l'export
             exportTimeToMaturity: periodResult.timeToMaturity, // Time to maturity exact utilisé lors de l'export
@@ -390,7 +391,8 @@ class StrategyImportService {
               ...strategyDetail.repricingData,
               // Ajouter les paramètres exacts utilisés lors de l'export
               exportSpotPrice: params.spotPrice,
-              exportDomesticRate: params.domesticRate,
+              // ✅ CORRECTION : Utiliser interestRate si domesticRate n'est pas défini (pour cohérence avec le calcul du forward)
+              exportDomesticRate: params.domesticRate !== undefined ? params.domesticRate : params.interestRate,
               exportForeignRate: params.foreignRate,
               exportVolatility: effectiveVolatility,
               exportTimeToMaturity: periodResult.timeToMaturity,
@@ -405,7 +407,8 @@ class StrategyImportService {
               dividendYield: 0,
               pricingModel: 'Garman-Kohlhagen',
               exportSpotPrice: params.spotPrice,
-              exportDomesticRate: params.domesticRate,
+              // ✅ CORRECTION : Utiliser interestRate si domesticRate n'est pas défini (pour cohérence avec le calcul du forward)
+              exportDomesticRate: params.domesticRate !== undefined ? params.domesticRate : params.interestRate,
               exportForeignRate: params.foreignRate,
               exportVolatility: effectiveVolatility,
               exportTimeToMaturity: periodResult.timeToMaturity,

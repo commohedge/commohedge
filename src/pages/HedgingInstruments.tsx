@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { Layout } from "@/components/Layout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
@@ -30,6 +31,7 @@ import {
 } from "lucide-react";
 import StrategyImportService, { HedgingInstrument } from "@/services/StrategyImportService";
 import { PricingService } from "@/services/PricingService";
+import { Commodity } from "@/services/commodityApi";
 // ✅ IMPORT EXACT DES FONCTIONS EXPORTÉES D'INDEX.TSX UTILISÉES PAR STRATEGY BUILDER
 // ✅ STRICTEMENT : Black-Scholes et Monte Carlo pour put/call simples
 // ✅ STRICTEMENT : Closed-form pour les options avec barrières
@@ -42,6 +44,40 @@ import {
   calculateOptionPrice, // ✅ Fonction principale de pricing de Strategy Builder
   erf
 } from "@/pages/Index";
+
+// ✅ Mapping des symboles de commodity aux symboles TradingView pour récupérer les prix réels
+const COMMODITY_SYMBOL_MAP: { [key: string]: { tradingViewSymbol: string; category: 'metals' | 'agricultural' | 'energy' | 'freight' | 'bunker' } } = {
+  // Energy
+  'WTI': { tradingViewSymbol: 'CL1!', category: 'energy' },
+  'BRENT': { tradingViewSymbol: 'BRN1!', category: 'energy' },
+  'NATGAS': { tradingViewSymbol: 'NG1!', category: 'energy' },
+  'HEATING': { tradingViewSymbol: 'HO1!', category: 'energy' },
+  'RBOB': { tradingViewSymbol: 'RB1!', category: 'energy' },
+  
+  // Precious Metals
+  'GOLD': { tradingViewSymbol: 'GC1!', category: 'metals' },
+  'SILVER': { tradingViewSymbol: 'SI1!', category: 'metals' },
+  'PLATINUM': { tradingViewSymbol: 'PL1!', category: 'metals' },
+  'PALLADIUM': { tradingViewSymbol: 'PA1!', category: 'metals' },
+  
+  // Base Metals
+  'COPPER': { tradingViewSymbol: 'HG1!', category: 'metals' },
+  'ALUMINUM': { tradingViewSymbol: 'ALI1!', category: 'metals' },
+  'ZINC': { tradingViewSymbol: 'ZN1!', category: 'metals' },
+  'NICKEL': { tradingViewSymbol: 'NI1!', category: 'metals' },
+  
+  // Agriculture
+  'CORN': { tradingViewSymbol: 'ZC1!', category: 'agricultural' },
+  'WHEAT': { tradingViewSymbol: 'ZW1!', category: 'agricultural' },
+  'SOYBEAN': { tradingViewSymbol: 'ZS1!', category: 'agricultural' },
+  'COTTON': { tradingViewSymbol: 'CT1!', category: 'agricultural' },
+  'SUGAR': { tradingViewSymbol: 'SB1!', category: 'agricultural' },
+  'COFFEE': { tradingViewSymbol: 'KC1!', category: 'agricultural' },
+  
+  // Livestock
+  'CATTLE': { tradingViewSymbol: 'LE1!', category: 'agricultural' },
+  'HOGS': { tradingViewSymbol: 'HE1!', category: 'agricultural' },
+};
 
 // Interface pour les paramètres de marché par commodity
 interface CommodityMarketData {
@@ -95,54 +131,56 @@ const HedgingInstruments = () => {
   const [importService] = useState(() => StrategyImportService.getInstance());
   
   // ✅ MTM Calculation states - maintenant par devise avec logique Strategy Builder
-  const [strategyStartDate, setStrategyStartDate] = useState(() => {
-    // Récupérer depuis Strategy Builder si disponible
-    try {
-      const savedState = localStorage.getItem('calculatorState');
-      if (savedState) {
-        const state = JSON.parse(savedState);
-        return state.strategyStartDate || new Date().toISOString().split('T')[0];
-      }
-    } catch (error) {
-      console.warn('Error loading strategy start date from Strategy Builder:', error);
-    }
-    return new Date().toISOString().split('T')[0];
-  });
+  const [valuationDate, setValuationDate] = useState(new Date().toISOString().split('T')[0]);
   
-  const [hedgingStartDate, setHedgingStartDate] = useState(() => {
-    // Récupérer depuis Strategy Builder si disponible
-    try {
-      const savedState = localStorage.getItem('calculatorState');
-      if (savedState) {
-        const state = JSON.parse(savedState);
-        return state.startDate || new Date().toISOString().split('T')[0];
-      }
-    } catch (error) {
-      console.warn('Error loading hedging start date from Strategy Builder:', error);
-    }
-    return new Date().toISOString().split('T')[0];
+  // ✅ État pour utiliser les prix réels du Commodity Market
+  const [useRealMarketPrices, setUseRealMarketPrices] = useState<boolean>(() => {
+    const saved = localStorage.getItem('hedgingInstruments_useRealMarketPrices');
+    return saved === 'true';
   });
 
-  // ✅ Fonction pour récupérer les dates depuis les instruments exportés
-  const getExportDatesFromInstruments = () => {
-    if (instruments.length === 0) return null;
+  // ✅ Fonction pour récupérer le prix réel depuis Commodity Market
+  const getRealMarketPrice = useCallback((commoditySymbol: string): number | null => {
+    const symbolMap = COMMODITY_SYMBOL_MAP[commoditySymbol];
     
-    // Chercher un instrument avec des dates d'export
-    const instrumentWithDates = instruments.find(inst => 
-      inst.exportStrategyStartDate && inst.exportHedgingStartDate
-    );
-    
-    if (instrumentWithDates) {
-      return {
-        strategyStartDate: instrumentWithDates.exportStrategyStartDate,
-        hedgingStartDate: instrumentWithDates.exportHedgingStartDate
-      };
+    if (!symbolMap) {
+      return null;
     }
-    
+
+    try {
+      // Chercher dans le cache localStorage
+      const cacheKey = `fx_commodities_cache_${symbolMap.category}`;
+      const cached = localStorage.getItem(cacheKey);
+      if (cached) {
+        const cacheData = JSON.parse(cached);
+        if (cacheData.data && Array.isArray(cacheData.data)) {
+          // Chercher par symbole TradingView exact
+          let commodity = cacheData.data.find((c: Commodity) => 
+            c.symbol === symbolMap.tradingViewSymbol ||
+            c.symbol.replace('!', '') === symbolMap.tradingViewSymbol.replace('!', '')
+          );
+          
+          // Si pas trouvé, chercher par symbole sans le '!'
+          if (!commodity) {
+            const symbolWithoutExcl = symbolMap.tradingViewSymbol.replace('!', '');
+            commodity = cacheData.data.find((c: Commodity) => 
+              c.symbol === symbolWithoutExcl || 
+              c.symbol.replace('!', '') === symbolWithoutExcl
+            );
+          }
+          
+          if (commodity && commodity.price > 0) {
+            console.log(`[REAL MARKET PRICE] Found ${commoditySymbol}: ${commodity.price} from ${symbolMap.category}`);
+            return commodity.price;
+          }
+        }
+      }
+    } catch (error) {
+      console.error(`[REAL MARKET PRICE] Error reading cache for ${commoditySymbol}:`, error);
+    }
+
     return null;
-  };
-  
-  const [valuationDate, setValuationDate] = useState(new Date().toISOString().split('T')[0]);
+  }, []);
   const [commodityMarketData, setCommodityMarketData] = useState<{ [commodity: string]: CommodityMarketData }>(() => {
     // Charger les données de marché depuis localStorage
     try {
@@ -242,7 +280,6 @@ const HedgingInstruments = () => {
       const loadedInstruments = service.getHedgingInstruments();
       
       // LOG DE DIAGNOSTIC : Vérifier les données d'export
-      console.log('[DEBUG] Instruments chargés depuis le service:', loadedInstruments);
       if (loadedInstruments.length > 0) {
         const firstInstrument = loadedInstruments[0];
         console.log('[DEBUG] Premier instrument - Données d\'export:');
@@ -271,7 +308,6 @@ const HedgingInstruments = () => {
                 currentData.spot !== exportData.spot ||
                 currentData.riskFreeRate !== exportData.riskFreeRate) {
               
-              console.log(`[DEBUG] Updating market data for ${commodity} with export data:`, exportData);
               newData[commodity] = exportData;
               hasUpdates = true;
             }
@@ -302,87 +338,40 @@ const HedgingInstruments = () => {
     return () => window.removeEventListener('hedgingInstrumentsUpdated', handleUpdate);
   }, []);
 
-  // Force re-calculation when valuation date changes
+  // ✅ OPTIMISATION : Force re-calculation when valuation date changes
   useEffect(() => {
     if (instruments.length > 0) {
-      console.log(`[🔄 VALUATION DATE CHANGE] New date: ${valuationDate} - Forcing recalculation of ${instruments.length} instruments`);
-      
       // Force re-render to recalculate all Today Prices with new valuation date
       const updatedInstruments = instruments.map(instrument => ({ ...instrument }));
       setInstruments(updatedInstruments);
-      
-      // Force update of currency market data state to trigger re-renders
-      setCommodityMarketData(prev => ({ ...prev }));
       
       // Show toast to confirm recalculation
       toast({
         title: "Valuation Date Updated",
         description: `Recalculating prices and MTM for ${instruments.length} instruments as of ${valuationDate}`,
       });
-    } else {
-      console.log(`[🔄 VALUATION DATE CHANGE] New date: ${valuationDate} - No instruments to recalculate`);
     }
-  }, [valuationDate, toast]);
+  }, [valuationDate, toast, instruments.length]);
 
-  // Force re-calculation when market parameters change (spot, volatility, rates)
+  // ✅ OPTIMISATION : Force re-calculation when market parameters change
   useEffect(() => {
     if (instruments.length > 0) {
-      console.log(`[DEBUG] Market parameters changed, forcing recalculation of Today Prices and MTM`);
       // Force re-render to recalculate all Today Prices and MTM with new market parameters
       const updatedInstruments = instruments.map(instrument => ({ ...instrument }));
       setInstruments(updatedInstruments);
     }
-  }, [commodityMarketData]);
+  }, [commodityMarketData, instruments.length]);
 
-  // ✅ Synchroniser les dates avec Strategy Builder et instruments exportés
-  useEffect(() => {
-    const handleStrategyBuilderUpdate = () => {
-      try {
-        const savedState = localStorage.getItem('calculatorState');
-        if (savedState) {
-          const state = JSON.parse(savedState);
-          if (state.strategyStartDate) {
-            setStrategyStartDate(state.strategyStartDate);
-          }
-          if (state.startDate) {
-            setHedgingStartDate(state.startDate);
-          }
-        }
-      } catch (error) {
-        console.warn('Error syncing dates with Strategy Builder:', error);
-      }
-    };
-
-    // ✅ Synchroniser avec les dates d'export des instruments
-    const handleExportDatesSync = () => {
-      const exportDates = getExportDatesFromInstruments();
-      if (exportDates) {
-        console.log('[HEDGING] Syncing with export dates:', exportDates);
-        setStrategyStartDate(exportDates.strategyStartDate);
-        setHedgingStartDate(exportDates.hedgingStartDate);
-      }
-    };
-
-    // Écouter les changements dans Strategy Builder
-    window.addEventListener('storage', handleStrategyBuilderUpdate);
-    
-    // Vérifier au chargement
-    handleStrategyBuilderUpdate();
-    handleExportDatesSync();
-
-    return () => {
-      window.removeEventListener('storage', handleStrategyBuilderUpdate);
-    };
-  }, [instruments]); // ✅ Ajouter instruments comme dépendance
-
-  // ✅ Recalculer automatiquement quand les dates changent
+  // ✅ Force re-calculation when useRealMarketPrices changes
   useEffect(() => {
     if (instruments.length > 0) {
-      console.log('[HEDGING] Dates changed - Strategy Start:', strategyStartDate, 'Hedging Start:', hedgingStartDate);
-      // Force re-render pour recalculer les MTM
-      setInstruments([...instruments]);
+      console.log(`[🔄 REAL MARKET PRICES] Toggled to ${useRealMarketPrices} - Forcing recalculation of ${instruments.length} instruments`);
+      // Force re-render to recalculate all Today Prices with real market prices
+      const updatedInstruments = instruments.map(instrument => ({ ...instrument }));
+      setInstruments(updatedInstruments);
     }
-  }, [strategyStartDate, hedgingStartDate]);
+  }, [useRealMarketPrices, instruments.length]);
+
 
   // ✅ Utiliser exactement la même logique de pricing que Strategy Builder
 
@@ -437,15 +426,6 @@ const HedgingInstruments = () => {
     return result;
   };
 
-  // ✅ Calcul de maturité depuis Strategy Start Date (comme Strategy Builder)
-  const calculateTimeToMaturityFromStrategyStart = (maturityDate: string): number => {
-    return calculateTimeToMaturity(maturityDate, strategyStartDate); // ✅ Utiliser la fonction exportée d'Index.tsx
-  };
-
-  // ✅ Calcul de maturité depuis Hedging Start Date (pour affichage)
-  const calculateTimeToMaturityFromHedgingStart = (maturityDate: string): number => {
-    return calculateTimeToMaturity(maturityDate, hedgingStartDate); // ✅ Utiliser la fonction exportée d'Index.tsx
-  };
 
   // Utiliser le PricingService centralisé au lieu de redéfinir erf
   // const erf = (x: number): number => { ... } - SUPPRIMÉ, utilise PricingService.erf()
@@ -483,7 +463,6 @@ const HedgingInstruments = () => {
     
     // Si l'option est expirée (TTM = 0), retourner la valeur intrinsèque
     if (calculationTimeToMaturity <= 0) {
-      console.log(`[DEBUG] ${instrument.id}: Option expired - TTM = ${calculationTimeToMaturity.toFixed(4)}`);
       const marketData = commodityMarketData[instrument.currency] || getMarketDataFromInstruments(instrument.currency) || { spot: 1.0000, volatility: 20, riskFreeRate: 1.0 };
       const spotRate = instrument.impliedSpotPrice || marketData.spot;
       const K = instrument.strike || spotRate;
@@ -525,8 +504,22 @@ const HedgingInstruments = () => {
                            Math.abs(marketData.spot - exportSpotPrice) > 0.0001 ||
                            Math.abs(marketData.volatility - exportVolatility) > 0.1;
     
-    // Hiérarchie pour le spot price : individuel > global (si modifié) > export
-    const spotRate = instrument.impliedSpotPrice || (useCurrentParams ? marketData.spot : baseSpotRate);
+    // ✅ PRIORITÉ : Prix réel du marché si activé > individuel > global (si modifié) > export
+    let spotRate: number;
+    if (useRealMarketPrices) {
+      const realPrice = getRealMarketPrice(instrument.currency);
+      if (realPrice !== null && realPrice > 0) {
+        spotRate = realPrice;
+        console.log(`[DEBUG] ${instrument.id}: Using REAL MARKET PRICE: ${spotRate.toFixed(6)} for ${instrument.currency}`);
+      } else {
+        // Fallback si prix réel non disponible
+        spotRate = instrument.impliedSpotPrice || (useCurrentParams ? marketData.spot : baseSpotRate);
+        console.log(`[DEBUG] ${instrument.id}: Real market price not available, using fallback: ${spotRate.toFixed(6)}`);
+      }
+    } else {
+      // Hiérarchie normale : individuel > global (si modifié) > export
+      spotRate = instrument.impliedSpotPrice || (useCurrentParams ? marketData.spot : baseSpotRate);
+    }
     
     const r_d = useCurrentParams ? marketData.riskFreeRate / 100 : baseRiskFreeRate / 100;
     
@@ -541,54 +534,44 @@ const HedgingInstruments = () => {
     if (instrument.impliedVolatility) {
       // 1. Priorité : Volatilité implicite spécifique (éditable par l'utilisateur)
       sigma = instrument.impliedVolatility / 100;
-      console.log(`[DEBUG] ${instrument.id}: Using CURRENT IMPLIED volatility: ${(sigma*100).toFixed(3)}%`);
     } else if (instrument.volatility) {
       // 2. Priorité : Volatilité spécifique de l'instrument (éditable par l'utilisateur)
       sigma = instrument.volatility / 100;
-      console.log(`[DEBUG] ${instrument.id}: Using CURRENT instrument volatility: ${(sigma*100).toFixed(3)}%`);
     } else if (isExportedStrategy && instrument.exportVolatility && !useCurrentParams) {
       // 3. Priorité : Volatilité d'export pour les stratégies exportées (cohérence avec Strategy Builder)
-      // Seulement si les paramètres globaux n'ont pas été modifiés
       sigma = instrument.exportVolatility / 100;
-      console.log(`[DEBUG] ${instrument.id}: Using EXPORT volatility: ${(sigma*100).toFixed(3)}%`);
     } else if (useCurrentParams && marketData.volatility) {
       // 4. Priorité : Volatilité globale actuelle (si les paramètres ont été modifiés)
       sigma = marketData.volatility / 100;
-      console.log(`[DEBUG] ${instrument.id}: Using CURRENT market volatility (modified): ${(sigma*100).toFixed(3)}%`);
-         } else if (marketData.volatility) {
+    } else if (marketData.volatility) {
       // 4. Priorité : Volatilité globale de la devise (éditable par l'utilisateur)
-       sigma = marketData.volatility / 100;
-       console.log(`[DEBUG] ${instrument.id}: Using CURRENT market volatility: ${(sigma*100).toFixed(3)}%`);
+      sigma = marketData.volatility / 100;
     } else {
       // 5. Fallback : Volatilité des données de marché
       const marketData = commodityMarketData[instrument.currency] || getMarketDataFromInstruments(instrument.currency) || { spot: 1.0000, volatility: 20, riskFreeRate: 1.0 };
       sigma = marketData.volatility / 100;
-      console.log(`[DEBUG] ${instrument.id}: Using CURRENT market volatility: ${(sigma*100).toFixed(3)}%`);
     }
     
     // 4. FORWARD CALCULATION : Utiliser les paramètres d'export pour la cohérence, mais permettre les modifications
-    // Pour les stratégies exportées, utiliser le forward d'export si les paramètres n'ont pas été modifiés
+    // ✅ CORRECTION : Pour les stratégies exportées, toujours utiliser le forward d'export si disponible
+    // et si le time to maturity est le même, pour garantir la cohérence avec Strategy Builder
     let S;
     if (isExportedStrategy && instrument.exportForwardPrice && 
         Math.abs(calculationTimeToMaturity - (instrument.exportTimeToMaturity || 0)) < 0.0001 && 
         !useCurrentParams) {
-      // Si c'est la même échéance que l'export ET que les paramètres globaux n'ont pas été modifiés
+      // ✅ Si c'est la même échéance que l'export ET que les paramètres globaux n'ont pas été modifiés
+      // Utiliser directement le forward d'export (garantit la cohérence avec Strategy Builder)
       S = instrument.exportForwardPrice;
-      console.log(`[DEBUG] ${instrument.id}: Using EXPORT forward price: ${S.toFixed(6)}`);
+    } else if (isExportedStrategy && !useCurrentParams) {
+      // ✅ Si les paramètres n'ont pas été modifiés mais le TTM a changé, recalculer avec les paramètres d'export
+      const exportSpot = instrument.exportSpotPrice || baseSpotRate;
+      const exportRate = (instrument.exportDomesticRate || baseRiskFreeRate) / 100;
+      const exportTTM = instrument.exportTimeToMaturity || calculationTimeToMaturity;
+      S = exportSpot * Math.exp(exportRate * exportTTM);
     } else {
       // Sinon, calculer avec les paramètres actuels
       S = spotRate * Math.exp(r_d * calculationTimeToMaturity);  // Simple forward: S * e^(r*t)
-      console.log(`[DEBUG] ${instrument.id}: Calculating forward with ${useCurrentParams ? 'CURRENT' : 'EXPORT'} parameters: ${S.toFixed(6)} (spot=${spotRate.toFixed(6)}, r=${(r_d*100).toFixed(3)}%, t=${calculationTimeToMaturity.toFixed(6)})`);
     }
-    
-    console.log(`[DEBUG] ${instrument.id}: Forward calculation - Current: ${S.toFixed(6)}, Export: ${instrument.exportForwardPrice || 'N/A'}`);
-    console.log(`[DEBUG] ${instrument.id}: PRICING PARAMETERS - Spot: ${spotRate.toFixed(6)}, Forward: ${S.toFixed(6)} - Using FORWARD PRICE for vanilla options (Strategy Builder logic - Black-76 model)`);
-    
-    // 5. STRIKE ANALYSIS : Vérifier la cohérence du strike
-    console.log(`[DEBUG] ${instrument.id}: Strike analysis - Strike: ${instrument.strike}, Type: ${instrument.originalComponent?.strikeType || 'unknown'}, Original Strike: ${instrument.originalComponent?.strike || 'N/A'}, Spot: ${spotRate}`);
-    
-         console.log(`[DEBUG] ${instrument.id}: Time to maturity - Valuation Date: ${valuationDate}, TTM: ${calculationTimeToMaturity.toFixed(4)} years (Maturity: ${instrument.maturity})`);
-     console.log(`[DEBUG] ${instrument.id}: Using current spot ${spotRate.toFixed(4)} -> forward ${S.toFixed(4)} (r=${(r_d*100).toFixed(1)}%, t=${calculationTimeToMaturity.toFixed(4)})`);
     
     // Vérifier l'expiration
      if (calculationTimeToMaturity <= 0) {
@@ -607,23 +590,18 @@ const HedgingInstruments = () => {
        const secondBarrier = instrument.secondBarrier;
        
        if (barrier) {
-         console.log(`[DEBUG] ${instrument.id}: Barrier analysis - spot=${spotRate.toFixed(4)}, barrier=${barrier.toFixed(4)}`);
-         
          if (secondBarrier) {
            const lowerBarrier = Math.min(barrier, secondBarrier);
            const upperBarrier = Math.max(barrier, secondBarrier);
            const spotOutsideRange = spotRate <= lowerBarrier || spotRate >= upperBarrier;
-           console.log(`[DEBUG] ${instrument.id}: Double barrier analysis - spot=${spotRate.toFixed(4)}, lower=${lowerBarrier.toFixed(4)}, upper=${upperBarrier.toFixed(4)}, outside=${spotOutsideRange}`);
            
            // Pour les double knock-out: si le spot est en dehors des barrières, l'option est déjà knockée
            if (optionType.includes('knock-out') && spotOutsideRange) {
-             console.log(`[DEBUG] ${instrument.id}: Double knock-out option already knocked out (spot outside barriers)`);
              return 0;
            }
            
            // Pour les double knock-in: si le spot est en dehors des barrières, l'option est activée
            if (optionType.includes('knock-in') && spotOutsideRange) {
-             console.log(`[DEBUG] ${instrument.id}: Double knock-in option activated (spot outside barriers)`);
              // Continuer avec le pricing normal d'une option vanille
            }
          } else {
@@ -646,38 +624,19 @@ const HedgingInstruments = () => {
              }
            }
            
-           console.log(`[DEBUG] ${instrument.id}: Single barrier analysis - barrierCrossed=${barrierCrossed}`);
-           
            // Pour les knock-out: si barrière franchie, option knockée
            if (optionType.includes('knock-out') && barrierCrossed) {
-             console.log(`[DEBUG] ${instrument.id}: Knock-out option already knocked out`);
              return 0;
            }
            
            // Pour les knock-in: si barrière franchie, option activée
            if (optionType.includes('knock-in') && barrierCrossed) {
-             console.log(`[DEBUG] ${instrument.id}: Knock-in option activated`);
              // Continuer avec le pricing normal d'une option vanille
            }
          }
        }
      }
-    // DEBUG: Log des paramètres pour diagnostiquer les écarts de pricing
-    console.log(`[DEBUG] Instrument ${instrument.id}: ==================== PRICING COMPARISON ====================`);
-    console.log(`[DEBUG] Instrument ${instrument.id}: Type: ${instrument.type}`);
-    console.log(`[DEBUG] Instrument ${instrument.id}: Original/Export Price: ${instrument.realOptionPrice || instrument.premium || 'N/A'}`);
-         console.log(`[DEBUG] Instrument ${instrument.id}: Current Spot: ${spotRate.toFixed(6)}, Forward: ${S.toFixed(6)} (USING FORWARD FOR PRICING)`);
-     console.log(`[DEBUG] Instrument ${instrument.id}: Strike: ${K.toFixed(6)}`);
-     console.log(`[DEBUG] Instrument ${instrument.id}: Barrier: ${instrument.barrier?.toFixed(6) || 'N/A'}, SecondBarrier: ${instrument.secondBarrier?.toFixed(6) || 'N/A'}`);
-     console.log(`[DEBUG] Instrument ${instrument.id}: Rebate: ${instrument.rebate || 'N/A'}%`);
-     console.log(`[DEBUG] Instrument ${instrument.id}: Rates - Risk-Free: ${(r_d*100).toFixed(3)}%`);
-     console.log(`[DEBUG] Instrument ${instrument.id}: Time to Maturity - Strategy: ${instrument.timeToMaturity?.toFixed(6) || 'N/A'}, Calculated: ${calculationTimeToMaturity.toFixed(6)}`);
-     console.log(`[DEBUG] Instrument ${instrument.id}: Volatility - Implied: ${instrument.impliedVolatility || 'N/A'}%, Component: ${instrument.originalComponent?.volatility || 'N/A'}%, Instrument: ${instrument.volatility || 'N/A'}%, Market: ${marketData.volatility}%, Used: ${(sigma*100).toFixed(3)}%`);
-     console.log(`[DEBUG] Instrument ${instrument.id}: Using timeToMaturity for calculation: ${calculationTimeToMaturity.toFixed(6)} (source: ${instrument.timeToMaturity ? 'Strategy' : 'Calculated'})`);
-    
-    // ✅ UTILISER EXACTEMENT LA MÊME FONCTION DE PRICING QUE STRATEGY BUILDER
-    // ✅ Utiliser le forward price (S) comme dans Strategy Builder (Black-76 model for commodities)
-    console.log(`[DEBUG] ${instrument.id}: Using Strategy Builder pricing function with parameters: S (forward)=${S.toFixed(6)}, K=${K.toFixed(6)}, r=${r_d.toFixed(6)}, t=${calculationTimeToMaturity.toFixed(6)}, sigma=${sigma.toFixed(6)}`);
+    // ✅ OPTIMISATION : Logs réduits pour améliorer les performances
     
     // ✅ UTILISATION DIRECTE DE LA FONCTION STRATEGY BUILDER - MÊME LOGIQUE EXACTE
     // Mapper le type d'instrument vers le type reconnu par calculateOptionPrice
@@ -733,7 +692,6 @@ const HedgingInstruments = () => {
       mappedType = mappedType; // Garder le type original pour les options digitales
     }
     
-    console.log(`[DEBUG] ${instrument.id}: TYPE MAPPING - Original: ${instrument.type}, Mapped: ${mappedType}`);
     
     // ✅ CORRECTION CRITIQUE : Utiliser les barrières calculées lors de l'export
     let calculatedBarrier = instrument.barrier || 0;
@@ -751,7 +709,6 @@ const HedgingInstruments = () => {
         if (instrument.secondBarrier) {
           calculatedSecondBarrier = instrument.secondBarrier * spotRatio;
         }
-        console.log(`[DEBUG] ${instrument.id}: SPOT PRICE CHANGE - Export: ${exportSpotPrice}, Current: ${currentSpotPrice}, Ratio: ${spotRatio.toFixed(6)}`);
       }
     }
     
@@ -768,18 +725,9 @@ const HedgingInstruments = () => {
       calculatedBarrier = lowerBarrier;
       calculatedSecondBarrier = upperBarrier;
       
-      console.log(`[DEBUG] ${instrument.id}: DOUBLE BARRIER LOGIC - Strategy Builder compatible`);
-      console.log(`[DEBUG] ${instrument.id}: Original barriers - Barrier1: ${instrument.barrier?.toFixed(6)}, Barrier2: ${instrument.secondBarrier?.toFixed(6)}`);
-      console.log(`[DEBUG] ${instrument.id}: Calculated barriers - L (lower): ${lowerBarrier.toFixed(6)}, U (upper): ${upperBarrier.toFixed(6)}`);
-      console.log(`[DEBUG] ${instrument.id}: Final mapping - barrier=${calculatedBarrier.toFixed(6)}, secondBarrier=${calculatedSecondBarrier.toFixed(6)}`);
-      console.log(`[DEBUG] ${instrument.id}: ✅ DOUBLE BARRIER DETECTED - Using closed-form with L=${lowerBarrier.toFixed(6)}, U=${upperBarrier.toFixed(6)}`);
     } else if (mappedType.includes('double') && !calculatedSecondBarrier) {
-      console.log(`[DEBUG] ${instrument.id}: ⚠️ DOUBLE BARRIER MISSING SECOND BARRIER - Type: ${mappedType}, SecondBarrier: ${calculatedSecondBarrier}`);
-      console.log(`[DEBUG] ${instrument.id}: ⚠️ WARNING - Double barrier option detected but secondBarrier is missing or undefined`);
-      console.log(`[DEBUG] ${instrument.id}: ⚠️ WARNING - This may cause incorrect pricing. Check export data.`);
+      console.warn(`[WARNING] ${instrument.id}: Double barrier option detected but secondBarrier is missing`);
     }
-    
-    console.log(`[DEBUG] ${instrument.id}: BARRIER CALCULATION - Final - Barrier: ${calculatedBarrier.toFixed(6)}, SecondBarrier: ${calculatedSecondBarrier?.toFixed(6) || 'N/A'}`);
     
     // ✅ UTILISATION STRICTE DE LA FONCTION PRINCIPALE DE STRATEGY BUILDER
     // Cette fonction gère automatiquement le choix du modèle selon le type d'option :
@@ -1042,7 +990,7 @@ const HedgingInstruments = () => {
       
       toast({
         title: "MTM Recalculated",
-        description: `Updated prices for ${instruments.length} instruments using Strategy Start Date ${strategyStartDate} and Hedging Start Date ${hedgingStartDate}`,
+        description: `Updated prices for ${instruments.length} instruments using Valuation Date ${valuationDate}`,
       });
     } catch (error) {
       toast({
@@ -1158,79 +1106,70 @@ const HedgingInstruments = () => {
     });
   };
 
-  const filteredInstruments = instruments.filter(instrument => {
-    const isOption = instrument.type.includes("Call") || 
-                    instrument.type.includes("Put") || 
-                    instrument.type === "Collar" ||
-                    instrument.type.includes("Touch") ||
-                    instrument.type.includes("Binary") ||
-                    instrument.type.includes("Digital") ||
-                    instrument.type.includes("Knock");
-    
-    const matchesTab = selectedTab === "all" || 
-                      (selectedTab === "forwards" && instrument.type === "Forward") ||
-                      (selectedTab === "options" && isOption) ||
-                      (selectedTab === "swaps" && instrument.type === "Swap") ||
-                      (selectedTab === "hedge-accounting" && instrument.hedge_accounting);
-    
-    return matchesTab;
-  });
+  // ✅ OPTIMISATION : Memoization des calculs coûteux
+  const filteredInstruments = useMemo(() => {
+    return instruments.filter(instrument => {
+      const isOption = instrument.type.includes("Call") || 
+                      instrument.type.includes("Put") || 
+                      instrument.type === "Collar" ||
+                      instrument.type.includes("Touch") ||
+                      instrument.type.includes("Binary") ||
+                      instrument.type.includes("Digital") ||
+                      instrument.type.includes("Knock");
+      
+      const matchesTab = selectedTab === "all" || 
+                        (selectedTab === "forwards" && instrument.type === "Forward") ||
+                        (selectedTab === "options" && isOption) ||
+                        (selectedTab === "swaps" && instrument.type === "Swap") ||
+                        (selectedTab === "hedge-accounting" && instrument.hedge_accounting);
+      
+      return matchesTab;
+    });
+  }, [instruments, selectedTab]);
 
-  // Summary calculations
-  const totalNotional = instruments.reduce((sum, inst) => {
-    // Calculate the same way as displayed in the table
-    const quantityToHedge = inst.quantity || 0;
-    const unitPrice = inst.realOptionPrice || inst.premium || 0;
-    const volumeToHedge = inst.notional;
-    const calculatedNotional = unitPrice * volumeToHedge;
-    
-    // Use the same logic as in the table display
-    const displayedNotional = calculatedNotional > 0 ? calculatedNotional : inst.notional;
-    return sum + displayedNotional;
-  }, 0);
+  // ✅ OPTIMISATION : Memoization des calculs de résumé
+  const totalNotional = useMemo(() => {
+    return instruments.reduce((sum, inst) => {
+      const quantityToHedge = inst.quantity || 0;
+      const unitPrice = inst.realOptionPrice || inst.premium || 0;
+      const volumeToHedge = inst.notional;
+      const calculatedNotional = unitPrice * volumeToHedge;
+      const displayedNotional = calculatedNotional > 0 ? calculatedNotional : inst.notional;
+      return sum + displayedNotional;
+    }, 0);
+  }, [instruments]);
   
-  // Calculate total MTM using our pricing functions with currency-specific data
-  const totalMTM = instruments.reduce((sum, inst) => {
-    const marketData = commodityMarketData[inst.currency];
-    if (!marketData) {
-      console.warn(`No market data for currency ${inst.currency}, skipping MTM calculation`);
-      return sum;
-    }
-    
-    // ✅ CORRECTION : Utiliser le prix d'export comme prix initial pour MTM = 0 à l'export
-    // Pour les stratégies exportées, le prix initial doit être le prix d'export
-    const originalPrice = inst.realOptionPrice || inst.premium || 0;
-    
-    // ✅ CORRECTION : Logique correcte pour initialPrice
-    const isExportedStrategy = inst.exportSpotPrice && inst.exportTimeToMaturity;
-    // Pour les stratégies exportées : initialPrice = prix d'export (pour MTM=0 à l'export)
-    // Pour les stratégies manuelles : initialPrice = premium saisi par l'utilisateur
-    const initialPrice = isExportedStrategy ? originalPrice : (inst.premium || 0);
-    
-    // Calculate today's theoretical price using the same logic as Strategy Builder
-    const todayPrice = calculateTodayPrice(inst);
-    
-    // ✅ MTM = (Today's Price - Initial Price) * Notional
-    // Pour les stratégies exportées : Initial Price = Export Price → MTM = 0 à l'export
-    // Pour les stratégies manuelles : Initial Price = Premium → MTM basé sur le premium
-    const quantity = inst.quantity || 1;
-    const isShort = quantity < 0;
-    
-    let mtmValue;
-    if (isShort) {
-      // For short positions: MTM = Initial Price - Today's Price
-      mtmValue = initialPrice - todayPrice;
-    } else {
-      // For long positions: MTM = Today's Price - Initial Price  
-      mtmValue = todayPrice - initialPrice;
-    }
-    
-    console.log(`[DEBUG] ${inst.id}: MTM Calculation - Initial: ${initialPrice.toFixed(6)}, Today: ${todayPrice.toFixed(6)}, MTM: ${mtmValue.toFixed(6)}, Exported: ${isExportedStrategy}`);
-    
-    return sum + (mtmValue * Math.abs(inst.notional));
-  }, 0);
+  // ✅ OPTIMISATION : Memoization du calcul MTM total
+  const totalMTM = useMemo(() => {
+    return instruments.reduce((sum, inst) => {
+      const marketData = commodityMarketData[inst.currency];
+      if (!marketData) {
+        return sum;
+      }
+      
+      const originalPrice = inst.realOptionPrice || inst.premium || 0;
+      const isExportedStrategy = inst.exportSpotPrice && inst.exportTimeToMaturity;
+      const initialPrice = isExportedStrategy ? originalPrice : (inst.premium || 0);
+      const todayPrice = calculateTodayPrice(inst);
+      const quantity = inst.quantity || 1;
+      const isShort = quantity < 0;
+      
+      const mtmValue = isShort 
+        ? initialPrice - todayPrice 
+        : todayPrice - initialPrice;
+      
+      return sum + (mtmValue * Math.abs(inst.notional));
+    }, 0);
+  }, [instruments, commodityMarketData, valuationDate]);
   
-  const hedgeAccountingCount = instruments.filter(inst => inst.hedge_accounting).length;
+  const hedgeAccountingCount = useMemo(() => {
+    return instruments.filter(inst => inst.hedge_accounting).length;
+  }, [instruments]);
+  
+  // ✅ OPTIMISATION : Memoization des commodities uniques
+  const uniqueCommodities = useMemo(() => {
+    return getUniqueCommodities(instruments);
+  }, [instruments]);
 
   return (
     <Layout 
@@ -1247,41 +1186,13 @@ const HedgingInstruments = () => {
             MTM Valuation Parameters
           </CardTitle>
           <CardDescription>
-            Configure market parameters for Mark-to-Market calculations using Strategy Builder date logic
+            Configure market parameters for Mark-to-Market calculations using Valuation Date
           </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
-            {/* ✅ Strategy Builder Date Logic */}
-            <div className="grid gap-4 md:grid-cols-3">
-              <div className="space-y-2">
-                <Label htmlFor="strategy-start-date">Strategy Start Date</Label>
-                <div className="flex items-center gap-2">
-                <Input
-                  id="strategy-start-date"
-                  type="date"
-                  value={strategyStartDate}
-                    disabled
-                    className="font-mono bg-gray-50 dark:bg-gray-800"
-                />
-                  <Badge variant="outline" className="text-xs">Fixed</Badge>
-                </div>
-                <p className="text-xs text-muted-foreground">Fixed from Strategy Builder</p>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="hedging-start-date">Hedging Start Date</Label>
-                <div className="flex items-center gap-2">
-                <Input
-                  id="hedging-start-date"
-                  type="date"
-                  value={hedgingStartDate}
-                    disabled
-                    className="font-mono bg-gray-50 dark:bg-gray-800"
-                />
-                  <Badge variant="outline" className="text-xs">Fixed</Badge>
-                </div>
-                <p className="text-xs text-muted-foreground">Fixed from Strategy Builder</p>
-              </div>
+            {/* ✅ Valuation Date - Unique date for pricing */}
+            <div className="grid gap-4 md:grid-cols-1">
               <div className="space-y-2">
                 <Label htmlFor="valuation-date">Valuation Date</Label>
                 <Input
@@ -1291,8 +1202,38 @@ const HedgingInstruments = () => {
                   onChange={(e) => setValuationDate(e.target.value)}
                   className="font-mono"
                 />
-                <p className="text-xs text-muted-foreground">Track strategies over time</p>
+                <p className="text-xs text-muted-foreground">Date used for pricing and MTM calculations</p>
               </div>
+            </div>
+            
+            {/* ✅ Use Real Market Prices Option */}
+            <div className="flex items-center justify-between p-4 border rounded-lg bg-muted/20">
+              <div className="space-y-0.5">
+                <Label htmlFor="use-real-prices" className="text-sm font-medium">
+                  Use Real Market Prices from Commodity Market
+                </Label>
+                <p className="text-xs text-muted-foreground">
+                  Use live prices from Commodity Market page instead of manual prices for pricing calculations
+                </p>
+              </div>
+              <Switch
+                id="use-real-prices"
+                checked={useRealMarketPrices}
+                onCheckedChange={(checked) => {
+                  setUseRealMarketPrices(checked);
+                  localStorage.setItem('hedgingInstruments_useRealMarketPrices', checked.toString());
+                  // Force recalculation when toggled
+                  if (instruments.length > 0) {
+                    setInstruments([...instruments]);
+                  }
+                  toast({
+                    title: checked ? "Real Market Prices Enabled" : "Real Market Prices Disabled",
+                    description: checked 
+                      ? "Using live prices from Commodity Market for pricing"
+                      : "Using manual prices for pricing",
+                  });
+                }}
+              />
             </div>
             <div className="space-y-2 md:col-span-3">
               <Label>&nbsp;</Label>
@@ -1312,28 +1253,15 @@ const HedgingInstruments = () => {
                 
 
                 
-                {/* BOUTON DE TEST POUR DIAGNOSTIC */}
-                <Button 
-                  onClick={() => {
-                    console.log('[DEBUG TEST] localStorage hedgingInstruments:', 
-                      JSON.parse(localStorage.getItem('hedgingInstruments') || '[]'));
-                    console.log('[DEBUG TEST] instruments state:', instruments);
-                  }} 
-                  variant="outline" 
-                  size="sm"
-                  className="px-3"
-                >
-                  🔍
-                </Button>
               </div>
             </div>
 
             {/* Market Data per Commodity */}
-            {getUniqueCommodities(instruments).length > 0 ? (
+            {uniqueCommodities.length > 0 ? (
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <Label className="text-sm font-medium text-muted-foreground">
-                    Market Parameters by Commodity ({getUniqueCommodities(instruments).length} commodities found)
+                    Market Parameters by Commodity ({uniqueCommodities.length} commodities found)
                   </Label>
                   <Button
                     variant="outline"
@@ -1345,7 +1273,7 @@ const HedgingInstruments = () => {
                     Refresh from Export
                   </Button>
                 </div>
-                {getUniqueCommodities(instruments).map((commodity) => {
+                {uniqueCommodities.map((commodity) => {
                   const data = commodityMarketData[commodity] || getMarketDataFromInstruments(commodity) || { spot: 1.0000, volatility: 20, riskFreeRate: 1.0 };
                   return (
                     <div key={commodity} className="border rounded-lg p-4 bg-muted/20">
@@ -1369,16 +1297,33 @@ const HedgingInstruments = () => {
                       </div>
                       <div className="grid gap-3 md:grid-cols-3">
                         <div className="space-y-1">
-                          <Label htmlFor={`spot-${commodity}`} className="text-xs">Spot Price</Label>
+                          <div className="flex items-center justify-between">
+                            <Label htmlFor={`spot-${commodity}`} className="text-xs">Spot Price</Label>
+                            {useRealMarketPrices && getRealMarketPrice(commodity) !== null && (
+                              <Badge variant="outline" className="text-xs bg-green-50 text-green-700 border-green-200">
+                                Real Market
+                              </Badge>
+                            )}
+                          </div>
                           <Input
                             id={`spot-${commodity}`}
                             type="number"
                             step="0.0001"
-                            value={data.spot}
-                            onChange={(e) => updateCommodityMarketData(commodity, 'spot', parseFloat(e.target.value) || data.spot)}
-                            className="font-mono text-sm"
+                            value={useRealMarketPrices && getRealMarketPrice(commodity) !== null 
+                              ? (getRealMarketPrice(commodity) || data.spot)
+                              : data.spot}
+                            onChange={(e) => {
+                              if (!useRealMarketPrices) {
+                                updateCommodityMarketData(commodity, 'spot', parseFloat(e.target.value) || data.spot);
+                              }
+                            }}
+                            disabled={useRealMarketPrices && getRealMarketPrice(commodity) !== null}
+                            className={`font-mono text-sm ${useRealMarketPrices && getRealMarketPrice(commodity) !== null ? 'bg-green-50 border-green-200' : ''}`}
                             placeholder="75.50"
                           />
+                          {useRealMarketPrices && getRealMarketPrice(commodity) !== null && (
+                            <p className="text-xs text-green-600">Using live price from Commodity Market</p>
+                          )}
                         </div>
                         <div className="space-y-1">
                           <Label htmlFor={`vol-${commodity}`} className="text-xs">Volatility (%)</Label>
@@ -1815,10 +1760,7 @@ const HedgingInstruments = () => {
                         if (instrument.maturity) {
                           // ✅ Utiliser la fonction calculateTimeToMaturity qui gère déjà l'expiration
                           timeToMaturity = calculateTimeToMaturity(instrument.maturity, valuationDate);
-                          console.log(`[DEBUG] ${instrument.id}: CURRENT DISPLAY - Using Valuation Date ${valuationDate}: ${timeToMaturity.toFixed(4)}y`);
-                          console.log(`[DEBUG] ${instrument.id}: Time to Maturity - Current: ${timeToMaturity.toFixed(4)}y, Export: ${instrument.exportTimeToMaturity ? instrument.exportTimeToMaturity.toFixed(4) + 'y' : 'N/A'}`);
                         } else {
-                          console.warn(`No maturity date available for instrument ${instrument.id}`);
                           timeToMaturity = 0;
                         }
                       // Use implied volatility from Detailed Results if available, otherwise use component volatility

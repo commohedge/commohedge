@@ -631,63 +631,63 @@ async function fetchFreightSymbolData(symbol: string, name: string, type: Commod
     // Search for price elements in different possible selectors (optimized - only price)
     if (price === 0) {
       // Prioritized selectors (most common first for faster parsing)
-      const priceSelectors = [
-        '.tv-symbol-price-quote__value',
-        '[data-field="last_price"]',
+    const priceSelectors = [
+      '.tv-symbol-price-quote__value',
+      '[data-field="last_price"]',
         '[data-field="price"]',
-        '.js-symbol-last',
-        '.tv-symbol-header__price',
+      '.js-symbol-last',
+      '.tv-symbol-header__price',
         '[class*="price-quote"]',
         '[class*="last-price"]',
         '[class*="symbol-price"]',
         '[class*="tv-symbol-price"]',
         '[class*="price-value"]',
         '[data-field="last"]'
-      ];
-      
-      for (const selector of priceSelectors) {
+    ];
+    
+    for (const selector of priceSelectors) {
         const priceElements = root.querySelectorAll(selector);
         for (const priceElement of priceElements) {
-          const rawPriceText = priceElement.text.trim();
+        const rawPriceText = priceElement.text.trim();
           if (!rawPriceText || rawPriceText.length === 0) continue;
-          
-          // Parse prices correctly for TradingView format
-          let priceText = rawPriceText;
-          
-          // Remove units and spaces
+        
+        // Parse prices correctly for TradingView format
+        let priceText = rawPriceText;
+        
+        // Remove units and spaces
           priceText = priceText.replace(/\s*(USD|usd|$|€|EUR|eur|MMBtu|BBL|MT|OZ|LB|BU|GAL)\s*/gi, '');
-          
+        
           // Remove all non-numeric characters except commas, dots, and minus
           priceText = priceText.replace(/[^\d.,-]/g, '');
+        
+        // Handle TradingView number format
+        if (priceText.includes(',') && priceText.includes('.')) {
+          const lastDotIndex = priceText.lastIndexOf('.');
+          const lastCommaIndex = priceText.lastIndexOf(',');
           
-          // Handle TradingView number format
-          if (priceText.includes(',') && priceText.includes('.')) {
-            const lastDotIndex = priceText.lastIndexOf('.');
-            const lastCommaIndex = priceText.lastIndexOf(',');
-            
-            if (lastDotIndex > lastCommaIndex) {
-              priceText = priceText.replace(/,/g, '');
-            } else {
-              priceText = priceText.replace(/\./g, '').replace(/,([^,]*)$/, '.$1');
-            }
-          } else if (priceText.includes(',') && !priceText.includes('.')) {
-            const parts = priceText.split(',');
-            if (parts.length === 2 && parts[1].length === 3 && parts[0].length <= 3) {
-              priceText = priceText.replace(/,/g, '');
-            } else if (parts.length === 2 && parts[1].length <= 4) {
-              priceText = priceText.replace(',', '.');
-            } else {
-              priceText = priceText.replace(/,/g, '');
-            }
+          if (lastDotIndex > lastCommaIndex) {
+            priceText = priceText.replace(/,/g, '');
+          } else {
+            priceText = priceText.replace(/\./g, '').replace(/,([^,]*)$/, '.$1');
           }
-          
+        } else if (priceText.includes(',') && !priceText.includes('.')) {
+          const parts = priceText.split(',');
+          if (parts.length === 2 && parts[1].length === 3 && parts[0].length <= 3) {
+            priceText = priceText.replace(/,/g, '');
+          } else if (parts.length === 2 && parts[1].length <= 4) {
+            priceText = priceText.replace(',', '.');
+          } else {
+            priceText = priceText.replace(/,/g, '');
+          }
+        }
+        
           const parsedPrice = parseFloat(priceText) || 0;
-          
+        
           if (parsedPrice > 0) {
             price = parsedPrice;
             console.log(`✅ Parsed price for ${symbol}: ${price}`);
-            break;
-          }
+          break;
+        }
         }
         if (price > 0) break;
       }
@@ -711,7 +711,7 @@ async function fetchFreightSymbolData(symbol: string, name: string, type: Commod
           
           // Simple number format handling
           if (matchedPrice.includes(',')) {
-            matchedPrice = matchedPrice.replace(/,/g, '');
+              matchedPrice = matchedPrice.replace(/,/g, '');
           }
           
           const parsedPrice = parseFloat(matchedPrice) || 0;
