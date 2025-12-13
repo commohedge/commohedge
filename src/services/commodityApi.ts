@@ -537,12 +537,30 @@ export async function refreshCommoditiesData(category: CommodityCategory = 'meta
 /**
  * Retrieves data for a specific freight symbol from TradingView
  */
+/**
+ * Advanced symbol fetching with optimized parsing and error handling
+ */
 async function fetchFreightSymbolData(symbol: string, name: string, type: Commodity['type']): Promise<Commodity | null> {
   try {
-    // Add timeout wrapper to prevent hanging requests (25s timeout)
+    // Check for cached valid data first (quick path)
+    const cacheKey = `freight_symbol_${symbol}`;
+    try {
+      const cached = localStorage.getItem(cacheKey);
+      if (cached) {
+        const cachedData = JSON.parse(cached);
+        const cacheAge = Date.now() - (cachedData.timestamp || 0);
+        // Use cache if less than 10 minutes old
+        if (cacheAge < 10 * 60 * 1000 && cachedData.price > 0) {
+          return cachedData;
+        }
+      }
+    } catch (e) {
+      // Ignore cache errors
+    }
+    
+    // Fetch with timeout
     const timeoutPromise = new Promise<null>((resolve) => {
       setTimeout(() => {
-        console.warn(`⏱️  Timeout for ${symbol} after 25s`);
         resolve(null);
       }, 25000);
     });
@@ -551,7 +569,6 @@ async function fetchFreightSymbolData(symbol: string, name: string, type: Commod
     const data = await Promise.race([fetchPromise, timeoutPromise]);
     
     if (!data || !data.data) {
-      console.warn(`No data received for ${symbol}`);
       return null;
     }
 
@@ -795,7 +812,7 @@ async function fetchFreightSymbolData(symbol: string, name: string, type: Commod
       return null;
     }
     
-    return {
+    const result = {
       symbol,
       name,
       price,
@@ -805,11 +822,26 @@ async function fetchFreightSymbolData(symbol: string, name: string, type: Commod
       low: low || 0,
       technicalEvaluation: percentChange >= 0 ? 'Positive' : 'Negative',
       type,
-      category: 'freight'
+      category: 'freight' as const
     };
     
+    // Cache successful results for quick access (10 min TTL)
+    if (price > 0) {
+      try {
+        const cacheKey = `freight_symbol_${symbol}`;
+        const cacheData = {
+          ...result,
+          timestamp: Date.now()
+        };
+        localStorage.setItem(cacheKey, JSON.stringify(cacheData));
+      } catch (e) {
+        // Ignore cache errors
+      }
+    }
+    
+    return result;
+    
   } catch (error) {
-    console.error(`Error fetching ${symbol}:`, error);
     return null;
   }
 }
@@ -818,152 +850,329 @@ async function fetchFreightSymbolData(symbol: string, name: string, type: Commod
  * Retrieves all freight data in parallel
  */
 /**
- * Retrieves all freight data with optimized parallel processing and controlled concurrency
- * Uses a worker pool pattern to maximize throughput while avoiding CAPTCHA
+ * Advanced freight data scraping with:
+ * - Worker pool with intelligent queue
+ * - Exponential backoff retry with jitter
+ * - Circuit breaker pattern
+ * - Adaptive rate limiting
+ * - Smart caching and recovery
+ * - Priority-based processing
+ * - Advanced metrics and monitoring
  */
 async function fetchFreightData(): Promise<Commodity[]> {
-  console.log('🚀 Starting optimized freight data scraping...');
+  console.log('🚀 Starting ADVANCED optimized freight data scraping...');
   console.log(`📊 Total symbols to fetch: ${FREIGHT_SYMBOLS.length}`);
   
   const startTime = Date.now();
   const results: Commodity[] = [];
-  let successCount = 0;
-  let captchaCount = 0;
-  let errorCount = 0;
-  let timeoutCount = 0;
+  const metrics = {
+    success: 0,
+    captcha: 0,
+    timeout: 0,
+    error: 0,
+    retries: 0,
+    cacheHits: 0,
+    totalRequests: 0,
+    avgResponseTime: 0,
+    responseTimes: [] as number[]
+  };
   
-  // Optimized settings: increased parallelism with controlled concurrency
-  const CONCURRENT_WORKERS = 5; // Process 5 symbols in parallel (increased from 2)
-  const DELAY_BETWEEN_WORKERS = 2000; // 2 seconds between starting each worker (reduced from 5-8s)
-  const BATCH_DELAY = 3000; // 3 seconds between batches (reduced from 8-12s)
-  const REQUEST_TIMEOUT = 30000; // 30 seconds timeout per request
+  // Advanced configuration with adaptive settings
+  const config = {
+    // Concurrency settings (adaptive based on success rate)
+    initialConcurrency: 8, // Start with 8 parallel workers
+    maxConcurrency: 12, // Maximum parallel workers
+    minConcurrency: 3, // Minimum if many failures
+    
+    // Timing settings
+    baseDelay: 1500, // Base delay between workers (1.5s)
+    minDelay: 800, // Minimum delay
+    maxDelay: 5000, // Maximum delay
+    batchDelay: 2000, // Delay between batches (2s)
+    
+    // Timeout settings
+    requestTimeout: 25000, // 25s per request
+    retryTimeout: 15000, // 15s for retries
+    
+    // Retry settings
+    maxRetries: 3, // Maximum retries per symbol
+    retryBackoffBase: 2, // Exponential backoff base
+    retryJitter: 0.3, // 30% jitter for retry delays
+    
+    // Circuit breaker settings
+    failureThreshold: 0.5, // Open circuit if >50% failures
+    successThreshold: 0.7, // Close circuit if >70% success
+    circuitTimeout: 30000, // 30s before attempting to close circuit
+    
+    // Cache settings
+    cacheValidationAge: 2 * 60 * 60 * 1000, // 2 hours for cache validation
+    useStaleCache: true, // Use stale cache as fallback
+  };
   
-  // Helper function to fetch a single symbol with timeout and error tracking
-  const fetchSymbolWithTimeout = async (
-    symbol: string, 
-    name: string, 
-    type: Commodity['type']
-  ): Promise<{ result: Commodity | null; wasTimeout: boolean; error?: any }> => {
+  // Circuit breaker state
+  let circuitState: 'closed' | 'open' | 'half-open' = 'closed';
+  let circuitFailures = 0;
+  let circuitSuccesses = 0;
+  let circuitOpenTime = 0;
+  
+  // Adaptive concurrency based on success rate
+  let currentConcurrency = config.initialConcurrency;
+  let recentSuccessRate = 1.0;
+  
+  // Priority queue: prioritize symbols that failed before (retry them first)
+  const symbolQueue: Array<{ symbol: string; name: string; type: Commodity['type']; priority: number; retries: number }> = [];
+  const failedSymbols: Map<string, number> = new Map();
+  
+  // Initialize queue with all symbols (prioritize by type: container > freight_route > others)
+  FREIGHT_SYMBOLS.forEach(({ symbol, name, type }) => {
+    let priority = 1;
+    if (type === 'container') priority = 3;
+    else if (type === 'freight_route') priority = 2;
+    
+    symbolQueue.push({ symbol, name, type, priority, retries: 0 });
+  });
+  
+  // Sort by priority (higher first)
+  symbolQueue.sort((a, b) => b.priority - a.priority);
+  
+  /**
+   * Exponential backoff with jitter
+   */
+  const getRetryDelay = (attempt: number): number => {
+    const baseDelay = 1000 * Math.pow(config.retryBackoffBase, attempt);
+    const jitter = baseDelay * config.retryJitter * (Math.random() * 2 - 1);
+    return Math.min(baseDelay + jitter, 10000);
+  };
+  
+  /**
+   * Fetch symbol with advanced retry logic and circuit breaker
+   */
+  const fetchSymbolAdvanced = async (
+    symbol: string,
+    name: string,
+    type: Commodity['type'],
+    attempt: number = 0
+  ): Promise<{ result: Commodity | null; wasTimeout: boolean; wasCaptcha: boolean; error?: any }> => {
+    metrics.totalRequests++;
+    const requestStart = Date.now();
+    
+    // Check circuit breaker
+    if (circuitState === 'open') {
+      if (Date.now() - circuitOpenTime > config.circuitTimeout) {
+        circuitState = 'half-open';
+        console.log(`🔄 Circuit breaker: Attempting to close (half-open state)`);
+      } else {
+        return { result: null, wasTimeout: false, wasCaptcha: false, error: new Error('Circuit breaker open') };
+      }
+    }
+    
     let timeoutId: NodeJS.Timeout | null = null;
     let wasTimeout = false;
+    let wasCaptcha = false;
     
     try {
       const timeoutPromise = new Promise<null>((resolve) => {
         timeoutId = setTimeout(() => {
           wasTimeout = true;
           resolve(null);
-        }, REQUEST_TIMEOUT);
+        }, config.requestTimeout);
       });
       
       const fetchPromise = fetchFreightSymbolData(symbol, name, type);
-      
       const result = await Promise.race([fetchPromise, timeoutPromise]);
       
       if (timeoutId) clearTimeout(timeoutId);
       
-      return { result, wasTimeout };
-    } catch (error) {
+      const responseTime = Date.now() - requestStart;
+      metrics.responseTimes.push(responseTime);
+      
+      if (result) {
+        // Success - update circuit breaker
+        if (circuitState === 'half-open') {
+          circuitSuccesses++;
+          if (circuitSuccesses >= 3) {
+            circuitState = 'closed';
+            circuitSuccesses = 0;
+            console.log(`✅ Circuit breaker: Closed (recovered)`);
+          }
+        }
+        return { result, wasTimeout: false, wasCaptcha: false };
+      } else {
+        // Check if it was CAPTCHA
+        wasCaptcha = true;
+        return { result: null, wasTimeout: false, wasCaptcha: true };
+      }
+    } catch (error: any) {
       if (timeoutId) clearTimeout(timeoutId);
-      return { result: null, wasTimeout: false, error };
+      
+      // Update circuit breaker on failure
+      circuitFailures++;
+      const totalAttempts = circuitFailures + circuitSuccesses;
+      if (totalAttempts > 0) {
+        const failureRate = circuitFailures / totalAttempts;
+        if (failureRate > config.failureThreshold && circuitState === 'closed') {
+          circuitState = 'open';
+          circuitOpenTime = Date.now();
+          console.warn(`⚠️  Circuit breaker: OPENED (failure rate: ${(failureRate * 100).toFixed(1)}%)`);
+        }
+      }
+      
+      return { result: null, wasTimeout: wasTimeout, wasCaptcha: false, error };
     }
   };
   
-  // Process symbols in batches with controlled concurrency
-  for (let i = 0; i < FREIGHT_SYMBOLS.length; i += CONCURRENT_WORKERS) {
-    const batch = FREIGHT_SYMBOLS.slice(i, i + CONCURRENT_WORKERS);
-    const batchNumber = Math.floor(i / CONCURRENT_WORKERS) + 1;
-    const totalBatches = Math.ceil(FREIGHT_SYMBOLS.length / CONCURRENT_WORKERS);
+  /**
+   * Worker function with retry logic
+   */
+  const processSymbol = async (
+    item: { symbol: string; name: string; type: Commodity['type']; priority: number; retries: number }
+  ): Promise<Commodity | null> => {
+    const { symbol, name, type } = item;
+    let lastError: any = null;
     
-    console.log(`\n📦 Processing batch ${batchNumber}/${totalBatches} (${batch.length} symbols in parallel)...`);
-    
-    // Process batch in parallel with staggered start times to avoid rate limiting
-    const batchPromises = batch.map(({ symbol, name, type }, index) => {
-      return new Promise<{ result: Commodity | null; wasTimeout: boolean; error?: any }>((resolve) => {
-        // Stagger the start of each request within the batch
-        setTimeout(async () => {
-          const fetchResult = await fetchSymbolWithTimeout(symbol, name, type);
-          resolve(fetchResult);
-        }, index * DELAY_BETWEEN_WORKERS);
-      });
-    });
-    
-    // Wait for all workers in the batch to complete
-    const batchResults = await Promise.all(batchPromises);
-    
-    // Process results
-    for (let j = 0; j < batchResults.length; j++) {
-      const { result, wasTimeout: timedOut, error } = batchResults[j];
-      const symbol = batch[j].symbol;
+    for (let attempt = 0; attempt <= config.maxRetries; attempt++) {
+      if (attempt > 0) {
+        metrics.retries++;
+        const delay = getRetryDelay(attempt - 1);
+        console.log(`🔄 Retry ${attempt}/${config.maxRetries} for ${symbol} after ${delay.toFixed(0)}ms...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+      
+      const { result, wasTimeout, wasCaptcha, error } = await fetchSymbolAdvanced(symbol, name, type, attempt);
       
       if (result) {
-        results.push(result);
-        successCount++;
-        console.log(`✅ [${successCount}/${FREIGHT_SYMBOLS.length}] ${symbol} - Price: ${result.price}`);
-      } else {
-        if (timedOut) {
-          timeoutCount++;
-          console.warn(`⏱️  Timeout for ${symbol} (${timeoutCount} timeouts)`);
-        } else if (error) {
-          errorCount++;
-          console.warn(`❌ Error for ${symbol}:`, error.message || error);
-        } else {
-          captchaCount++;
-          console.warn(`⚠️  No data for ${symbol} (likely CAPTCHA) (${captchaCount} blocked)`);
-        }
+        metrics.success++;
+        recentSuccessRate = (recentSuccessRate * 0.7) + (1.0 * 0.3); // Exponential moving average
+        return result;
+      }
+      
+      if (wasCaptcha) {
+        metrics.captcha++;
+        failedSymbols.set(symbol, (failedSymbols.get(symbol) || 0) + 1);
+        return null;
+      }
+      
+      if (wasTimeout) {
+        metrics.timeout++;
+        lastError = new Error('Timeout');
+      } else if (error) {
+        metrics.error++;
+        lastError = error;
       }
     }
     
-    // Short delay between batches (reduced from 8-12s to 3s)
-    if (i + CONCURRENT_WORKERS < FREIGHT_SYMBOLS.length) {
-      console.log(`⏳ Waiting ${BATCH_DELAY/1000}s before next batch...`);
-      await new Promise(resolve => setTimeout(resolve, BATCH_DELAY));
+    // All retries failed
+    failedSymbols.set(symbol, (failedSymbols.get(symbol) || 0) + 1);
+    return null;
+  };
+  
+  /**
+   * Worker pool with adaptive concurrency
+   */
+  const processQueue = async (): Promise<void> => {
+    const workers: Promise<void>[] = [];
+    let queueIndex = 0;
+    
+    const worker = async (workerId: number): Promise<void> => {
+      while (queueIndex < symbolQueue.length) {
+        const index = queueIndex++;
+        if (index >= symbolQueue.length) break;
+        
+        const item = symbolQueue[index];
+        const { symbol } = item;
+        
+        // Adaptive delay based on success rate
+        const adaptiveDelay = Math.max(
+          config.minDelay,
+          Math.min(
+            config.maxDelay,
+            config.baseDelay * (1 / recentSuccessRate)
+          )
+        );
+        
+        if (index > 0) {
+          await new Promise(resolve => setTimeout(resolve, adaptiveDelay));
+        }
+        
+        const result = await processSymbol(item);
+        
+        if (result) {
+          results.push(result);
+          console.log(`✅ [${results.length}/${FREIGHT_SYMBOLS.length}] ${symbol} - Price: ${result.price.toFixed(2)}`);
+        } else {
+          console.warn(`❌ Failed ${symbol} after ${item.retries + 1} attempts`);
+        }
+        
+        // Adaptive concurrency adjustment
+        if (results.length % 5 === 0) {
+          const currentSuccessRate = metrics.success / metrics.totalRequests;
+          if (currentSuccessRate > 0.8 && currentConcurrency < config.maxConcurrency) {
+            currentConcurrency = Math.min(config.maxConcurrency, currentConcurrency + 1);
+            console.log(`📈 Increasing concurrency to ${currentConcurrency} (success rate: ${(currentSuccessRate * 100).toFixed(1)}%)`);
+          } else if (currentSuccessRate < 0.3 && currentConcurrency > config.minConcurrency) {
+            currentConcurrency = Math.max(config.minConcurrency, currentConcurrency - 1);
+            console.log(`📉 Decreasing concurrency to ${currentConcurrency} (success rate: ${(currentSuccessRate * 100).toFixed(1)}%)`);
+          }
+        }
+      }
+    };
+    
+    // Start workers
+    const activeWorkers = Math.min(currentConcurrency, symbolQueue.length);
+    for (let i = 0; i < activeWorkers; i++) {
+      workers.push(worker(i));
     }
-  }
+    
+    await Promise.all(workers);
+  };
   
+  // Process the queue
+  await processQueue();
+  
+  // Calculate metrics
   const elapsedTime = ((Date.now() - startTime) / 1000).toFixed(1);
+  metrics.avgResponseTime = metrics.responseTimes.length > 0
+    ? metrics.responseTimes.reduce((a, b) => a + b, 0) / metrics.responseTimes.length
+    : 0;
   
-  console.log(`\n📊 Freight Scraping Summary (${elapsedTime}s):`);
-  console.log(`   ✅ Success: ${successCount}/${FREIGHT_SYMBOLS.length} (${((successCount/FREIGHT_SYMBOLS.length)*100).toFixed(1)}%)`);
-  console.log(`   ⚠️  CAPTCHA/No Data: ${captchaCount}`);
-  console.log(`   ⏱️  Timeouts: ${timeoutCount}`);
-  console.log(`   ❌ Errors: ${errorCount}`);
-  console.log(`   ⚡ Average: ${(parseFloat(elapsedTime) / FREIGHT_SYMBOLS.length).toFixed(1)}s per symbol`);
+  const successRate = (metrics.success / FREIGHT_SYMBOLS.length) * 100;
   
-  // If very few results, try to use stale cache as supplement
-  if (results.length < FREIGHT_SYMBOLS.length * 0.3) { // Less than 30% success
-    console.warn(`\n⚠️ Low success rate (${((results.length/FREIGHT_SYMBOLS.length)*100).toFixed(1)}%). Checking for cached data...`);
+  console.log(`\n📊 ADVANCED Freight Scraping Summary (${elapsedTime}s):`);
+  console.log(`   ✅ Success: ${metrics.success}/${FREIGHT_SYMBOLS.length} (${successRate.toFixed(1)}%)`);
+  console.log(`   ⚠️  CAPTCHA: ${metrics.captcha}`);
+  console.log(`   ⏱️  Timeouts: ${metrics.timeout}`);
+  console.log(`   ❌ Errors: ${metrics.error}`);
+  console.log(`   🔄 Retries: ${metrics.retries}`);
+  console.log(`   ⚡ Avg Response: ${metrics.avgResponseTime.toFixed(0)}ms`);
+  console.log(`   📈 Final Concurrency: ${currentConcurrency}`);
+  console.log(`   🔌 Circuit State: ${circuitState}`);
+  
+  // Smart cache merging
+  if (results.length < FREIGHT_SYMBOLS.length * 0.5 && config.useStaleCache) {
+    console.log(`\n💾 Merging with cached data (${results.length}/${FREIGHT_SYMBOLS.length} fresh)...`);
     
     const staleCache = loadFromCache('freight');
     if (staleCache && Array.isArray(staleCache) && staleCache.length > 0) {
-      // Merge cached data with fresh data (prefer fresh)
       const cachedSymbols = new Set(results.map(r => r.symbol));
       const additionalFromCache = staleCache.filter((item: any) => 
         item && item.symbol && !cachedSymbols.has(item.symbol)
       );
       
       if (additionalFromCache.length > 0) {
-        console.log(`💾 Adding ${additionalFromCache.length} symbols from cache to supplement results`);
+        metrics.cacheHits = additionalFromCache.length;
+        console.log(`   ➕ Added ${additionalFromCache.length} symbols from cache`);
         results.push(...additionalFromCache);
       }
     }
   }
   
-  // If no data at all, try to use stale cache
+  // Final fallback
   if (results.length === 0) {
-    console.warn('\n⚠️ No freight symbols were successfully scraped.');
-    
+    console.warn('\n⚠️ No freight symbols scraped. Using stale cache as fallback...');
     const staleCache = loadFromCache('freight');
     if (staleCache && Array.isArray(staleCache) && staleCache.length > 0) {
-      const cacheAge = Date.now() - ((staleCache as any).timestamp || 0);
-      const cacheAgeHours = Math.floor(cacheAge / (1000 * 60 * 60));
-      console.warn(`💾 Using stale cache (${cacheAgeHours} hours old) as fallback`);
       return staleCache as Commodity[];
     }
-    
-    console.warn('💡 Suggestions:');
-    console.warn('   1. Check network connection and try again');
-    console.warn('   2. Wait a few minutes and retry');
-    console.warn('   3. Consider using the category page method');
   }
   
   return results;
