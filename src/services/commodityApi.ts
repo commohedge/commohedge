@@ -455,39 +455,51 @@ export async function fetchCommoditiesData(category: CommodityCategory = 'metals
 
     // Special handling for freight
     if (category === 'freight') {
-      // Try to fetch from category page first (less likely to be blocked)
+      // Try to fetch from category page first (MUCH faster - single request vs 33 requests)
       try {
-        console.log('Attempting to fetch freight data from TradingView category page...');
+        console.log('🚀 Attempting to fetch freight data from TradingView category page (fast method)...');
+        const categoryStartTime = Date.now();
         const categoryData = await scrapeTradingViewCategory('freight');
         const parsedCommodities = normalizeCommoditySymbols(parseCommoditiesData(categoryData, category));
         
-        // Filter to only freight-related symbols
-        const freightFromCategory = parsedCommodities.filter(c => 
-          c.symbol.includes('CS') || 
-          c.symbol.includes('TM') || 
-          c.symbol.includes('TD') || 
-          c.symbol.includes('TC') || 
-          c.symbol.includes('BG') || 
-          c.symbol.includes('BL') || 
-          c.symbol.includes('USC') || 
-          c.symbol.includes('USE') || 
-          c.symbol.includes('XUK') || 
-          c.symbol.includes('FLJ') || 
-          c.symbol.includes('FLP') ||
-          c.name.toLowerCase().includes('freight') ||
-          c.name.toLowerCase().includes('container')
-        );
+        // Filter to only freight-related symbols using our known symbols list
+        const knownSymbols = new Set(FREIGHT_SYMBOLS.map(s => s.symbol.replace('!', '')));
+        const freightFromCategory = parsedCommodities.filter(c => {
+          const symbolBase = c.symbol.replace('!', '').replace('NYMEX:', '');
+          return knownSymbols.has(symbolBase) ||
+                 c.symbol.includes('CS') || 
+                 c.symbol.includes('TM') || 
+                 c.symbol.includes('TD') || 
+                 c.symbol.includes('TC') || 
+                 c.symbol.includes('BG') || 
+                 c.symbol.includes('BL') || 
+                 c.symbol.includes('USC') || 
+                 c.symbol.includes('USE') || 
+                 c.symbol.includes('XUK') || 
+                 c.symbol.includes('FLJ') || 
+                 c.symbol.includes('FLP') ||
+                 c.name.toLowerCase().includes('freight') ||
+                 c.name.toLowerCase().includes('container');
+        });
+        
+        const categoryTime = ((Date.now() - categoryStartTime) / 1000).toFixed(1);
         
         if (freightFromCategory.length > 0) {
-          console.log(`Successfully fetched ${freightFromCategory.length} freight commodities from category page`);
+          console.log(`✅ Successfully fetched ${freightFromCategory.length} freight commodities from category page in ${categoryTime}s`);
+          const estimatedIndividualTime = 33 * 5; // ~5s per symbol average
+          const speedup = (estimatedIndividualTime / parseFloat(categoryTime)).toFixed(1);
+          console.log(`   ⚡ Estimated ${speedup}x faster than individual requests (would take ~${estimatedIndividualTime}s)`);
           saveToCache(category, freightFromCategory);
           return freightFromCategory;
+        } else {
+          console.warn(`⚠️  Category page returned ${parsedCommodities.length} commodities but none matched freight symbols`);
         }
       } catch (error) {
-        console.warn('Failed to fetch freight from category page, trying individual symbols:', error);
+        console.warn('⚠️  Failed to fetch freight from category page, falling back to individual symbols:', error);
       }
       
-      // Fallback to individual symbol pages (with increased delays)
+      // Fallback to individual symbol pages (optimized parallel processing)
+      console.log('🔄 Falling back to individual symbol scraping (slower but more reliable)...');
       const freightData = await fetchFreightData();
       saveToCache(category, freightData);
       return freightData;
@@ -527,7 +539,16 @@ export async function refreshCommoditiesData(category: CommodityCategory = 'meta
  */
 async function fetchFreightSymbolData(symbol: string, name: string, type: Commodity['type']): Promise<Commodity | null> {
   try {
-    const data = await scrapeTradingViewSymbol(symbol);
+    // Add timeout wrapper to prevent hanging requests (25s timeout)
+    const timeoutPromise = new Promise<null>((resolve) => {
+      setTimeout(() => {
+        console.warn(`⏱️  Timeout for ${symbol} after 25s`);
+        resolve(null);
+      }, 25000);
+    });
+    
+    const fetchPromise = scrapeTradingViewSymbol(symbol);
+    const data = await Promise.race([fetchPromise, timeoutPromise]);
     
     if (!data || !data.data) {
       console.warn(`No data received for ${symbol}`);
@@ -797,82 +818,152 @@ async function fetchFreightSymbolData(symbol: string, name: string, type: Commod
  * Retrieves all freight data in parallel
  */
 /**
- * Retrieves all freight data in parallel with improved CAPTCHA avoidance
+ * Retrieves all freight data with optimized parallel processing and controlled concurrency
+ * Uses a worker pool pattern to maximize throughput while avoiding CAPTCHA
  */
 async function fetchFreightData(): Promise<Commodity[]> {
-  console.log('Fetching freight data from individual symbol pages...');
-  console.log(`Total symbols to fetch: ${FREIGHT_SYMBOLS.length}`);
+  console.log('🚀 Starting optimized freight data scraping...');
+  console.log(`📊 Total symbols to fetch: ${FREIGHT_SYMBOLS.length}`);
   
-  // Reduce batch size and increase delays to avoid CAPTCHA
-  const batchSize = 2; // Reduced from 5 to 2
+  const startTime = Date.now();
   const results: Commodity[] = [];
   let successCount = 0;
   let captchaCount = 0;
   let errorCount = 0;
+  let timeoutCount = 0;
   
-  for (let i = 0; i < FREIGHT_SYMBOLS.length; i += batchSize) {
-    const batch = FREIGHT_SYMBOLS.slice(i, i + batchSize);
-    const batchNumber = Math.floor(i / batchSize) + 1;
-    const totalBatches = Math.ceil(FREIGHT_SYMBOLS.length / batchSize);
+  // Optimized settings: increased parallelism with controlled concurrency
+  const CONCURRENT_WORKERS = 5; // Process 5 symbols in parallel (increased from 2)
+  const DELAY_BETWEEN_WORKERS = 2000; // 2 seconds between starting each worker (reduced from 5-8s)
+  const BATCH_DELAY = 3000; // 3 seconds between batches (reduced from 8-12s)
+  const REQUEST_TIMEOUT = 30000; // 30 seconds timeout per request
+  
+  // Helper function to fetch a single symbol with timeout and error tracking
+  const fetchSymbolWithTimeout = async (
+    symbol: string, 
+    name: string, 
+    type: Commodity['type']
+  ): Promise<{ result: Commodity | null; wasTimeout: boolean; error?: any }> => {
+    let timeoutId: NodeJS.Timeout | null = null;
+    let wasTimeout = false;
     
-    console.log(`Processing batch ${batchNumber}/${totalBatches} (${batch.length} symbols)...`);
+    try {
+      const timeoutPromise = new Promise<null>((resolve) => {
+        timeoutId = setTimeout(() => {
+          wasTimeout = true;
+          resolve(null);
+        }, REQUEST_TIMEOUT);
+      });
+      
+      const fetchPromise = fetchFreightSymbolData(symbol, name, type);
+      
+      const result = await Promise.race([fetchPromise, timeoutPromise]);
+      
+      if (timeoutId) clearTimeout(timeoutId);
+      
+      return { result, wasTimeout };
+    } catch (error) {
+      if (timeoutId) clearTimeout(timeoutId);
+      return { result: null, wasTimeout: false, error };
+    }
+  };
+  
+  // Process symbols in batches with controlled concurrency
+  for (let i = 0; i < FREIGHT_SYMBOLS.length; i += CONCURRENT_WORKERS) {
+    const batch = FREIGHT_SYMBOLS.slice(i, i + CONCURRENT_WORKERS);
+    const batchNumber = Math.floor(i / CONCURRENT_WORKERS) + 1;
+    const totalBatches = Math.ceil(FREIGHT_SYMBOLS.length / CONCURRENT_WORKERS);
     
-    // Process sequentially within batch to reduce rate limiting
-    for (const { symbol, name, type } of batch) {
-      try {
-        const data = await fetchFreightSymbolData(symbol, name, type);
-        if (data) {
-          results.push(data);
-          successCount++;
-          console.log(`✅ Successfully fetched ${symbol} (${successCount}/${FREIGHT_SYMBOLS.length})`);
+    console.log(`\n📦 Processing batch ${batchNumber}/${totalBatches} (${batch.length} symbols in parallel)...`);
+    
+    // Process batch in parallel with staggered start times to avoid rate limiting
+    const batchPromises = batch.map(({ symbol, name, type }, index) => {
+      return new Promise<{ result: Commodity | null; wasTimeout: boolean; error?: any }>((resolve) => {
+        // Stagger the start of each request within the batch
+        setTimeout(async () => {
+          const fetchResult = await fetchSymbolWithTimeout(symbol, name, type);
+          resolve(fetchResult);
+        }, index * DELAY_BETWEEN_WORKERS);
+      });
+    });
+    
+    // Wait for all workers in the batch to complete
+    const batchResults = await Promise.all(batchPromises);
+    
+    // Process results
+    for (let j = 0; j < batchResults.length; j++) {
+      const { result, wasTimeout: timedOut, error } = batchResults[j];
+      const symbol = batch[j].symbol;
+      
+      if (result) {
+        results.push(result);
+        successCount++;
+        console.log(`✅ [${successCount}/${FREIGHT_SYMBOLS.length}] ${symbol} - Price: ${result.price}`);
+      } else {
+        if (timedOut) {
+          timeoutCount++;
+          console.warn(`⏱️  Timeout for ${symbol} (${timeoutCount} timeouts)`);
+        } else if (error) {
+          errorCount++;
+          console.warn(`❌ Error for ${symbol}:`, error.message || error);
         } else {
           captchaCount++;
-          console.warn(`⚠️ CAPTCHA or no data for ${symbol} (${captchaCount} blocked)`);
+          console.warn(`⚠️  No data for ${symbol} (likely CAPTCHA) (${captchaCount} blocked)`);
         }
-        
-        // Randomized delay between each symbol to avoid pattern detection
-        // Base delay: 5-8 seconds (increased from 3s)
-        const baseDelay = 5000;
-        const randomDelay = Math.random() * 3000; // 0-3 seconds random
-        const delay = baseDelay + randomDelay;
-        await new Promise(resolve => setTimeout(resolve, delay));
-        
-      } catch (error) {
-        errorCount++;
-        console.warn(`❌ Failed to fetch ${symbol}:`, error);
       }
     }
     
-    // Longer randomized delay between batches to respect API limits and avoid CAPTCHA
-    if (i + batchSize < FREIGHT_SYMBOLS.length) {
-      const batchDelay = 8000 + Math.random() * 4000; // 8-12 seconds random
-      console.log(`⏳ Waiting ${Math.round(batchDelay/1000)}s before next batch to avoid CAPTCHA...`);
-      await new Promise(resolve => setTimeout(resolve, batchDelay));
+    // Short delay between batches (reduced from 8-12s to 3s)
+    if (i + CONCURRENT_WORKERS < FREIGHT_SYMBOLS.length) {
+      console.log(`⏳ Waiting ${BATCH_DELAY/1000}s before next batch...`);
+      await new Promise(resolve => setTimeout(resolve, BATCH_DELAY));
     }
   }
   
-  console.log(`\n📊 Freight Scraping Summary:`);
-  console.log(`   ✅ Success: ${successCount}/${FREIGHT_SYMBOLS.length}`);
-  console.log(`   ⚠️  CAPTCHA/No Data: ${captchaCount}`);
-  console.log(`   ❌ Errors: ${errorCount}`);
+  const elapsedTime = ((Date.now() - startTime) / 1000).toFixed(1);
   
-  // If no data was fetched (all blocked by CAPTCHA), try to use stale cache
-  if (results.length === 0) {
-    console.warn('\n⚠️ All freight symbols were blocked by CAPTCHA. TradingView is currently blocking automated access.');
+  console.log(`\n📊 Freight Scraping Summary (${elapsedTime}s):`);
+  console.log(`   ✅ Success: ${successCount}/${FREIGHT_SYMBOLS.length} (${((successCount/FREIGHT_SYMBOLS.length)*100).toFixed(1)}%)`);
+  console.log(`   ⚠️  CAPTCHA/No Data: ${captchaCount}`);
+  console.log(`   ⏱️  Timeouts: ${timeoutCount}`);
+  console.log(`   ❌ Errors: ${errorCount}`);
+  console.log(`   ⚡ Average: ${(parseFloat(elapsedTime) / FREIGHT_SYMBOLS.length).toFixed(1)}s per symbol`);
+  
+  // If very few results, try to use stale cache as supplement
+  if (results.length < FREIGHT_SYMBOLS.length * 0.3) { // Less than 30% success
+    console.warn(`\n⚠️ Low success rate (${((results.length/FREIGHT_SYMBOLS.length)*100).toFixed(1)}%). Checking for cached data...`);
     
-    // Try to return stale cache if available
     const staleCache = loadFromCache('freight');
-    if (staleCache && staleCache.length > 0) {
-      const cacheAge = Date.now() - (staleCache as any).timestamp;
+    if (staleCache && Array.isArray(staleCache) && staleCache.length > 0) {
+      // Merge cached data with fresh data (prefer fresh)
+      const cachedSymbols = new Set(results.map(r => r.symbol));
+      const additionalFromCache = staleCache.filter((item: any) => 
+        item && item.symbol && !cachedSymbols.has(item.symbol)
+      );
+      
+      if (additionalFromCache.length > 0) {
+        console.log(`💾 Adding ${additionalFromCache.length} symbols from cache to supplement results`);
+        results.push(...additionalFromCache);
+      }
+    }
+  }
+  
+  // If no data at all, try to use stale cache
+  if (results.length === 0) {
+    console.warn('\n⚠️ No freight symbols were successfully scraped.');
+    
+    const staleCache = loadFromCache('freight');
+    if (staleCache && Array.isArray(staleCache) && staleCache.length > 0) {
+      const cacheAge = Date.now() - ((staleCache as any).timestamp || 0);
       const cacheAgeHours = Math.floor(cacheAge / (1000 * 60 * 60));
       console.warn(`💾 Using stale cache (${cacheAgeHours} hours old) as fallback`);
       return staleCache as Commodity[];
     }
     
     console.warn('💡 Suggestions:');
-    console.warn('   1. Wait a few hours and try again');
-    console.warn('   2. Use the category page method (if available)');
-    console.warn('   3. Consider using an alternative data source for freight rates');
+    console.warn('   1. Check network connection and try again');
+    console.warn('   2. Wait a few minutes and retry');
+    console.warn('   3. Consider using the category page method');
   }
   
   return results;
