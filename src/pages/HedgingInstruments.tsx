@@ -464,7 +464,21 @@ const HedgingInstruments = () => {
     // Si l'option est expirée (TTM = 0), retourner la valeur intrinsèque
     if (calculationTimeToMaturity <= 0) {
       const marketData = commodityMarketData[instrument.currency] || getMarketDataFromInstruments(instrument.currency) || { spot: 1.0000, volatility: 20, riskFreeRate: 1.0 };
-      const spotRate = instrument.impliedSpotPrice || marketData.spot;
+      
+      // ✅ PRIORITÉ : Prix réel du marché si activé > individuel > global
+      let spotRate: number;
+      if (useRealMarketPrices) {
+        const realPrice = getRealMarketPrice(instrument.currency);
+        if (realPrice !== null && realPrice > 0) {
+          spotRate = realPrice;
+          console.log(`[DEBUG] ${instrument.id}: EXPIRED OPTION - Using REAL MARKET PRICE: ${spotRate.toFixed(6)} for ${instrument.currency}`);
+        } else {
+          spotRate = instrument.impliedSpotPrice || marketData.spot;
+        }
+      } else {
+        spotRate = instrument.impliedSpotPrice || marketData.spot;
+      }
+      
       const K = instrument.strike || spotRate;
       
       if (instrument.type.toLowerCase().includes('call')) {
@@ -553,10 +567,14 @@ const HedgingInstruments = () => {
     }
     
     // 4. FORWARD CALCULATION : Utiliser les paramètres d'export pour la cohérence, mais permettre les modifications
-    // ✅ CORRECTION : Pour les stratégies exportées, toujours utiliser le forward d'export si disponible
-    // et si le time to maturity est le même, pour garantir la cohérence avec Strategy Builder
+    // ✅ CORRECTION : Si les prix réels sont activés, TOUJOURS utiliser spotRate (qui contient le prix réel)
+    // ✅ Sinon, utiliser la logique normale avec les paramètres d'export
     let S;
-    if (isExportedStrategy && instrument.exportForwardPrice && 
+    if (useRealMarketPrices) {
+      // ✅ PRIORITÉ ABSOLUE : Si les prix réels sont activés, utiliser spotRate (qui contient déjà le prix réel)
+      S = spotRate * Math.exp(r_d * calculationTimeToMaturity);
+      console.log(`[DEBUG] ${instrument.id}: FORWARD CALCULATION - Using REAL MARKET PRICE spotRate=${spotRate.toFixed(6)}, forward=${S.toFixed(6)}`);
+    } else if (isExportedStrategy && instrument.exportForwardPrice && 
         Math.abs(calculationTimeToMaturity - (instrument.exportTimeToMaturity || 0)) < 0.0001 && 
         !useCurrentParams) {
       // ✅ Si c'est la même échéance que l'export ET que les paramètres globaux n'ont pas été modifiés
