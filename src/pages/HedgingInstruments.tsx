@@ -1951,7 +1951,22 @@ const HedgingInstruments = () => {
                            <TableCell className="text-center bg-green-50/80 border-r border-slate-200">
                             {(() => {
                               const marketData = commodityMarketData[instrument.currency] || getMarketDataFromInstruments(instrument.currency) || { spot: 1.0000, volatility: 20, domesticRate: 1.0, foreignRate: 1.0 };
-                              const currentSpot = instrument.impliedSpotPrice || marketData.spot;
+                              
+                              // ✅ PRIORITÉ : Prix réel du marché si activé > individuel > global
+                              let currentSpot: number;
+                              if (useRealMarketPrices) {
+                                const realPrice = getRealMarketPrice(instrument.currency);
+                                if (realPrice !== null && realPrice > 0) {
+                                  currentSpot = realPrice;
+                                } else {
+                                  currentSpot = instrument.impliedSpotPrice || marketData.spot;
+                                }
+                              } else {
+                                currentSpot = instrument.impliedSpotPrice || marketData.spot;
+                              }
+                              
+                              const isUsingRealPrice = useRealMarketPrices && getRealMarketPrice(instrument.currency) !== null && getRealMarketPrice(instrument.currency)! > 0;
+                              
                               return (
                                 <div className="space-y-1">
                                   <div className="flex items-center gap-1">
@@ -1959,17 +1974,22 @@ const HedgingInstruments = () => {
                                       type="number"
                                       value={instrument.impliedSpotPrice ?? currentSpot}
                                       onChange={(e) => {
-                                        const value = parseFloat(e.target.value);
-                                        if (!isNaN(value) && value > 0) {
-                                          updateInstrumentSpotPrice(instrument.id, value);
+                                        if (!isUsingRealPrice) {
+                                          const value = parseFloat(e.target.value);
+                                          if (!isNaN(value) && value > 0) {
+                                            updateInstrumentSpotPrice(instrument.id, value);
+                                          }
                                         }
                                       }}
                                       placeholder={currentSpot.toFixed(6)}
-                                      className="w-20 h-6 text-xs text-center bg-white border-green-200 focus:border-green-400 focus:ring-green-400/20"
+                                      disabled={isUsingRealPrice}
+                                      className={`w-20 h-6 text-xs text-center border-green-200 focus:border-green-400 focus:ring-green-400/20 ${
+                                        isUsingRealPrice ? 'bg-green-50 border-green-300' : 'bg-white'
+                                      }`}
                                       step="0.0001"
                                       min="0"
                                     />
-                                    {instrument.impliedSpotPrice && (
+                                    {instrument.impliedSpotPrice && !isUsingRealPrice && (
                                       <Button
                                         variant="ghost"
                                         size="sm"
@@ -1981,8 +2001,12 @@ const HedgingInstruments = () => {
                                       </Button>
                                     )}
                                   </div>
-                                <div className="text-xs text-green-600 bg-green-100/50 px-2 py-1 rounded-md">
-                                    Using: {currentSpot.toFixed(6)}
+                                <div className={`text-xs px-2 py-1 rounded-md ${
+                                  isUsingRealPrice 
+                                    ? 'text-green-700 bg-green-100/70' 
+                                    : 'text-green-600 bg-green-100/50'
+                                }`}>
+                                    {isUsingRealPrice ? 'Real Market: ' : 'Using: '}{currentSpot.toFixed(6)}
                                   </div>
                                 </div>
                               );
@@ -2090,7 +2114,20 @@ const HedgingInstruments = () => {
                               };
                               // ✅ CORRECTION : Utiliser la même formule que Strategy Builder pour les commodités
                               const r_d = marketData.riskFreeRate / 100;
-                              const currentSpot = instrument.impliedSpotPrice || marketData.spot;
+                              
+                              // ✅ PRIORITÉ : Prix réel du marché si activé > individuel > global
+                              let currentSpot: number;
+                              if (useRealMarketPrices) {
+                                const realPrice = getRealMarketPrice(instrument.currency);
+                                if (realPrice !== null && realPrice > 0) {
+                                  currentSpot = realPrice;
+                                } else {
+                                  currentSpot = instrument.impliedSpotPrice || marketData.spot;
+                                }
+                              } else {
+                                currentSpot = instrument.impliedSpotPrice || marketData.spot;
+                              }
+                              
                               const currentTimeToMat = calculateTimeToMaturity(instrument.maturity, valuationDate);
                               // Utiliser la même formule que Strategy Builder : S * exp(r * t) pour les commodités
                               const currentForward = currentSpot * Math.exp(r_d * currentTimeToMat);
