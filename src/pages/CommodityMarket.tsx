@@ -719,11 +719,6 @@ export default function CommodityMarket() {
                             <TableHead>Symbol</TableHead>
                             <TableHead>Name</TableHead>
                             <TableHead className="text-right">Price</TableHead>
-                            <TableHead className="text-right">Change</TableHead>
-                            <TableHead className="text-right">Change %</TableHead>
-                            <TableHead className="text-right">High</TableHead>
-                            <TableHead className="text-right">Low</TableHead>
-                            <TableHead>Technical</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -737,23 +732,6 @@ export default function CommodityMarket() {
                               <TableCell className="font-medium">{commodity.symbol}</TableCell>
                               <TableCell className="max-w-xs truncate">{commodity.name}</TableCell>
                               <TableCell className="text-right font-mono">{commodity.price.toFixed(2)}</TableCell>
-                              <TableCell className="text-right">
-                                <PriceChangeBadge value={commodity.absoluteChange} />
-                              </TableCell>
-                              <TableCell className="text-right">
-                                <PriceChangeBadge value={commodity.percentChange} isPercent />
-                              </TableCell>
-                              <TableCell className="text-right font-mono text-sm text-slate-600">{commodity.high.toFixed(2)}</TableCell>
-                              <TableCell className="text-right font-mono text-sm text-slate-600">{commodity.low.toFixed(2)}</TableCell>
-                              <TableCell>
-                                <span className={`px-2 py-1 rounded text-xs font-medium ${
-                                  commodity.technicalEvaluation.toLowerCase().includes('buy') ? 'bg-green-100 text-green-700' :
-                                  commodity.technicalEvaluation.toLowerCase().includes('sell') ? 'bg-red-100 text-red-700' :
-                                  'bg-slate-100 text-slate-700'
-                                }`}>
-                                  {commodity.technicalEvaluation}
-                                </span>
-                              </TableCell>
                             </TableRow>
                           ))}
                         </TableBody>
