@@ -6733,16 +6733,16 @@ const pricingFunctions = {
           )}
         </div>
         <div className="flex items-center gap-3">
-          {displayResults && (
-            <Button
-              variant="destructive"
-              onClick={clearLoadedScenario}
-              className="flex items-center gap-2"
+      {displayResults && (
+          <Button
+            variant="destructive"
+            onClick={clearLoadedScenario}
+            className="flex items-center gap-2"
               size="sm"
-            >
+          >
               <X className="h-4 w-4" />
-              Clear Loaded Scenario
-            </Button>
+            Clear Loaded Scenario
+          </Button>
           )}
           <Button
             onClick={saveScenario}
@@ -6878,13 +6878,13 @@ const pricingFunctions = {
                         const filteredPairs = getFilteredDefaultCommodities();
                         const allPairs = [...filteredPairs, ...customCurrencyPairs];
                         const selectedPair = allPairs.find(pair => pair.symbol === value);
-                        if (selectedPair) {
-                          setParams({
-                            ...params, 
-                            currencyPair: selectedPair,
-                            spotPrice: selectedPair.defaultSpotRate
-                          });
-                          setInitialSpotPrice(selectedPair.defaultSpotRate);
+                      if (selectedPair) {
+                        setParams({
+                          ...params, 
+                          currencyPair: selectedPair,
+                          spotPrice: selectedPair.defaultSpotRate
+                        });
+                        setInitialSpotPrice(selectedPair.defaultSpotRate);
                         }
                       }
                     }}
@@ -7067,88 +7067,88 @@ const pricingFunctions = {
                             <>
                               {energyPairs.length > 0 && (
                                 <>
-                                  <div className="p-2 text-xs font-medium text-muted-foreground border-b">⚡ Energy</div>
+                      <div className="p-2 text-xs font-medium text-muted-foreground border-b">⚡ Energy</div>
                                   {energyPairs.map(pair => (
-                                    <SelectItem key={pair.symbol} value={pair.symbol}>
-                                      <div className="flex flex-col">
-                                        <div className="flex justify-between items-center w-full">
-                                          <span>{pair.symbol}</span>
-                                          <span className="text-xs text-muted-foreground font-mono">${pair.defaultSpotRate}/{pair.base}</span>
-                                        </div>
-                                        <span className="text-xs text-muted-foreground">{pair.name}</span>
-                                      </div>
-                                    </SelectItem>
-                                  ))}
+                        <SelectItem key={pair.symbol} value={pair.symbol}>
+                          <div className="flex flex-col">
+                            <div className="flex justify-between items-center w-full">
+                              <span>{pair.symbol}</span>
+                              <span className="text-xs text-muted-foreground font-mono">${pair.defaultSpotRate}/{pair.base}</span>
+                            </div>
+                            <span className="text-xs text-muted-foreground">{pair.name}</span>
+                          </div>
+                        </SelectItem>
+                      ))}
                                 </>
                               )}
                               {metalsPairs.length > 0 && (
                                 <>
-                                  <div className="p-2 text-xs font-medium text-muted-foreground border-b border-t">🔩 Metals</div>
+                      <div className="p-2 text-xs font-medium text-muted-foreground border-b border-t">🔩 Metals</div>
                                   {metalsPairs.map(pair => (
-                                    <SelectItem key={pair.symbol} value={pair.symbol}>
-                                      <div className="flex flex-col">
-                                        <div className="flex justify-between items-center w-full">
-                                          <span>{pair.symbol}</span>
-                                          <span className="text-xs text-muted-foreground font-mono">${pair.defaultSpotRate}/{pair.base}</span>
-                                        </div>
-                                        <span className="text-xs text-muted-foreground">{pair.name}</span>
-                                      </div>
-                                    </SelectItem>
-                                  ))}
+                        <SelectItem key={pair.symbol} value={pair.symbol}>
+                          <div className="flex flex-col">
+                            <div className="flex justify-between items-center w-full">
+                              <span>{pair.symbol}</span>
+                              <span className="text-xs text-muted-foreground font-mono">${pair.defaultSpotRate}/{pair.base}</span>
+                            </div>
+                            <span className="text-xs text-muted-foreground">{pair.name}</span>
+                          </div>
+                        </SelectItem>
+                      ))}
                                 </>
                               )}
                               {agriculturePairs.length > 0 && (
                                 <>
-                                  <div className="p-2 text-xs font-medium text-muted-foreground border-b border-t">🌾 Agriculture</div>
+                      <div className="p-2 text-xs font-medium text-muted-foreground border-b border-t">🌾 Agriculture</div>
                                   {agriculturePairs.map(pair => (
-                                    <SelectItem key={pair.symbol} value={pair.symbol}>
-                                      <div className="flex flex-col">
-                                        <div className="flex justify-between items-center w-full">
-                                          <span>{pair.symbol}</span>
-                                          <span className="text-xs text-muted-foreground font-mono">${pair.defaultSpotRate}/{pair.base}</span>
-                                        </div>
-                                        <span className="text-xs text-muted-foreground">{pair.name}</span>
-                                      </div>
-                                    </SelectItem>
-                                  ))}
+                        <SelectItem key={pair.symbol} value={pair.symbol}>
+                          <div className="flex flex-col">
+                            <div className="flex justify-between items-center w-full">
+                              <span>{pair.symbol}</span>
+                              <span className="text-xs text-muted-foreground font-mono">${pair.defaultSpotRate}/{pair.base}</span>
+                            </div>
+                            <span className="text-xs text-muted-foreground">{pair.name}</span>
+                          </div>
+                        </SelectItem>
+                      ))}
                                 </>
                               )}
                               {livestockPairs.length > 0 && (
                                 <>
-                                  <div className="p-2 text-xs font-medium text-muted-foreground border-b border-t">🐄 Livestock</div>
+                      <div className="p-2 text-xs font-medium text-muted-foreground border-b border-t">🐄 Livestock</div>
                                   {livestockPairs.map(pair => (
-                                    <SelectItem key={pair.symbol} value={pair.symbol}>
-                                      <div className="flex flex-col">
-                                        <div className="flex justify-between items-center w-full">
-                                          <span>{pair.symbol}</span>
-                                          <span className="text-xs text-muted-foreground font-mono">${pair.defaultSpotRate}/{pair.base}</span>
-                                        </div>
-                                        <span className="text-xs text-muted-foreground">{pair.name}</span>
-                                      </div>
-                                    </SelectItem>
-                                  ))}
+                        <SelectItem key={pair.symbol} value={pair.symbol}>
+                          <div className="flex flex-col">
+                            <div className="flex justify-between items-center w-full">
+                              <span>{pair.symbol}</span>
+                              <span className="text-xs text-muted-foreground font-mono">${pair.defaultSpotRate}/{pair.base}</span>
+                            </div>
+                            <span className="text-xs text-muted-foreground">{pair.name}</span>
+                          </div>
+                        </SelectItem>
+                      ))}
                                 </>
                               )}
-                              {customCurrencyPairs.length > 0 && (
-                                <>
-                                  <div className="p-2 text-xs font-medium text-muted-foreground border-b border-t">✨ Custom Commodities</div>
-                                  {customCurrencyPairs.map(pair => (
-                                    <SelectItem key={pair.symbol} value={pair.symbol}>
-                                      <div className="flex flex-col">
-                                        <div className="flex justify-between items-center w-full">
-                                          <span>{pair.symbol}</span>
-                                          <span className="text-xs text-muted-foreground font-mono">{pair.defaultSpotRate}</span>
-                                        </div>
-                                        <span className="text-xs text-muted-foreground">{pair.name}</span>
-                                      </div>
-                                    </SelectItem>
-                                  ))}
-                                </>
+                        {customCurrencyPairs.length > 0 && (
+                          <>
+                            <div className="p-2 text-xs font-medium text-muted-foreground border-b border-t">✨ Custom Commodities</div>
+                            {customCurrencyPairs.map(pair => (
+                              <SelectItem key={pair.symbol} value={pair.symbol}>
+                                <div className="flex flex-col">
+                                  <div className="flex justify-between items-center w-full">
+                                    <span>{pair.symbol}</span>
+                                    <span className="text-xs text-muted-foreground font-mono">{pair.defaultSpotRate}</span>
+                                  </div>
+                                  <span className="text-xs text-muted-foreground">{pair.name}</span>
+                                </div>
+                              </SelectItem>
+                            ))}
+                          </>
                               )}
                             </>
                           );
                         })()
-                      )}
+                        )}
                         
                         <div className="p-2 border-t mt-2">
                           <Dialog>
@@ -7379,89 +7379,89 @@ const pricingFunctions = {
                   />
                 </div>
 
-                 {/* Position Type */}
+                {/* Position Type */}
                  <div className="space-y-1">
-                   <label className="text-sm font-medium text-foreground">Position Type</label>
-                   <Select
-                     value={params.volumeType}
-                     onValueChange={(value: 'long' | 'short') => 
-                       setParams(prev => ({ ...prev, volumeType: value }))
-                     }
-                   >
+                  <label className="text-sm font-medium text-foreground">Position Type</label>
+                  <Select
+                    value={params.volumeType}
+                    onValueChange={(value: 'long' | 'short') => 
+                      setParams(prev => ({ ...prev, volumeType: value }))
+                    }
+                  >
                      <SelectTrigger className="h-9">
-                       <SelectValue placeholder="Select position type" />
-                     </SelectTrigger>
-                     <SelectContent>
-                       <SelectItem value="long">
-                         <div className="flex items-center gap-2">
-                           <span className="text-green-600">📈</span>
-                           <span>Long Position</span>
-                         </div>
-                       </SelectItem>
-                       <SelectItem value="short">
-                         <div className="flex items-center gap-2">
-                           <span className="text-red-600">📉</span>
-                           <span>Short Position</span>
-                         </div>
-                       </SelectItem>
-                     </SelectContent>
-                   </Select>
+                      <SelectValue placeholder="Select position type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="long">
+                        <div className="flex items-center gap-2">
+                          <span className="text-green-600">📈</span>
+                          <span>Long Position</span>
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="short">
+                        <div className="flex items-center gap-2">
+                          <span className="text-red-600">📉</span>
+                          <span>Short Position</span>
+                        </div>
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
                    <div className="text-xs text-muted-foreground">
-                     {params.volumeType === 'long' || params.volumeType === 'receivable' ? (
-                       <span className="text-green-600 flex items-center gap-1">
-                         <span>📈</span>
-                         <span>You own or will buy the commodity</span>
-                       </span>
-                     ) : (
-                       <span className="text-red-600 flex items-center gap-1">
-                         <span>📉</span>
-                         <span>You need to deliver or sell the commodity</span>
-                       </span>
-                     )}
-                   </div>
-                 </div>
-                 
-                 {/* Spot Price */}
+                    {params.volumeType === 'long' || params.volumeType === 'receivable' ? (
+                      <span className="text-green-600 flex items-center gap-1">
+                        <span>📈</span>
+                        <span>You own or will buy the commodity</span>
+                      </span>
+                    ) : (
+                      <span className="text-red-600 flex items-center gap-1">
+                        <span>📉</span>
+                        <span>You need to deliver or sell the commodity</span>
+                      </span>
+                    )}
+                  </div>
+                </div>
+                
+                {/* Spot Price */}
                  <div className="space-y-1">
-                   <label className="text-sm font-medium text-foreground">
-                     Spot Price {params.currencyPair?.symbol && (
-                       <span className="ml-1 text-xs text-muted-foreground font-normal">
-                         ({params.currencyPair.symbol})
-                       </span>
-                     )}
-                   </label>
-                   <div className="flex items-center gap-2">
-                     <Input
-                       type="number"
-                       value={params.spotPrice}
-                       onChange={(e) => handleSpotPriceChange(Number(e.target.value))}
+                  <label className="text-sm font-medium text-foreground">
+                    Spot Price {params.currencyPair?.symbol && (
+                      <span className="ml-1 text-xs text-muted-foreground font-normal">
+                        ({params.currencyPair.symbol})
+                      </span>
+                    )}
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      type="number"
+                      value={params.spotPrice}
+                      onChange={(e) => handleSpotPriceChange(Number(e.target.value))}
                        className="h-9 text-sm font-mono flex-1"
-                       step="0.0001"
-                       placeholder={`${params.currencyPair?.defaultSpotRate || 1.0850}`}
-                     />
-                     <Button
-                       variant="outline"
-                       size="sm"
-                       onClick={() => {
-                         if (params.currencyPair) {
-                           setParams({...params, spotPrice: params.currencyPair.defaultSpotRate});
-                           setInitialSpotPrice(params.currencyPair.defaultSpotRate);
-                         }
-                       }}
+                      step="0.0001"
+                      placeholder={`${params.currencyPair?.defaultSpotRate || 1.0850}`}
+                    />
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        if (params.currencyPair) {
+                          setParams({...params, spotPrice: params.currencyPair.defaultSpotRate});
+                          setInitialSpotPrice(params.currencyPair.defaultSpotRate);
+                        }
+                      }}
                        className="h-9 px-2 whitespace-nowrap text-xs"
-                       title="Reset to default market rate"
-                     >
-                       Reset
-                     </Button>
-                   </div>
+                      title="Reset to default market rate"
+                    >
+                      Reset
+                    </Button>
+                  </div>
                    <div className="text-xs text-muted-foreground flex items-center gap-1 bg-primary/5 px-2 py-1 rounded border border-primary/10">
-                     <span>💱</span>
+                    <span>💱</span>
                      <span>Current: <span className="font-mono font-medium">${(params.spotPrice || 0).toFixed(2)}</span></span>
-                     {params.currencyPair?.base && (
-                       <span className="text-muted-foreground">/{params.currencyPair.base}</span>
-                     )}
-                   </div>
-                 </div>
+                    {params.currencyPair?.base && (
+                      <span className="text-muted-foreground">/{params.currencyPair.base}</span>
+                    )}
+                  </div>
+                </div>
 
                  {/* Price Differential */}
                  <div className="space-y-1">

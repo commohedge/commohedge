@@ -397,7 +397,7 @@ export const useCommodityData = (): UseCommodityDataReturn => {
               orig => orig.id === originalInstrument.id
             );
             if (!exists) {
-              commodityGroups[commodity].originalInstruments.push(originalInstrument);
+            commodityGroups[commodity].originalInstruments.push(originalInstrument);
             }
           }
         });
@@ -568,7 +568,24 @@ export const useCommodityData = (): UseCommodityDataReturn => {
             
             // Get market data for price per unit
             const marketData = serviceRef.current.getMarketData();
-            const spotPrice = marketData.spotPrices[commodity] || 0;
+            let spotPrice = marketData.spotPrices[commodity] || 0;
+            
+            // ✅ Try to get price from exported instruments (for live data scenarios)
+            if (spotPrice === 0 && groupOriginalInstruments.length > 0) {
+              // Try to find exportSpotPrice from original instruments
+              const firstOriginalInstrument = groupOriginalInstruments[0];
+              if (firstOriginalInstrument.exportSpotPrice && firstOriginalInstrument.exportSpotPrice > 0) {
+                spotPrice = firstOriginalInstrument.exportSpotPrice;
+                console.log(`[COMMODITY EXPOSURE] Using exportSpotPrice ${spotPrice} from instrument for ${commodity}`);
+              } else if (firstOriginalInstrument.repricingData?.exportSpotPrice && firstOriginalInstrument.repricingData.exportSpotPrice > 0) {
+                spotPrice = firstOriginalInstrument.repricingData.exportSpotPrice;
+                console.log(`[COMMODITY EXPOSURE] Using repricingData.exportSpotPrice ${spotPrice} from instrument for ${commodity}`);
+              } else if (firstOriginalInstrument.repricingData?.underlyingPrice && firstOriginalInstrument.repricingData.underlyingPrice > 0) {
+                spotPrice = firstOriginalInstrument.repricingData.underlyingPrice;
+                console.log(`[COMMODITY EXPOSURE] Using repricingData.underlyingPrice ${spotPrice} from instrument for ${commodity}`);
+              }
+            }
+            
             const pricePerUnit = spotPrice > 0 ? spotPrice : 0;
             const quantity = pricePerUnit > 0 ? Math.abs(underlyingExposureVolume / pricePerUnit) : Math.abs(underlyingExposureVolume);
             const totalValue = Math.abs(underlyingExposureVolume);

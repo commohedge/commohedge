@@ -1691,36 +1691,37 @@ const HedgingInstruments = () => {
                   </div>
                 </div>
               ) : (
-                                 <div className="overflow-x-auto" style={{ maxWidth: 'calc(100vw - 280px)' }}>
-                   <Table className="min-w-full border-collapse bg-white shadow-sm rounded-lg overflow-hidden">
-                     <TableHeader className="bg-gradient-to-r from-slate-50 to-slate-100">
+                <div className="w-full border rounded-lg overflow-hidden bg-white">
+                  <div className="overflow-x-auto" style={{ maxHeight: 'calc(100vh - 500px)', overflowY: 'auto' }}>
+                    <Table className="min-w-full border-collapse">
+                     <TableHeader className="bg-gradient-to-r from-slate-50 to-slate-100 sticky top-0 z-10">
                        <TableRow className="border-b-2 border-slate-200">
                          {/* Fixed columns */}
-                         <TableHead rowSpan={2} className="bg-slate-50 font-semibold text-center border-r border-slate-200 min-w-[60px] sticky left-0 z-[5]">ID</TableHead>
-                         <TableHead rowSpan={2} className="bg-slate-50 font-semibold text-center border-r border-slate-200 min-w-[100px]">Type</TableHead>
-                         <TableHead rowSpan={2} className="bg-slate-50 font-semibold text-center border-r border-slate-200 min-w-[100px]">Commodity</TableHead>
-                         <TableHead rowSpan={2} className="bg-slate-50 font-semibold text-center border-r border-slate-200 min-w-[80px]">Quantity (%)</TableHead>
-                         <TableHead rowSpan={2} className="bg-slate-50 font-semibold text-center border-r border-slate-200 min-w-[100px]">Unit Price (Initial)</TableHead>
-                         <TableHead rowSpan={2} className="bg-slate-50 font-semibold text-center border-r border-slate-200 min-w-[100px]">Today Price</TableHead>
-                         <TableHead rowSpan={2} className="bg-slate-50 font-semibold text-center border-r border-slate-200 min-w-[100px]">MTM</TableHead>
+                         <TableHead rowSpan={2} className="bg-slate-50 font-semibold text-center border-r border-slate-200 w-[60px] sticky left-0 z-20 shadow-sm">ID</TableHead>
+                         <TableHead rowSpan={2} className="bg-slate-50 font-semibold text-center border-r border-slate-200 w-[90px]">Type</TableHead>
+                         <TableHead rowSpan={2} className="bg-slate-50 font-semibold text-center border-r border-slate-200 w-[100px]">Commodity</TableHead>
+                         <TableHead rowSpan={2} className="bg-slate-50 font-semibold text-center border-r border-slate-200 w-[80px]">Quantity (%)</TableHead>
+                         <TableHead rowSpan={2} className="bg-slate-50 font-semibold text-center border-r border-slate-200 w-[110px]">Unit Price (Initial)</TableHead>
+                         <TableHead rowSpan={2} className="bg-slate-50 font-semibold text-center border-r border-slate-200 w-[100px]">Today Price</TableHead>
+                         <TableHead rowSpan={2} className="bg-slate-50 font-semibold text-center border-r border-slate-200 w-[100px]">MTM</TableHead>
                          
                          {/* Dynamic columns with conditional Export */}
-                         <TableHead colSpan={showExportColumns ? 2 : 1} className="text-center border-b border-r border-slate-200 bg-blue-50 font-semibold min-w-[120px]">Time to Maturity</TableHead>
-                         <TableHead colSpan={showExportColumns ? 2 : 1} className="text-center border-b border-r border-slate-200 bg-green-50 font-semibold min-w-[100px]">Spot Price</TableHead>
-                         <TableHead colSpan={showExportColumns ? 2 : 1} className="text-center border-b border-r border-slate-200 bg-yellow-50 font-semibold min-w-[100px]">Volatility (%)</TableHead>
-                         <TableHead colSpan={showExportColumns ? 2 : 1} className="text-center border-b border-r border-slate-200 bg-purple-50 font-semibold min-w-[120px]">Risk-Free Rate (%)</TableHead>
-                         <TableHead colSpan={showExportColumns ? 2 : 1} className="text-center border-b border-r border-slate-200 bg-indigo-50 font-semibold min-w-[120px]">Forward Price</TableHead>
-                         <TableHead colSpan={showExportColumns ? 2 : 1} className="text-center border-b border-r border-slate-200 bg-orange-50 font-semibold min-w-[120px]">Strike Analysis</TableHead>
+                         <TableHead colSpan={showExportColumns ? 2 : 1} className="text-center border-b border-r border-slate-200 bg-blue-50 font-semibold w-[110px]">Time to Maturity</TableHead>
+                         <TableHead colSpan={showExportColumns ? 2 : 1} className="text-center border-b border-r border-slate-200 bg-green-50 font-semibold w-[100px]">Spot Price</TableHead>
+                         <TableHead colSpan={showExportColumns ? 2 : 1} className="text-center border-b border-r border-slate-200 bg-yellow-50 font-semibold w-[100px]">Volatility (%)</TableHead>
+                         <TableHead colSpan={showExportColumns ? 2 : 1} className="text-center border-b border-r border-slate-200 bg-purple-50 font-semibold w-[110px]">Risk-Free Rate (%)</TableHead>
+                         <TableHead colSpan={showExportColumns ? 2 : 1} className="text-center border-b border-r border-slate-200 bg-indigo-50 font-semibold w-[110px]">Forward Price</TableHead>
+                         <TableHead colSpan={showExportColumns ? 2 : 1} className="text-center border-b border-r border-slate-200 bg-orange-50 font-semibold w-[110px]">Strike Analysis</TableHead>
                          
                          {/* Fixed end columns */}
-                         <TableHead rowSpan={2} className="bg-slate-50 font-semibold text-center border-r border-slate-200 min-w-[80px]">Barrier 1</TableHead>
-                         <TableHead rowSpan={2} className="bg-slate-50 font-semibold text-center border-r border-slate-200 min-w-[80px]">Barrier 2</TableHead>
-                         <TableHead rowSpan={2} className="bg-slate-50 font-semibold text-center border-r border-slate-200 min-w-[80px]">Rebate (%)</TableHead>
-                         <TableHead rowSpan={2} className="bg-slate-50 font-semibold text-center border-r border-slate-200 min-w-[80px]">Volume</TableHead>
-                         <TableHead rowSpan={2} className="bg-slate-50 font-semibold text-center border-r border-slate-200 min-w-[100px]">Notional</TableHead>
-                         <TableHead rowSpan={2} className="bg-slate-50 font-semibold text-center border-r border-slate-200 min-w-[100px]">Maturity</TableHead>
-                         <TableHead rowSpan={2} className="bg-slate-50 font-semibold text-center border-r border-slate-200 min-w-[80px]">Status</TableHead>
-                         <TableHead rowSpan={2} className="bg-slate-50 font-semibold text-center min-w-[120px]">Actions</TableHead>
+                         <TableHead rowSpan={2} className="bg-slate-50 font-semibold text-center border-r border-slate-200 w-[80px]">Barrier 1</TableHead>
+                         <TableHead rowSpan={2} className="bg-slate-50 font-semibold text-center border-r border-slate-200 w-[80px]">Barrier 2</TableHead>
+                         <TableHead rowSpan={2} className="bg-slate-50 font-semibold text-center border-r border-slate-200 w-[80px]">Rebate (%)</TableHead>
+                         <TableHead rowSpan={2} className="bg-slate-50 font-semibold text-center border-r border-slate-200 w-[90px]">Volume</TableHead>
+                         <TableHead rowSpan={2} className="bg-slate-50 font-semibold text-center border-r border-slate-200 w-[100px]">Notional</TableHead>
+                         <TableHead rowSpan={2} className="bg-slate-50 font-semibold text-center border-r border-slate-200 w-[100px]">Maturity</TableHead>
+                         <TableHead rowSpan={2} className="bg-slate-50 font-semibold text-center border-r border-slate-200 w-[80px]">Status</TableHead>
+                         <TableHead rowSpan={2} className="bg-slate-50 font-semibold text-center w-[120px]">Actions</TableHead>
                     </TableRow>
                        <TableRow className="border-b border-slate-200">
                          {/* Sub-headers for dynamic columns */}
@@ -1789,8 +1790,8 @@ const HedgingInstruments = () => {
                       
                       return (
                          <TableRow key={instrument.id} className="hover:bg-slate-50/80 border-b border-slate-100 transition-all duration-200 group">
-                           <TableCell className="font-semibold bg-slate-50/90 border-r border-slate-200 text-center sticky left-0 z-[5] text-slate-700">
-                             <div className="px-2 py-1 rounded-md bg-white shadow-sm">
+                           <TableCell className="font-semibold bg-slate-50/90 border-r border-slate-200 text-center sticky left-0 z-20 shadow-sm text-slate-700 w-[60px]">
+                             <div className="px-2 py-1 rounded-md bg-white">
                                {instrument.id}
                              </div>
                            </TableCell>
@@ -2243,7 +2244,8 @@ const HedgingInstruments = () => {
                       );
                     })}
                   </TableBody>
-                </Table>
+                    </Table>
+                  </div>
                 </div>
               )}
             </TabsContent>

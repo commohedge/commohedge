@@ -394,7 +394,7 @@ const Exposures = () => {
           currency: commodity,
           commodity: commodity,
           unit: unit,
-          ...data
+        ...data
         });
       });
     });
@@ -417,7 +417,7 @@ const Exposures = () => {
         byMaturity.push({
           maturityRange: maturityRange,
           unit: unit,
-          ...data
+        ...data
         });
       });
     });
@@ -899,7 +899,7 @@ const Exposures = () => {
                         .map((totals, idx) => (
                           <p key={idx} className="text-2xl font-bold text-green-600">
                             {totals.totalReceivables.toLocaleString('en-US', { maximumFractionDigits: 2 })} {totals.unit}
-                          </p>
+                  </p>
                         ))
                     ) : (
                       <p className="text-2xl font-bold text-green-600">0</p>
@@ -925,7 +925,7 @@ const Exposures = () => {
                         .map((totals, idx) => (
                           <p key={idx} className="text-2xl font-bold text-red-600">
                             {totals.totalPayables.toLocaleString('en-US', { maximumFractionDigits: 2 })} {totals.unit}
-                          </p>
+                  </p>
                         ))
                     ) : (
                       <p className="text-2xl font-bold text-red-600">0</p>
@@ -951,7 +951,7 @@ const Exposures = () => {
                         .map((totals, idx) => (
                           <p key={idx} className="text-2xl font-bold text-blue-600">
                             {totals.totalHedged.toLocaleString('en-US', { maximumFractionDigits: 2 })} {totals.unit}
-                          </p>
+                  </p>
                         ))
                     ) : (
                       <p className="text-2xl font-bold text-blue-600">0</p>
@@ -1160,9 +1160,9 @@ const Exposures = () => {
                                 <TableRow key={`${commodityData.commodity || commodityData.currency}-${commodityData.unit}-${idx}`} className="hover:bg-muted/50">
                                   <TableCell>
                                     <div className="flex flex-col gap-1">
-                                      <Badge variant="outline" className="font-mono font-bold">
-                                        {commodityData.commodity || commodityData.currency}
-                                      </Badge>
+                                    <Badge variant="outline" className="font-mono font-bold">
+                                      {commodityData.commodity || commodityData.currency}
+                                    </Badge>
                                       <span className="text-xs text-muted-foreground">{commodityData.unit}</span>
                                     </div>
                                   </TableCell>
@@ -1221,18 +1221,18 @@ const Exposures = () => {
                                 <TableRow key={`${maturityData.maturityRange}-${maturityData.unit}-${idx}`} className="hover:bg-muted/50">
                                   <TableCell>
                                     <div className="flex flex-col gap-1">
-                                      <Badge 
-                                        variant="outline" 
-                                        className={`font-mono font-bold ${
-                                          maturityData.maturityRange === '≤ 30 days' ? 'border-red-200 text-red-700' :
-                                          maturityData.maturityRange === '31-90 days' ? 'border-orange-200 text-orange-700' :
-                                          maturityData.maturityRange === '91-180 days' ? 'border-yellow-200 text-yellow-700' :
-                                          maturityData.maturityRange === '181-365 days' ? 'border-blue-200 text-blue-700' :
-                                          'border-green-200 text-green-700'
-                                        }`}
-                                      >
-                                        {maturityData.maturityRange}
-                                      </Badge>
+                                    <Badge 
+                                      variant="outline" 
+                                      className={`font-mono font-bold ${
+                                        maturityData.maturityRange === '≤ 30 days' ? 'border-red-200 text-red-700' :
+                                        maturityData.maturityRange === '31-90 days' ? 'border-orange-200 text-orange-700' :
+                                        maturityData.maturityRange === '91-180 days' ? 'border-yellow-200 text-yellow-700' :
+                                        maturityData.maturityRange === '181-365 days' ? 'border-blue-200 text-blue-700' :
+                                        'border-green-200 text-green-700'
+                                      }`}
+                                    >
+                                      {maturityData.maturityRange}
+                                    </Badge>
                                       <span className="text-xs text-muted-foreground">{maturityData.unit}</span>
                                     </div>
                                   </TableCell>
