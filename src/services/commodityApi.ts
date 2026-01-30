@@ -300,10 +300,89 @@ function extractCurrency(symbol: string, name: string, category: CommodityCatego
     }
   }
   
-  // Strategy 3: Category-specific defaults (fallback)
+  // Strategy 3: Geographic and exchange-based detection
+  // Check for geographic indicators in name or symbol
+  const lowerName = name.toLowerCase();
+  const lowerSymbol = symbol.toLowerCase();
+  const combinedText = `${lowerName} ${lowerSymbol}`;
+  
+  // Geographic currency mapping
+  const geographicIndicators: Array<[string[], string]> = [
+    // UK / London / British
+    [['london', 'uk', 'united kingdom', 'british', 'ice futures europe', 'ice europe', 'liffe', 'euronext london'], 'GBP'],
+    // European (non-UK)
+    [['paris', 'france', 'eurex', 'euronext', 'european', 'frankfurt', 'germany', 'deutsche'], 'EUR'],
+    // US / American
+    [['new york', 'ny', 'nymex', 'comex', 'cbot', 'cme', 'chicago', 'us', 'usa', 'united states'], 'USD'],
+    // Japanese
+    [['tokyo', 'japan', 'ose', 'tocom'], 'JPY'],
+    // Australian
+    [['sydney', 'australia', 'asx'], 'AUD'],
+    // Canadian
+    [['toronto', 'canada', 'tsx'], 'CAD'],
+    // Chinese
+    [['shanghai', 'beijing', 'china', 'dce', 'czce', 'shfe'], 'CNY'],
+    // Indian
+    [['mumbai', 'india', 'nse', 'bse'], 'INR'],
+    // Brazilian
+    [['sao paulo', 'brazil', 'bm&f'], 'BRL'],
+    // Swiss
+    [['zurich', 'switzerland', 'swiss'], 'CHF'],
+    // South African
+    [['johannesburg', 'south africa', 'jse'], 'ZAR'],
+    // Russian
+    [['moscow', 'russia', 'moex'], 'RUB'],
+    // Singapore
+    [['singapore', 'sgx'], 'SGD'],
+    // Hong Kong
+    [['hong kong', 'hkex'], 'HKD']
+  ];
+  
+  for (const [indicators, currency] of geographicIndicators) {
+    if (indicators.some(indicator => combinedText.includes(indicator))) {
+      console.log(`✅ Currency detected from geographic/exchange indicator for ${symbol}: ${currency}`);
+      return currency;
+    }
+  }
+  
+  // Strategy 4: Exchange-specific currency mapping
+  const exchangeCurrencyMap: Record<string, string> = {
+    'ICE Futures Europe': 'GBP',
+    'ICE Europe': 'GBP',
+    'LIFFE': 'GBP',
+    'Euronext': 'EUR',
+    'EUREX': 'EUR',
+    'NYMEX': 'USD',
+    'COMEX': 'USD',
+    'CBOT': 'USD',
+    'CME': 'USD',
+    'TOCOM': 'JPY',
+    'OSE': 'JPY',
+    'ASX': 'AUD',
+    'TSX': 'CAD',
+    'DCE': 'CNY',
+    'CZCE': 'CNY',
+    'SHFE': 'CNY',
+    'NSE': 'INR',
+    'BSE': 'INR',
+    'BM&F': 'BRL',
+    'JSE': 'ZAR',
+    'MOEX': 'RUB',
+    'SGX': 'SGD',
+    'HKEX': 'HKD'
+  };
+  
+  for (const [exchange, currency] of Object.entries(exchangeCurrencyMap)) {
+    if (combinedText.includes(exchange.toLowerCase())) {
+      console.log(`✅ Currency detected from exchange for ${symbol}: ${currency}`);
+      return currency;
+    }
+  }
+  
+  // Strategy 5: Category-specific defaults with exceptions (fallback)
   const DEFAULT_CURRENCIES: Record<CommodityCategory, string> = {
     'metals': 'USD',        // Most metals are quoted in USD
-    'agricultural': 'USD',  // Most agricultural products are in USD
+    'agricultural': 'USD',  // Most agricultural products are in USD (but London/ICE = GBP)
     'energy': 'USD',        // Most energy products are in USD
     'freight': 'USD',       // Freight is typically quoted in USD
     'bunker': 'USD'         // Bunker fuel is typically in USD
@@ -433,6 +512,29 @@ function parseCommoditiesData(data: any, category: CommodityCategory): Commodity
         if (symbolElement) {
           symbol = symbolElement.text.trim();
           name = symbolElement.getAttribute('title') || '';
+          
+          // Try to extract exchange information from the cell or row for better currency detection
+          // TradingView sometimes includes exchange info in data attributes or nearby elements
+          const exchangeElement = firstCell.querySelector('[data-exchange], .exchange-name, [class*="exchange"], [class*="market"]');
+          if (exchangeElement) {
+            const exchangeText = exchangeElement.text.trim() || exchangeElement.getAttribute('data-exchange') || '';
+            if (exchangeText) {
+              // Append exchange to name for better currency detection
+              name = name ? `${name} ${exchangeText}` : exchangeText;
+            }
+          }
+          
+          // Also check parent elements and siblings for exchange info
+          const parentCell = firstCell.parentElement;
+          if (parentCell) {
+            const parentExchange = parentCell.querySelector('[data-exchange], [class*="exchange"]');
+            if (parentExchange) {
+              const exchangeText = parentExchange.text.trim() || parentExchange.getAttribute('data-exchange') || '';
+              if (exchangeText && !name.includes(exchangeText)) {
+                name = name ? `${name} ${exchangeText}` : exchangeText;
+              }
+            }
+          }
         } else {
           const allText = firstCell.text.trim();
           const parts = allText.split(/\s+/);
