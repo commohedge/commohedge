@@ -39,7 +39,7 @@ export default function CommodityMarket() {
   const [error, setError] = useState<{[key in 'metals' | 'agricultural' | 'energy' | 'freight' | 'bunker']?: string | null}>({});
   const [lastUpdated, setLastUpdated] = useState<{[key in 'metals' | 'agricultural' | 'energy' | 'freight' | 'bunker']?: Date | null}>({});
 
-  // ✅ Get selected domains from preferences
+  // ✅ Get selected domains from preferences - use useState to make it reactive
   const getSelectedDomains = (): CommodityCategory[] => {
     try {
       const savedSettings = localStorage.getItem('fxRiskManagerSettings');
@@ -55,7 +55,30 @@ export default function CommodityMarket() {
     return ['metals', 'agricultural', 'energy', 'freight', 'bunker']; // Default: all domains
   };
 
-  const selectedDomains = getSelectedDomains();
+  const [selectedDomains, setSelectedDomains] = useState<CommodityCategory[]>(getSelectedDomains());
+  
+  // ✅ Update selectedDomains when settings change
+  useEffect(() => {
+    const handleStorageChange = () => {
+      setSelectedDomains(getSelectedDomains());
+    };
+    
+    // Listen for storage changes
+    window.addEventListener('storage', handleStorageChange);
+    
+    // Also check periodically (in case same-tab changes)
+    const interval = setInterval(() => {
+      const newDomains = getSelectedDomains();
+      if (JSON.stringify(newDomains) !== JSON.stringify(selectedDomains)) {
+        setSelectedDomains(newDomains);
+      }
+    }, 1000);
+    
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      clearInterval(interval);
+    };
+  }, [selectedDomains]);
   
   // État pour la catégorie active - utiliser le premier domaine sélectionné par défaut
   const [activeCategory, setActiveCategory] = useState<'metals' | 'agricultural' | 'energy' | 'freight' | 'bunker' | 'worldbank'>(
@@ -451,7 +474,7 @@ export default function CommodityMarket() {
             value={activeCategory}
             onValueChange={(value) => setActiveCategory(value as any)}
           >
-            <div className="border-b border-slate-100 bg-slate-50/80 rounded-t-xl">
+            <div className="border-b border-border bg-muted/50 rounded-t-xl">
               <TabsList className="h-auto p-2 bg-transparent w-full justify-start gap-2">
                 {/* ✅ Afficher uniquement les onglets pour les domaines sélectionnés */}
                 {selectedDomains.includes('metals') && (
@@ -502,7 +525,7 @@ export default function CommodityMarket() {
                 {/* World Bank est toujours disponible */}
                 <TabsTrigger 
                   value="worldbank" 
-                  className="data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:border data-[state=active]:border-slate-200 rounded-lg px-4 py-3 font-medium transition-all duration-200 flex items-center gap-2"
+                  className="data-[state=active]:bg-background dark:data-[state=active]:bg-card data-[state=active]:shadow-sm data-[state=active]:border data-[state=active]:border-border rounded-lg px-4 py-3 font-medium transition-all duration-200 flex items-center gap-2"
                 >
                   <Building2 size={16} />
                   <span>World Bank</span>

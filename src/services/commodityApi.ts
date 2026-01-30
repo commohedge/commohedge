@@ -71,6 +71,7 @@ export interface Commodity {
   symbol: string;
   name: string;
   price: number;
+  currency: string; // Currency code (USD, EUR, GBP, etc.)
   percentChange: number;
   absoluteChange: number;
   high: number;
@@ -139,8 +140,18 @@ function loadFromCache(category: CommodityCategory): any[] | null {
       return null;
     }
 
-    console.log(`Loading cached data for ${category}: ${cacheData.data.length} items (${Math.round((now - cacheData.timestamp) / (1000 * 60 * 60))} hours old)`);
-    return cacheData.data;
+    // Migrate old cache data to include currency field if missing
+    const migratedData = (cacheData.data || []).map((item: any) => {
+      if (!item.currency) {
+        // Extract currency from existing data or use default
+        const currency = extractCurrency(item.symbol || '', item.name || '', category);
+        return { ...item, currency };
+      }
+      return item;
+    });
+
+    console.log(`Loading cached data for ${category}: ${migratedData.length} items (${Math.round((now - cacheData.timestamp) / (1000 * 60 * 60))} hours old)`);
+    return migratedData;
   } catch (error) {
     console.error(`Error loading cache for ${category}:`, error);
     return null;
@@ -198,6 +209,109 @@ export function getCacheInfo(): { [key in CommodityCategory]?: { lastUpdated: st
   });
   
   return info;
+}
+
+/**
+ * Extracts currency from commodity name or symbol
+ * Priority: 1. Name text, 2. Symbol, 3. Category default
+ */
+function extractCurrency(symbol: string, name: string, category: CommodityCategory): string {
+  // Comprehensive list of supported currencies (ISO 4217 codes)
+  const currencies = [
+    'USD', 'EUR', 'GBP', 'JPY', 'CHF', 'AUD', 'CAD', 'NZD',
+    'CNY', 'INR', 'BRL', 'MXN', 'ZAR', 'RUB', 'KRW', 'SGD',
+    'HKD', 'TRY', 'PLN', 'SEK', 'NOK', 'DKK', 'CZK', 'HUF',
+    'ILS', 'CLP', 'COP', 'ARS', 'PEN', 'PHP', 'THB', 'MYR',
+    'IDR', 'VND', 'AED', 'SAR', 'QAR', 'KWD', 'BHD', 'OMR',
+    'JOD', 'LBP', 'EGP', 'NGN', 'KES', 'UGX', 'TZS', 'ETB',
+    'GHS', 'XAF', 'XOF', 'ZMW', 'BWP', 'MZN', 'MAD', 'TND',
+    'DZD', 'LYD', 'SDG', 'SSP', 'ERN', 'DJF', 'SOS', 'SZL',
+    'LSL', 'NAD', 'AOA', 'CDF', 'RWF', 'BIF', 'MWK', 'MGA',
+    'KMF', 'SCR', 'MUR', 'MOP', 'PKR', 'BDT', 'LKR', 'NPR',
+    'MMK', 'KHR', 'LAK', 'BND', 'FJD', 'PGK', 'SBD', 'VUV',
+    'WST', 'TOP', 'XPF', 'NIO', 'GTQ', 'BZD', 'JMD', 'BBD',
+    'BSD', 'BMD', 'KYD', 'AWG', 'ANG', 'SRD', 'GYD', 'TTD',
+    'XCD', 'DOP', 'HTG', 'CUP', 'BAM', 'RSD', 'MKD', 'ALL',
+    'BGN', 'RON', 'MDL', 'UAH', 'BYN', 'GEL', 'AMD', 'AZN',
+    'KZT', 'KGS', 'TJS', 'TMT', 'UZS', 'AFN', 'IRR', 'IQD',
+    'YER', 'OMR', 'BHD', 'KWD', 'QAR', 'AED', 'SAR'
+  ];
+  
+  // Create regex pattern for currency matching (word boundaries to avoid partial matches)
+  const currencyPattern = new RegExp(`\\b(${currencies.join('|')})\\b`, 'i');
+  
+  // Strategy 1: Extract from name (most reliable)
+  // Common patterns: "Silver USD per ounce", "Gold EUR per gram", "Crude Oil USD per barrel"
+  if (name) {
+    const nameMatch = name.match(currencyPattern);
+    if (nameMatch) {
+      const foundCurrency = nameMatch[1].toUpperCase();
+      console.log(`✅ Currency extracted from name for ${symbol}: ${foundCurrency}`);
+      return foundCurrency;
+    }
+    
+    // Also check for currency symbols in name (check longer patterns first to avoid conflicts)
+    const currencySymbols: Array<[string, string]> = [
+      ['R$', 'BRL'],  // Check longer patterns first
+      ['$', 'USD'],
+      ['€', 'EUR'],
+      ['£', 'GBP'],
+      ['¥', 'JPY'],  // Default to JPY for commodities (CNY is less common)
+      ['₹', 'INR'],
+      ['R', 'ZAR'],  // Check after R$ to avoid false matches
+      ['₽', 'RUB'],
+      ['₩', 'KRW'],
+      ['₪', 'ILS'],
+      ['₦', 'NGN'],
+      ['₨', 'PKR'],  // PKR is more common than INR for this symbol
+      ['₫', 'VND'],
+      ['₱', 'PHP'],
+      ['฿', 'THB'],
+      ['₡', 'CRC']
+    ];
+    
+    for (const [symbol, currency] of currencySymbols) {
+      if (name.includes(symbol)) {
+        console.log(`✅ Currency extracted from symbol in name for ${symbol}: ${currency}`);
+        return currency;
+      }
+    }
+  }
+  
+  // Strategy 2: Extract from symbol
+  // Some symbols contain currency: XAGUSD1!, XAUUSD1!, EURUSD, etc.
+  if (symbol) {
+    // Check if symbol ends with currency code (e.g., XAGUSD1!, XAUUSD1!)
+    const symbolMatch = symbol.match(currencyPattern);
+    if (symbolMatch) {
+      const foundCurrency = symbolMatch[1].toUpperCase();
+      console.log(`✅ Currency extracted from symbol for ${symbol}: ${foundCurrency}`);
+      return foundCurrency;
+    }
+    
+    // Check for currency pairs in symbol (e.g., EURUSD, GBPUSD)
+    const currencyPairPattern = /([A-Z]{3})(USD|EUR|GBP|JPY|CHF|AUD|CAD|NZD|CNY|INR|BRL|MXN|ZAR|RUB|KRW|SGD|HKD|TRY)/i;
+    const pairMatch = symbol.match(currencyPairPattern);
+    if (pairMatch) {
+      // For pairs, the quote currency is usually what we want
+      const foundCurrency = pairMatch[2].toUpperCase();
+      console.log(`✅ Currency extracted from currency pair in symbol for ${symbol}: ${foundCurrency}`);
+      return foundCurrency;
+    }
+  }
+  
+  // Strategy 3: Category-specific defaults (fallback)
+  const DEFAULT_CURRENCIES: Record<CommodityCategory, string> = {
+    'metals': 'USD',        // Most metals are quoted in USD
+    'agricultural': 'USD',  // Most agricultural products are in USD
+    'energy': 'USD',        // Most energy products are in USD
+    'freight': 'USD',       // Freight is typically quoted in USD
+    'bunker': 'USD'         // Bunker fuel is typically in USD
+  };
+  
+  const defaultCurrency = DEFAULT_CURRENCIES[category];
+  console.log(`⚠️  Using default currency for ${symbol} (${category}): ${defaultCurrency}`);
+  return defaultCurrency;
 }
 
 /**
@@ -399,11 +513,13 @@ function parseCommoditiesData(data: any, category: CommodityCategory): Commodity
         const technicalEvaluation = cells[6]?.text.trim() || 'Neutral';
         
         const type = getCommodityType(symbol, name, category);
+        const currency = extractCurrency(symbol, name, category);
         
         commodities.push({
           symbol,
           name,
           price,
+          currency,
           percentChange,
           absoluteChange,
           high,
@@ -731,10 +847,12 @@ async function fetchFreightSymbolData(symbol: string, name: string, type: Commod
     }
     
     // For freight, we only keep the price - other variables are not needed (optimization)
+    const currency = extractCurrency(symbol, name, 'freight');
     const result = {
       symbol,
       name,
       price,
+      currency,
       percentChange: 0, // Not needed for freight
       absoluteChange: 0, // Not needed for freight
       high: 0, // Not needed for freight
@@ -1402,10 +1520,12 @@ function createBunkerCommodity(
   high: number = 0,
   low: number = 0
 ): Commodity {
+  const currency = extractCurrency(symbol, name, 'bunker');
   return {
     symbol,
     name,
     price,
+    currency,
     percentChange,
     absoluteChange,
     high: high > 0 ? high : (symbol.includes('Gibraltar') ? 0 : price * 1.05),
