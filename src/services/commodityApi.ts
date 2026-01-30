@@ -591,6 +591,40 @@ function parseCommoditiesData(data: any, category: CommodityCategory): Commodity
         
         const price = parseNumber(cells[1]?.text.trim());
         
+        // Extract currency from price cell (TradingView shows currency next to price)
+        let currencyFromPrice = '';
+        const priceCell = cells[1];
+        if (priceCell) {
+          // Look for currency in the price cell text or nearby elements
+          const priceCellText = priceCell.text.trim();
+          const currencyPattern = /\b(USD|EUR|GBP|JPY|CHF|AUD|CAD|NZD|CNY|INR|BRL|MXN|ZAR|RUB|KRW|SGD|HKD|TRY|PLN|SEK|NOK|DKK|CZK|HUF|ILS|CLP|COP|ARS|PEN|PHP|THB|MYR|IDR|VND|AED|SAR|QAR|KWD|BHD|OMR|JOD|LBP|EGP|NGN|KES|UGX|TZS|ETB|GHS|XAF|XOF|ZMW|BWP|MZN|MAD|TND|DZD|LYD|SDG|SSP|ERN|DJF|SOS|SZL|LSL|NAD|AOA|CDF|RWF|BIF|MWK|MGA|KMF|SCR|MUR|MOP|PKR|BDT|LKR|NPR|MMK|KHR|LAK|BND|FJD|PGK|SBD|VUV|WST|TOP|XPF|NIO|GTQ|BZD|JMD|BBD|BSD|BMD|KYD|AWG|ANG|SRD|GYD|TTD|XCD|DOP|HTG|CUP|BAM|RSD|MKD|ALL|BGN|RON|MDL|UAH|BYN|GEL|AMD|AZN|KZT|KGS|TJS|TMT|UZS|AFN|IRR|IQD|YER)\b/i;
+          const currencyMatch = priceCellText.match(currencyPattern);
+          if (currencyMatch) {
+            currencyFromPrice = currencyMatch[1].toUpperCase();
+          }
+          
+          // Also check in child elements (TradingView often puts currency in a separate span)
+          if (!currencyFromPrice) {
+            const currencyElement = priceCell.querySelector('[class*="currency"], [class*="quote"], [data-currency]');
+            if (currencyElement) {
+              const currencyText = currencyElement.text.trim() || currencyElement.getAttribute('data-currency') || '';
+              const currencyMatch = currencyText.match(currencyPattern);
+              if (currencyMatch) {
+                currencyFromPrice = currencyMatch[1].toUpperCase();
+              }
+            }
+          }
+          
+          // Check in sibling elements (currency might be in next cell or nearby)
+          if (!currencyFromPrice && priceCell.nextElementSibling) {
+            const nextCellText = priceCell.nextElementSibling.text.trim();
+            const currencyMatch = nextCellText.match(currencyPattern);
+            if (currencyMatch) {
+              currencyFromPrice = currencyMatch[1].toUpperCase();
+            }
+          }
+        }
+        
         // Check for negative class indicators
         const percentCell = cells[2];
         const isPercentNegative = percentCell.toString().includes('negative') || 
@@ -615,7 +649,12 @@ function parseCommoditiesData(data: any, category: CommodityCategory): Commodity
         const technicalEvaluation = cells[6]?.text.trim() || 'Neutral';
         
         const type = getCommodityType(symbol, name, category);
-        const currency = extractCurrency(symbol, name, category);
+        // Use currency from price cell if found, otherwise extract from name/symbol
+        const currency = currencyFromPrice || extractCurrency(symbol, name, category);
+        
+        if (currencyFromPrice) {
+          console.log(`✅ Currency extracted from price cell for ${symbol}: ${currencyFromPrice}`);
+        }
         
         commodities.push({
           symbol,
@@ -814,8 +853,12 @@ async function fetchFreightSymbolData(symbol: string, name: string, type: Commod
       return null;
     }
     
-    // Extract ONLY the price (optimized for freight - we don't need other data)
+    // Extract price AND currency (optimized for freight)
     let price = 0;
+    let currencyFromPrice = '';
+    
+    // Comprehensive currency pattern for matching
+    const currencyPattern = /\b(USD|EUR|GBP|JPY|CHF|AUD|CAD|NZD|CNY|INR|BRL|MXN|ZAR|RUB|KRW|SGD|HKD|TRY|PLN|SEK|NOK|DKK|CZK|HUF|ILS|CLP|COP|ARS|PEN|PHP|THB|MYR|IDR|VND|AED|SAR|QAR|KWD|BHD|OMR|JOD|LBP|EGP|NGN|KES|UGX|TZS|ETB|GHS|XAF|XOF|ZMW|BWP|MZN|MAD|TND|DZD|LYD|SDG|SSP|ERN|DJF|SOS|SZL|LSL|NAD|AOA|CDF|RWF|BIF|MWK|MGA|KMF|SCR|MUR|MOP|PKR|BDT|LKR|NPR|MMK|KHR|LAK|BND|FJD|PGK|SBD|VUV|WST|TOP|XPF|NIO|GTQ|BZD|JMD|BBD|BSD|BMD|KYD|AWG|ANG|SRD|GYD|TTD|XCD|DOP|HTG|CUP|BAM|RSD|MKD|ALL|BGN|RON|MDL|UAH|BYN|GEL|AMD|AZN|KZT|KGS|TJS|TMT|UZS|AFN|IRR|IQD|YER)\b/i;
     
     // Try to extract from JSON embedded data first (most reliable and fastest)
     try {
@@ -833,9 +876,14 @@ async function fetchFreightSymbolData(symbol: string, name: string, type: Commod
           if (priceData?.price || priceData?.last_price) {
             price = priceData.price || priceData.last_price || 0;
             
+            // Also try to extract currency from JSON
+            if (priceData?.currency || priceData?.quote_currency || priceData?.currency_code) {
+              currencyFromPrice = (priceData.currency || priceData.quote_currency || priceData.currency_code).toUpperCase();
+            }
+            
             if (price > 0) {
-              console.log(`✅ Extracted price from JSON for ${symbol}: ${price}`);
-              break;
+              console.log(`✅ Extracted price from JSON for ${symbol}: ${price}${currencyFromPrice ? ` (${currencyFromPrice})` : ''}`);
+              if (currencyFromPrice) break; // If we have both price and currency, we're done
             }
           }
         } catch (e) {
@@ -869,10 +917,46 @@ async function fetchFreightSymbolData(symbol: string, name: string, type: Commod
         const rawPriceText = priceElement.text.trim();
           if (!rawPriceText || rawPriceText.length === 0) continue;
         
+        // Extract currency BEFORE removing it from price text
+        if (!currencyFromPrice) {
+          const currencyMatch = rawPriceText.match(currencyPattern);
+          if (currencyMatch) {
+            currencyFromPrice = currencyMatch[1].toUpperCase();
+            console.log(`✅ Currency found in price element for ${symbol}: ${currencyFromPrice}`);
+          }
+          
+          // Also check in parent or sibling elements for currency
+          if (!currencyFromPrice) {
+            const parent = priceElement.parentElement;
+            if (parent) {
+              const parentText = parent.text.trim();
+              const currencyMatch = parentText.match(currencyPattern);
+              if (currencyMatch) {
+                currencyFromPrice = currencyMatch[1].toUpperCase();
+                console.log(`✅ Currency found in parent element for ${symbol}: ${currencyFromPrice}`);
+              }
+              
+              // Check siblings
+              if (!currencyFromPrice) {
+                const siblings = parent.querySelectorAll('[class*="currency"], [class*="quote"], [data-currency]');
+                for (const sibling of siblings) {
+                  const siblingText = sibling.text.trim() || sibling.getAttribute('data-currency') || '';
+                  const currencyMatch = siblingText.match(currencyPattern);
+                  if (currencyMatch) {
+                    currencyFromPrice = currencyMatch[1].toUpperCase();
+                    console.log(`✅ Currency found in sibling element for ${symbol}: ${currencyFromPrice}`);
+                    break;
+                  }
+                }
+              }
+            }
+          }
+        }
+        
         // Parse prices correctly for TradingView format
         let priceText = rawPriceText;
         
-        // Remove units and spaces
+        // Remove units and spaces (but keep currency info we already extracted)
           priceText = priceText.replace(/\s*(USD|usd|$|€|EUR|eur|MMBtu|BBL|MT|OZ|LB|BU|GAL)\s*/gi, '');
         
           // Remove all non-numeric characters except commas, dots, and minus
@@ -903,11 +987,11 @@ async function fetchFreightSymbolData(symbol: string, name: string, type: Commod
         
           if (parsedPrice > 0) {
             price = parsedPrice;
-            console.log(`✅ Parsed price for ${symbol}: ${price}`);
+            console.log(`✅ Parsed price for ${symbol}: ${price}${currencyFromPrice ? ` (${currencyFromPrice})` : ''}`);
           break;
         }
         }
-        if (price > 0) break;
+        if (price > 0 && currencyFromPrice) break; // Stop if we have both price and currency
       }
     }
     
@@ -949,7 +1033,13 @@ async function fetchFreightSymbolData(symbol: string, name: string, type: Commod
     }
     
     // For freight, we only keep the price - other variables are not needed (optimization)
-    const currency = extractCurrency(symbol, name, 'freight');
+    // Use currency from price element if found, otherwise extract from name/symbol
+    const currency = currencyFromPrice || extractCurrency(symbol, name, 'freight');
+    
+    if (currencyFromPrice) {
+      console.log(`✅ Using currency from price element for ${symbol}: ${currencyFromPrice}`);
+    }
+    
     const result = {
       symbol,
       name,
