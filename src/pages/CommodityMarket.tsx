@@ -550,6 +550,7 @@ export default function CommodityMarket() {
                             <TableHead>Symbol</TableHead>
                             <TableHead>Name</TableHead>
                             <TableHead className="text-right">Price</TableHead>
+                            <TableHead className="text-center">Currency</TableHead>
                             <TableHead className="text-right">Change</TableHead>
                             <TableHead className="text-right">Change %</TableHead>
                             <TableHead className="text-right">High</TableHead>
@@ -568,6 +569,11 @@ export default function CommodityMarket() {
                               <TableCell className="font-medium">{commodity.symbol}</TableCell>
                               <TableCell className="max-w-xs truncate">{commodity.name}</TableCell>
                               <TableCell className="text-right font-mono">{commodity.price.toFixed(2)}</TableCell>
+                              <TableCell className="text-center">
+                                <span className="px-2 py-1 rounded text-xs font-semibold bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-400 border border-blue-200 dark:border-blue-800">
+                                  {commodity.currency || 'USD'}
+                                </span>
+                              </TableCell>
                               <TableCell className="text-right">
                                 <PriceChangeBadge value={commodity.absoluteChange} />
                               </TableCell>
@@ -614,6 +620,7 @@ export default function CommodityMarket() {
                             <TableHead>Symbol</TableHead>
                             <TableHead>Name</TableHead>
                             <TableHead className="text-right">Price</TableHead>
+                            <TableHead className="text-center">Currency</TableHead>
                             <TableHead className="text-right">Change</TableHead>
                             <TableHead className="text-right">Change %</TableHead>
                             <TableHead className="text-right">High</TableHead>
@@ -632,6 +639,11 @@ export default function CommodityMarket() {
                               <TableCell className="font-medium">{commodity.symbol}</TableCell>
                               <TableCell className="max-w-xs truncate">{commodity.name}</TableCell>
                               <TableCell className="text-right font-mono">{commodity.price.toFixed(2)}</TableCell>
+                              <TableCell className="text-center">
+                                <span className="px-2 py-1 rounded text-xs font-semibold bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-400 border border-blue-200 dark:border-blue-800">
+                                  {commodity.currency || 'USD'}
+                                </span>
+                              </TableCell>
                               <TableCell className="text-right">
                                 <PriceChangeBadge value={commodity.absoluteChange} />
                               </TableCell>
@@ -678,6 +690,7 @@ export default function CommodityMarket() {
                             <TableHead>Symbol</TableHead>
                             <TableHead>Name</TableHead>
                             <TableHead className="text-right">Price</TableHead>
+                            <TableHead className="text-center">Currency</TableHead>
                             <TableHead className="text-right">Change</TableHead>
                             <TableHead className="text-right">Change %</TableHead>
                             <TableHead className="text-right">High</TableHead>
@@ -696,6 +709,11 @@ export default function CommodityMarket() {
                               <TableCell className="font-medium">{commodity.symbol}</TableCell>
                               <TableCell className="max-w-xs truncate">{commodity.name}</TableCell>
                               <TableCell className="text-right font-mono">{commodity.price.toFixed(2)}</TableCell>
+                              <TableCell className="text-center">
+                                <span className="px-2 py-1 rounded text-xs font-semibold bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-400 border border-blue-200 dark:border-blue-800">
+                                  {commodity.currency || 'USD'}
+                                </span>
+                              </TableCell>
                               <TableCell className="text-right">
                                 <PriceChangeBadge value={commodity.absoluteChange} />
                               </TableCell>
@@ -742,6 +760,7 @@ export default function CommodityMarket() {
                             <TableHead>Symbol</TableHead>
                             <TableHead>Name</TableHead>
                             <TableHead className="text-right">Price</TableHead>
+                            <TableHead className="text-center">Currency</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -755,6 +774,11 @@ export default function CommodityMarket() {
                               <TableCell className="font-medium">{commodity.symbol}</TableCell>
                               <TableCell className="max-w-xs truncate">{commodity.name}</TableCell>
                               <TableCell className="text-right font-mono">{commodity.price.toFixed(2)}</TableCell>
+                              <TableCell className="text-center">
+                                <span className="px-2 py-1 rounded text-xs font-semibold bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-400 border border-blue-200 dark:border-blue-800">
+                                  {commodity.currency || 'USD'}
+                                </span>
+                              </TableCell>
                             </TableRow>
                           ))}
                         </TableBody>
@@ -784,6 +808,7 @@ export default function CommodityMarket() {
                             <TableHead>Symbol</TableHead>
                             <TableHead>Name</TableHead>
                             <TableHead className="text-right">Price</TableHead>
+                            <TableHead className="text-center">Currency</TableHead>
                             <TableHead className="text-right">Change</TableHead>
                             <TableHead className="text-right">Change %</TableHead>
                             <TableHead className="text-right">High</TableHead>
@@ -802,6 +827,11 @@ export default function CommodityMarket() {
                               <TableCell className="font-medium">{commodity.symbol}</TableCell>
                               <TableCell className="max-w-xs truncate">{commodity.name}</TableCell>
                               <TableCell className="text-right font-mono">{commodity.price.toFixed(2)}</TableCell>
+                              <TableCell className="text-center">
+                                <span className="px-2 py-1 rounded text-xs font-semibold bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-400 border border-blue-200 dark:border-blue-800">
+                                  {commodity.currency || 'USD'}
+                                </span>
+                              </TableCell>
                               <TableCell className="text-right">
                                 <PriceChangeBadge value={commodity.absoluteChange} />
                               </TableCell>
