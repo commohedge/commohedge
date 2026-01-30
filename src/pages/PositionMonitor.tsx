@@ -31,7 +31,6 @@ import {
 } from "lucide-react";
 import { useCommodityData } from "@/hooks/useCommodityData";
 import { Commodity, fetchCommoditiesData } from "@/services/commodityApi";
-import StrategyImportService from "@/services/StrategyImportService";
 import { toast } from "sonner";
 
 // Mapping des symboles de commodity aux symboles TradingView pour récupérer les prix depuis Commodity Market
@@ -87,7 +86,6 @@ interface Position {
 
 const PositionMonitor = () => {
   const { exposures, marketData } = useCommodityData();
-  const strategyImportServiceRef = React.useRef(StrategyImportService.getInstance());
   const [isLiveMode, setIsLiveMode] = useState(true);
   const [refreshInterval, setRefreshInterval] = useState("5");
   const [lastUpdate, setLastUpdate] = useState(new Date());
@@ -181,33 +179,8 @@ const PositionMonitor = () => {
 
   // Convertir exposures en positions (détaillé par maturité)
   const positionsFromExposures = useMemo((): Position[] => {
-    // ✅ Récupérer les instruments originaux pour obtenir exportSpotPrice si nécessaire
-    const originalInstruments = strategyImportServiceRef.current.getHedgingInstruments();
-    
     return exposures.map((exposure) => {
-      // ✅ Essayer de récupérer le prix depuis les instruments originaux si pricePerUnit est 0
-      let entryPriceFromInstrument = 0;
-      if (exposure.pricePerUnit === 0 || !exposure.pricePerUnit) {
-        // Chercher un instrument correspondant à cette exposure
-        const matchingInstrument = originalInstruments.find(inst => {
-          const instMaturity = new Date(inst.maturity).toISOString().split('T')[0];
-          const expMaturity = exposure.maturity.toISOString().split('T')[0];
-          return inst.currency === exposure.commodity && instMaturity === expMaturity;
-        });
-        
-        if (matchingInstrument) {
-          // Priorité: exportSpotPrice > repricingData.exportSpotPrice > repricingData.underlyingPrice
-          if (matchingInstrument.exportSpotPrice && matchingInstrument.exportSpotPrice > 0) {
-            entryPriceFromInstrument = matchingInstrument.exportSpotPrice;
-          } else if (matchingInstrument.repricingData?.exportSpotPrice && matchingInstrument.repricingData.exportSpotPrice > 0) {
-            entryPriceFromInstrument = matchingInstrument.repricingData.exportSpotPrice;
-          } else if (matchingInstrument.repricingData?.underlyingPrice && matchingInstrument.repricingData.underlyingPrice > 0) {
-            entryPriceFromInstrument = matchingInstrument.repricingData.underlyingPrice;
-          }
-        }
-      }
-      
-      const marketPrice = getMarketPrice(exposure.commodity) || exposure.pricePerUnit || entryPriceFromInstrument || 0;
+      const marketPrice = getMarketPrice(exposure.commodity) || exposure.pricePerUnit || 0;
       
       // Position = Volume brut (exactement comme dans Commodity Exposures, sans division)
       // Dans useCommodityData.ts ligne 400: totalValue = Math.abs(underlyingExposureVolume)
@@ -229,7 +202,7 @@ const PositionMonitor = () => {
       }
       
       const position = exposure.type === 'long' ? volume : -volume;
-      const entryPrice = exposure.pricePerUnit || entryPriceFromInstrument || marketPrice;
+      const entryPrice = exposure.pricePerUnit || marketPrice;
       
       // Calculer P&L
       // Si position est en volume (BBL), alors P&L = volume * (prix_marché - prix_entrée)

@@ -358,13 +358,13 @@ export default function WorldBankChart({ commodities, loading = false }: WorldBa
 
   if (loading) {
     return (
-      <Card className="h-full bg-slate-900 border-slate-800">
+      <Card className="h-full bg-background border-border">
         <CardHeader>
-          <Skeleton className="h-6 w-48 bg-slate-800" />
-          <Skeleton className="h-4 w-32 bg-slate-800" />
+          <Skeleton className="h-6 w-48 bg-muted" />
+          <Skeleton className="h-4 w-32 bg-muted" />
         </CardHeader>
         <CardContent>
-          <Skeleton className="h-[500px] w-full bg-slate-800" />
+          <Skeleton className="h-[500px] w-full bg-muted" />
         </CardContent>
       </Card>
     );
@@ -372,13 +372,13 @@ export default function WorldBankChart({ commodities, loading = false }: WorldBa
 
   if (commodities.length === 0) {
     return (
-      <Card className="h-full bg-slate-900 border-slate-800">
+      <Card className="h-full bg-background border-border">
         <CardHeader>
-          <CardTitle className="text-slate-100">World Bank Commodity Chart</CardTitle>
-          <CardDescription className="text-slate-400">No data available</CardDescription>
+            <CardTitle className="text-foreground">World Bank Commodity Chart</CardTitle>
+          <CardDescription className="text-muted-foreground">No data available</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="h-[500px] flex items-center justify-center text-slate-400">
+          <div className="h-[500px] flex items-center justify-center text-muted-foreground">
             No commodities data available
           </div>
         </CardContent>
@@ -387,22 +387,22 @@ export default function WorldBankChart({ commodities, loading = false }: WorldBa
   }
 
   return (
-    <Card className="h-full bg-slate-900 border-slate-800 shadow-2xl">
-      <CardHeader className="pb-4 border-b border-slate-800">
+    <Card className="h-full bg-background border-border shadow-2xl">
+      <CardHeader className="pb-4 border-b border-border">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
-            <CardTitle className="text-xl font-bold text-slate-100 flex items-center gap-2">
+            <CardTitle className="text-xl font-bold text-foreground flex items-center gap-2">
               <DollarSign className="h-5 w-5 text-green-500" />
               World Bank Commodity Chart
             </CardTitle>
-            <CardDescription className="text-sm text-slate-400">
+            <CardDescription className="text-sm text-muted-foreground">
               Professional trading-style visualization
             </CardDescription>
           </div>
           
           <div className="flex items-center gap-3">
             {/* Zoom Controls */}
-            <div className="flex items-center gap-1 bg-slate-800 rounded-lg p-1">
+            <div className="flex items-center gap-1 bg-muted rounded-lg p-1">
               <Button
                 variant="ghost"
                 size="sm"
@@ -424,7 +424,7 @@ export default function WorldBankChart({ commodities, loading = false }: WorldBa
                     });
                   }
                 }}
-                className="h-8 px-2 text-slate-300 hover:text-white hover:bg-slate-700"
+                className="h-8 px-2 text-muted-foreground hover:text-foreground hover:bg-muted"
                 title="Zoom In"
               >
                 <ZoomIn className="h-3 w-3" />
@@ -450,7 +450,7 @@ export default function WorldBankChart({ commodities, loading = false }: WorldBa
                     });
                   }
                 }}
-                className="h-8 px-2 text-slate-300 hover:text-white hover:bg-slate-700"
+                className="h-8 px-2 text-muted-foreground hover:text-foreground hover:bg-muted"
                 title="Zoom Out"
               >
                 <ZoomOut className="h-3 w-3" />
@@ -459,7 +459,7 @@ export default function WorldBankChart({ commodities, loading = false }: WorldBa
                 variant="ghost"
                 size="sm"
                 onClick={resetZoom}
-                className="h-8 px-2 text-slate-300 hover:text-white hover:bg-slate-700"
+                className="h-8 px-2 text-muted-foreground hover:text-foreground hover:bg-muted"
                 title="Reset Zoom"
               >
                 <RotateCcw className="h-3 w-3" />
@@ -467,7 +467,7 @@ export default function WorldBankChart({ commodities, loading = false }: WorldBa
             </div>
 
             {/* Chart Type Selector */}
-            <div className="flex items-center gap-1 bg-slate-800 rounded-lg p-1">
+            <div className="flex items-center gap-1 bg-muted rounded-lg p-1">
               <Button
                 variant={chartType === 'line' ? 'default' : 'ghost'}
                 size="sm"
@@ -476,7 +476,7 @@ export default function WorldBankChart({ commodities, loading = false }: WorldBa
                   "h-8 px-3 text-xs font-medium",
                   chartType === 'line' 
                     ? "bg-green-600 hover:bg-green-700 text-white" 
-                    : "text-slate-300 hover:text-white hover:bg-slate-700"
+                    : "text-muted-foreground hover:text-foreground hover:bg-muted"
                 )}
               >
                 <LineChart className="h-3 w-3 mr-1" />
@@ -490,7 +490,7 @@ export default function WorldBankChart({ commodities, loading = false }: WorldBa
                   "h-8 px-3 text-xs font-medium",
                   chartType === 'area' 
                     ? "bg-green-600 hover:bg-green-700 text-white" 
-                    : "text-slate-300 hover:text-white hover:bg-slate-700"
+                    : "text-muted-foreground hover:text-foreground hover:bg-muted"
                 )}
               >
                 <BarChart3 className="h-3 w-3 mr-1" />
@@ -504,20 +504,20 @@ export default function WorldBankChart({ commodities, loading = false }: WorldBa
       <CardContent className="space-y-4 pt-4">
         {/* Commodity Selector */}
         <div className="flex items-center gap-4">
-          <label className="text-sm font-medium text-slate-300 flex items-center gap-2">
+          <label className="text-sm font-medium text-foreground flex items-center gap-2">
             <Calendar className="h-4 w-4" />
             Select Commodity:
           </label>
           <Select value={selectedCommodity} onValueChange={setSelectedCommodity}>
-            <SelectTrigger className="w-80 bg-slate-800 border-slate-700 text-slate-100">
+            <SelectTrigger className="w-80 bg-muted border-border text-foreground">
               <SelectValue placeholder="Choose a commodity" />
             </SelectTrigger>
-            <SelectContent className="bg-slate-800 border-slate-700">
+            <SelectContent className="bg-background border-border">
               {commodities.map((commodity) => (
-                <SelectItem key={commodity.id} value={commodity.id} className="text-slate-100 hover:bg-slate-700">
+                <SelectItem key={commodity.id} value={commodity.id} className="text-foreground hover:bg-muted">
                   <div className="flex items-center gap-2">
                     <span>{commodity.name}</span>
-                    <span className="text-xs text-slate-400">({commodity.symbol})</span>
+                    <span className="text-xs text-muted-foreground">({commodity.symbol})</span>
                   </div>
                 </SelectItem>
               ))}
@@ -529,7 +529,7 @@ export default function WorldBankChart({ commodities, loading = false }: WorldBa
         <div className="relative">
           <canvas
             ref={canvasRef}
-            className="w-full rounded-lg border border-slate-700 cursor-crosshair"
+            className="w-full rounded-lg border border-border cursor-crosshair"
             style={{ height: '500px' }}
             onMouseMove={handleMouseMove}
             onMouseLeave={handleMouseLeave}
@@ -541,7 +541,7 @@ export default function WorldBankChart({ commodities, loading = false }: WorldBa
           {/* Tooltip */}
           {hoveredPoint && (
             <div 
-              className="absolute bg-slate-800 border border-slate-600 rounded-lg p-3 shadow-xl pointer-events-none z-10"
+              className="absolute bg-background border border-border rounded-lg p-3 shadow-xl pointer-events-none z-10"
               style={{
                 left: hoveredPoint.x + 10,
                 top: hoveredPoint.y - 60,
@@ -549,13 +549,13 @@ export default function WorldBankChart({ commodities, loading = false }: WorldBa
               }}
             >
               <div className="space-y-1">
-                <div className="text-sm font-medium text-slate-200">
+                <div className="text-sm font-medium text-foreground">
                   {selectedCommodityData?.name}
                 </div>
                 <div className="text-lg font-bold text-green-500">
                   {hoveredPoint.value.toLocaleString()} {selectedCommodityData?.unit}
                 </div>
-                <div className="text-xs text-slate-400">
+                <div className="text-xs text-muted-foreground">
                   {parseDate(hoveredPoint.date).toLocaleDateString('en-US', {
                     year: 'numeric',
                     month: 'long',
@@ -568,10 +568,10 @@ export default function WorldBankChart({ commodities, loading = false }: WorldBa
           
           {/* Chart Info Overlay */}
           {selectedCommodityData && (
-            <div className="absolute top-4 right-4 bg-slate-800/90 backdrop-blur-sm rounded-lg p-4 border border-slate-600">
+            <div className="absolute top-4 right-4 bg-background/90 backdrop-blur-sm rounded-lg p-4 border border-border">
               <div className="space-y-2">
                 <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium text-slate-300">Change:</span>
+                  <span className="text-sm font-medium text-foreground">Change:</span>
                   {selectedCommodityData.changePercent !== undefined ? (
                     <div className="flex items-center gap-1">
                       {selectedCommodityData.changePercent > 0 ? (
@@ -590,14 +590,14 @@ export default function WorldBankChart({ commodities, loading = false }: WorldBa
                     <span className="text-sm text-slate-400">N/A</span>
                   )}
                 </div>
-                <div className="text-xs text-slate-400">
+                <div className="text-xs text-muted-foreground">
                   {selectedCommodityData.data.length.toLocaleString()} data points
                 </div>
-                <div className="text-xs text-slate-400">
+                <div className="text-xs text-muted-foreground">
                   {parseDate(selectedCommodityData.data[0]?.date).getFullYear()} - {parseDate(selectedCommodityData.data[selectedCommodityData.data.length - 1]?.date).getFullYear()}
                 </div>
                 {zoomState.isZoomed && (
-                  <div className="text-xs text-slate-400">
+                  <div className="text-xs text-muted-foreground">
                     Zoomed: {zoomState.startIndex + 1} - {zoomState.endIndex + 1}
                   </div>
                 )}

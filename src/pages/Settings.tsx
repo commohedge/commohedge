@@ -40,11 +40,13 @@ import {
   Eraser,
   ZoomIn,
   ZoomOut,
-  Monitor
+  Monitor,
+  Landmark
 } from "lucide-react";
 import { useCompanySettings, companySettingsEmitter } from "@/hooks/useCompanySettings";
 import { getLocalStorageStats, performEmergencyRecovery } from "@/utils/emergencyRecovery";
 import "@/styles/zoom-controls.css";
+import { fetchAllCountries, CountryBondData } from "@/services/rateExplorer/bondsApi";
 
 interface AppSettings {
   // General settings
@@ -77,6 +79,18 @@ interface AppSettings {
     pricingFrequency: string;
     underlyingPriceType: 'spot' | 'forward';
     backtestExerciseType: 'monthly-average' | 'third-friday';
+    // Interest rate configuration for simulations
+    interestRateMode: 'fixed' | 'curve';
+    fixedRates: {
+      USD: number;
+      EUR: number;
+      GBP: number;
+      CHF: number;
+      JPY: number;
+      CAD: number;
+      AUD: number;
+      NZD: number;
+    };
   };
   
   // Interface settings
@@ -176,7 +190,20 @@ const Settings = () => {
       interestRateSource: "bloomberg",
       pricingFrequency: "real-time",
       underlyingPriceType: "spot",
-      backtestExerciseType: "monthly-average"
+      backtestExerciseType: "monthly-average",
+      // Interest rate mode: 'fixed' uses Bank Rate, 'curve' uses bootstrapped yield curve
+      interestRateMode: "fixed",
+      // Default fixed rates (Bank Rates as of current date - can be updated)
+      fixedRates: {
+        USD: 4.50,  // Federal Reserve rate
+        EUR: 3.00,  // ECB rate
+        GBP: 4.75,  // Bank of England rate
+        CHF: 0.50,  // Swiss National Bank rate
+        JPY: 0.25,  // Bank of Japan rate
+        CAD: 3.25,  // Bank of Canada rate
+        AUD: 4.35,  // Reserve Bank of Australia rate
+        NZD: 4.25,  // Reserve Bank of New Zealand rate
+      }
     },
     ui: {
       theme: "light",
@@ -245,6 +272,145 @@ const Settings = () => {
     const saved = localStorage.getItem('includeLogoInPdf');
     return saved ? JSON.parse(saved) : false;
   });
+  
+  // 🌐 Bank Rates from World Government Bonds
+  const [isLoadingBankRates, setIsLoadingBankRates] = useState(false);
+  const [bondDataLastUpdate, setBondDataLastUpdate] = useState<string | null>(() => {
+    // Load last update from localStorage
+    const saved = localStorage.getItem('bondDataLastUpdate');
+    return saved || null;
+  });
+  
+  // Currency to Country mapping for bank rates
+  const CURRENCY_TO_COUNTRY: Record<string, string> = {
+    USD: 'united-states',
+    EUR: 'germany', // Germany as reference for EUR
+    GBP: 'united-kingdom',
+    CHF: 'switzerland',
+    JPY: 'japan',
+    CAD: 'canada',
+    AUD: 'australia',
+    NZD: 'new-zealand',
+  };
+  
+  // 🌐 Check if bond data is fresh (less than 1 hour old)
+  const isBondDataFresh = (): boolean => {
+    if (!bondDataLastUpdate) return false;
+    const lastUpdate = new Date(bondDataLastUpdate);
+    const now = new Date();
+    const hoursDiff = (now.getTime() - lastUpdate.getTime()) / (1000 * 60 * 60);
+    return hoursDiff < 1; // Consider fresh if less than 1 hour old
+  };
+  
+  // 🌐 Fetch bank rates from World Government Bonds (with automatic scraping if needed)
+  const fetchBankRatesFromBonds = async (forceRefresh = false) => {
+    setIsLoadingBankRates(true);
+    try {
+      // Check if we need to refresh (data is stale or missing)
+      const needsRefresh = forceRefresh || !isBondDataFresh();
+      
+      if (needsRefresh) {
+        console.log('🔄 Données obsolètes ou manquantes, lancement du scraping...');
+      }
+      
+      const response = await fetchAllCountries();
+      
+      if (!response.success || !response.data) {
+        // If no data, try to trigger scraping by calling the API again
+        console.log('⚠️ Aucune donnée disponible, tentative de scraping...');
+        
+        // Wait a bit and retry (scraping might be in progress)
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        const retryResponse = await fetchAllCountries();
+        
+        if (!retryResponse.success || !retryResponse.data) {
+          toast({
+            title: "Données non disponibles",
+            description: "Les données ne sont pas disponibles. Le scraping est peut-être en cours. Réessayez dans quelques instants.",
+            variant: "destructive",
+          });
+          return;
+        }
+        
+        // Use retry response
+        const bondData = retryResponse.data;
+        const newRates: Record<string, number> = { ...settings.pricing.fixedRates };
+        let updatedCount = 0;
+        
+        Object.entries(CURRENCY_TO_COUNTRY).forEach(([currency, countrySlug]) => {
+          const countryData = bondData.find((c: CountryBondData) => 
+            c.countrySlug === countrySlug || 
+            c.country.toLowerCase().replace(/\s+/g, '-') === countrySlug
+          );
+          
+          if (countryData && countryData.bankRate !== null && countryData.bankRate !== undefined) {
+            newRates[currency] = countryData.bankRate;
+            updatedCount++;
+            console.log(`✅ ${currency}: ${countryData.country} Bank Rate = ${countryData.bankRate}%`);
+          }
+        });
+        
+        if (updatedCount > 0) {
+          updateSettings('pricing', { fixedRates: newRates });
+          const updateTime = retryResponse.scrapedAt || new Date().toISOString();
+          setBondDataLastUpdate(updateTime);
+          localStorage.setItem('bondDataLastUpdate', updateTime);
+        }
+        
+        return;
+      }
+      
+      const bondData = response.data;
+      const newRates: Record<string, number> = { ...settings.pricing.fixedRates };
+      let updatedCount = 0;
+      let missingRates: string[] = [];
+      
+      // Map each currency to its corresponding country's bank rate
+      Object.entries(CURRENCY_TO_COUNTRY).forEach(([currency, countrySlug]) => {
+        // Find the country in bond data (match by slug or country name)
+        const countryData = bondData.find((c: CountryBondData) => 
+          c.countrySlug === countrySlug || 
+          c.country.toLowerCase().replace(/\s+/g, '-') === countrySlug
+        );
+        
+        if (countryData && countryData.bankRate !== null && countryData.bankRate !== undefined) {
+          newRates[currency] = countryData.bankRate;
+          updatedCount++;
+          console.log(`✅ ${currency}: ${countryData.country} Bank Rate = ${countryData.bankRate}%`);
+        } else {
+          missingRates.push(currency);
+          console.log(`⚠️ ${currency}: Bank Rate non trouvé pour ${countrySlug}`);
+        }
+      });
+      
+      if (updatedCount > 0) {
+        updateSettings('pricing', { fixedRates: newRates });
+        const updateTime = response.scrapedAt || new Date().toISOString();
+        setBondDataLastUpdate(updateTime);
+        localStorage.setItem('bondDataLastUpdate', updateTime);
+        
+        // 🌐 Emit event to notify other components of rate update
+        window.dispatchEvent(new CustomEvent('settingsUpdated'));
+        
+        if (missingRates.length > 0) {
+          console.log(`⚠️ Taux manquants pour: ${missingRates.join(', ')}`);
+        }
+      } else if (missingRates.length > 0) {
+        // All rates are missing, data might be stale
+        console.log('⚠️ Tous les taux sont manquants, les données sont peut-être obsolètes');
+      }
+      
+    } catch (error) {
+      console.error('Erreur lors de la récupération des taux:', error);
+      toast({
+        title: "Erreur",
+        description: "Une erreur s'est produite lors de la récupération des taux.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoadingBankRates(false);
+    }
+  };
 
   // Load settings from localStorage
   useEffect(() => {
@@ -295,6 +461,23 @@ const Settings = () => {
 
     loadSettings();
   }, []);
+  
+  // 🌐 Auto-sync bank rates on mount and when in fixed mode
+  useEffect(() => {
+    // Only auto-sync if in fixed rate mode
+    if (settings.pricing.interestRateMode === 'fixed') {
+      // Check if data is fresh, if not, sync automatically
+      const lastUpdate = localStorage.getItem('bondDataLastUpdate');
+      const isFresh = lastUpdate ? (Date.now() - new Date(lastUpdate).getTime()) < 3600000 : false;
+      
+      if (!isFresh) {
+        console.log('🔄 Synchronisation automatique des taux bancaires...');
+        fetchBankRatesFromBonds(false); // false = don't force refresh if data exists
+      } else {
+        console.log('✅ Données des taux bancaires à jour');
+      }
+    }
+  }, [settings.pricing.interestRateMode]); // Sync when mode changes
 
   // Fonction pour mettre à jour les paramètres
   const updateSettings = (section: keyof AppSettings, updates: Record<string, unknown>) => {
@@ -374,6 +557,17 @@ const Settings = () => {
       // Finaliser
       setLastSaved(new Date());
       setHasChanges(false);
+      
+      // 🌐 Emit custom event to notify other components of settings update
+      window.dispatchEvent(new CustomEvent('settingsUpdated'));
+      
+      // 🌐 Auto-sync bank rates if in fixed mode
+      if (newSettings.pricing?.interestRateMode === 'fixed') {
+        // Trigger auto-sync in background (don't wait)
+        fetchBankRatesFromBonds(false).catch(err => {
+          console.error('Error auto-syncing bank rates:', err);
+        });
+      }
       
       // Afficher un message de succès
       toast({
@@ -1061,6 +1255,128 @@ const Settings = () => {
                     </SelectContent>
                   </Select>
                 </div>
+                
+                {/* Interest Rate Mode Configuration */}
+                <div className="space-y-4 p-4 border rounded-lg bg-muted/30">
+                  <div className="flex items-center gap-2">
+                    <TrendingUp className="w-5 h-5 text-primary" />
+                    <Label className="text-base font-semibold">Interest Rate Configuration for Pricing & Simulations</Label>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="interest-rate-mode">Interest Rate Mode</Label>
+                    <Select
+                      value={settings.pricing.interestRateMode}
+                      onValueChange={(value) => updateSettings('pricing', { interestRateMode: value as 'fixed' | 'curve' })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="fixed">
+                          <div className="flex items-center gap-2">
+                            <Target className="w-4 h-4" />
+                            <span>Fixed Rate (Bank Rate)</span>
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="curve">
+                          <div className="flex items-center gap-2">
+                            <TrendingUp className="w-4 h-4" />
+                            <span>Yield Curve (Bootstrapped)</span>
+                          </div>
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">
+                      {settings.pricing.interestRateMode === 'fixed' 
+                        ? "Uses a single fixed rate (Bank Rate) for each currency regardless of maturity."
+                        : "Uses the bootstrapped yield curve from Rate Explorer for precise rates at each maturity."}
+                    </p>
+                  </div>
+                  
+                  {settings.pricing.interestRateMode === 'fixed' && (
+                    <div className="space-y-3 pt-2">
+                      <div className="flex items-center justify-between">
+                        <Label className="text-sm font-medium">Fixed Rates by Currency (Bank Rates %)</Label>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={fetchBankRatesFromBonds}
+                          disabled={isLoadingBankRates}
+                          className="h-8"
+                        >
+                          {isLoadingBankRates ? (
+                            <>
+                              <RefreshCw className="w-3.5 h-3.5 mr-1.5 animate-spin" />
+                              Chargement...
+                            </>
+                          ) : (
+                            <>
+                              <Landmark className="w-3.5 h-3.5 mr-1.5" />
+                              Sync from Gov Bonds
+                            </>
+                          )}
+                        </Button>
+                      </div>
+                      
+                      {bondDataLastUpdate && (
+                        <p className="text-xs text-green-600 flex items-center gap-1">
+                          <CheckCircle className="w-3 h-3" />
+                          Dernière mise à jour: {new Date(bondDataLastUpdate).toLocaleString()}
+                        </p>
+                      )}
+                      
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                        {Object.entries(settings.pricing.fixedRates).map(([currency, rate]) => (
+                          <div key={currency} className="space-y-1">
+                            <Label htmlFor={`rate-${currency}`} className="text-xs flex items-center gap-1">
+                              <span className="font-mono font-bold">{currency}</span>
+                            </Label>
+                            <div className="flex items-center gap-1">
+                              <Input
+                                id={`rate-${currency}`}
+                                type="number"
+                                step="0.01"
+                                min="0"
+                                max="100"
+                                value={rate}
+                                onChange={(e) => {
+                                  const newRates = { ...settings.pricing.fixedRates };
+                                  newRates[currency as keyof typeof newRates] = parseFloat(e.target.value) || 0;
+                                  updateSettings('pricing', { fixedRates: newRates });
+                                }}
+                                className="h-8 text-sm"
+                              />
+                              <span className="text-xs text-muted-foreground">%</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      <Alert className="bg-blue-50 border-blue-200">
+                        <Landmark className="h-4 w-4 text-blue-600" />
+                        <AlertDescription className="text-xs text-blue-700">
+                          Cliquez sur <strong>"Sync from Gov Bonds"</strong> pour récupérer les taux bancaires depuis World Government Bonds.<br/>
+                          Mapping: USD → United States, EUR → Germany, GBP → UK, CHF → Switzerland, JPY → Japan, CAD → Canada, AUD → Australia, NZD → New Zealand.
+                        </AlertDescription>
+                      </Alert>
+                      <p className="text-xs text-muted-foreground">
+                        These rates are used as the risk-free rate for pricing options and simulations when "Fixed Rate" mode is selected.
+                      </p>
+                    </div>
+                  )}
+                  
+                  {settings.pricing.interestRateMode === 'curve' && (
+                    <Alert className="bg-primary/5 border-primary/20">
+                      <TrendingUp className="h-4 w-4" />
+                      <AlertDescription>
+                        <strong>Curve Mode:</strong> Interest rates will be interpolated from the bootstrapped yield curve 
+                        (IRS + Futures data) based on the specific maturity of each instrument. 
+                        Visit the <strong>Rate Explorer → All Curves</strong> tab to view and load the current curves.
+                      </AlertDescription>
+                    </Alert>
+                  )}
+                </div>
+
                 <div className="space-y-2">
                   <Label htmlFor="pricing-frequency">Pricing Frequency</Label>
                   <Select

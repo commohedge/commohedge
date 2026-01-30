@@ -159,7 +159,7 @@ const HedgingInstruments = () => {
             c.symbol === symbolMap.tradingViewSymbol ||
             c.symbol.replace('!', '') === symbolMap.tradingViewSymbol.replace('!', '')
           );
-          
+
           // Si pas trouvé, chercher par symbole sans le '!'
           if (!commodity) {
             const symbolWithoutExcl = symbolMap.tradingViewSymbol.replace('!', '');
@@ -178,7 +178,7 @@ const HedgingInstruments = () => {
     } catch (error) {
       console.error(`[REAL MARKET PRICE] Error reading cache for ${commoditySymbol}:`, error);
     }
-
+    
     return null;
   }, []);
   const [commodityMarketData, setCommodityMarketData] = useState<{ [commodity: string]: CommodityMarketData }>(() => {
@@ -557,9 +557,9 @@ const HedgingInstruments = () => {
     } else if (useCurrentParams && marketData.volatility) {
       // 4. Priorité : Volatilité globale actuelle (si les paramètres ont été modifiés)
       sigma = marketData.volatility / 100;
-    } else if (marketData.volatility) {
+         } else if (marketData.volatility) {
       // 4. Priorité : Volatilité globale de la devise (éditable par l'utilisateur)
-      sigma = marketData.volatility / 100;
+       sigma = marketData.volatility / 100;
     } else {
       // 5. Fallback : Volatilité des données de marché
       const marketData = commodityMarketData[instrument.currency] || getMarketDataFromInstruments(instrument.currency) || { spot: 1.0000, volatility: 20, riskFreeRate: 1.0 };
@@ -1127,57 +1127,57 @@ const HedgingInstruments = () => {
   // ✅ OPTIMISATION : Memoization des calculs coûteux
   const filteredInstruments = useMemo(() => {
     return instruments.filter(instrument => {
-      const isOption = instrument.type.includes("Call") || 
-                      instrument.type.includes("Put") || 
-                      instrument.type === "Collar" ||
-                      instrument.type.includes("Touch") ||
-                      instrument.type.includes("Binary") ||
-                      instrument.type.includes("Digital") ||
-                      instrument.type.includes("Knock");
-      
-      const matchesTab = selectedTab === "all" || 
-                        (selectedTab === "forwards" && instrument.type === "Forward") ||
-                        (selectedTab === "options" && isOption) ||
-                        (selectedTab === "swaps" && instrument.type === "Swap") ||
-                        (selectedTab === "hedge-accounting" && instrument.hedge_accounting);
-      
-      return matchesTab;
-    });
+    const isOption = instrument.type.includes("Call") || 
+                    instrument.type.includes("Put") || 
+                    instrument.type === "Collar" ||
+                    instrument.type.includes("Touch") ||
+                    instrument.type.includes("Binary") ||
+                    instrument.type.includes("Digital") ||
+                    instrument.type.includes("Knock");
+    
+    const matchesTab = selectedTab === "all" || 
+                      (selectedTab === "forwards" && instrument.type === "Forward") ||
+                      (selectedTab === "options" && isOption) ||
+                      (selectedTab === "swaps" && instrument.type === "Swap") ||
+                      (selectedTab === "hedge-accounting" && instrument.hedge_accounting);
+    
+    return matchesTab;
+  });
   }, [instruments, selectedTab]);
 
   // ✅ OPTIMISATION : Memoization des calculs de résumé
   const totalNotional = useMemo(() => {
     return instruments.reduce((sum, inst) => {
-      const quantityToHedge = inst.quantity || 0;
-      const unitPrice = inst.realOptionPrice || inst.premium || 0;
-      const volumeToHedge = inst.notional;
-      const calculatedNotional = unitPrice * volumeToHedge;
-      const displayedNotional = calculatedNotional > 0 ? calculatedNotional : inst.notional;
-      return sum + displayedNotional;
-    }, 0);
+    const quantityToHedge = inst.quantity || 0;
+    const unitPrice = inst.realOptionPrice || inst.premium || 0;
+    const volumeToHedge = inst.notional;
+    const calculatedNotional = unitPrice * volumeToHedge;
+    const displayedNotional = calculatedNotional > 0 ? calculatedNotional : inst.notional;
+    return sum + displayedNotional;
+  }, 0);
   }, [instruments]);
   
   // ✅ OPTIMISATION : Memoization du calcul MTM total
   const totalMTM = useMemo(() => {
     return instruments.reduce((sum, inst) => {
-      const marketData = commodityMarketData[inst.currency];
-      if (!marketData) {
-        return sum;
-      }
-      
-      const originalPrice = inst.realOptionPrice || inst.premium || 0;
-      const isExportedStrategy = inst.exportSpotPrice && inst.exportTimeToMaturity;
-      const initialPrice = isExportedStrategy ? originalPrice : (inst.premium || 0);
-      const todayPrice = calculateTodayPrice(inst);
-      const quantity = inst.quantity || 1;
-      const isShort = quantity < 0;
-      
+    const marketData = commodityMarketData[inst.currency];
+    if (!marketData) {
+      return sum;
+    }
+    
+    const originalPrice = inst.realOptionPrice || inst.premium || 0;
+    const isExportedStrategy = inst.exportSpotPrice && inst.exportTimeToMaturity;
+    const initialPrice = isExportedStrategy ? originalPrice : (inst.premium || 0);
+    const todayPrice = calculateTodayPrice(inst);
+    const quantity = inst.quantity || 1;
+    const isShort = quantity < 0;
+    
       const mtmValue = isShort 
         ? initialPrice - todayPrice 
         : todayPrice - initialPrice;
-      
-      return sum + (mtmValue * Math.abs(inst.notional));
-    }, 0);
+    
+    return sum + (mtmValue * Math.abs(inst.notional));
+  }, 0);
   }, [instruments, commodityMarketData, valuationDate]);
   
   const hedgeAccountingCount = useMemo(() => {
@@ -1316,9 +1316,9 @@ const HedgingInstruments = () => {
                       <div className="grid gap-3 md:grid-cols-3">
                         <div className="space-y-1">
                           <div className="flex items-center justify-between">
-                            <Label htmlFor={`spot-${commodity}`} className="text-xs">Spot Price</Label>
+                          <Label htmlFor={`spot-${commodity}`} className="text-xs">Spot Price</Label>
                             {useRealMarketPrices && getRealMarketPrice(commodity) !== null && (
-                              <Badge variant="outline" className="text-xs bg-green-50 text-green-700 border-green-200">
+                              <Badge variant="outline" className="text-xs bg-green-50 dark:bg-green-950/30 text-green-700 dark:text-green-400 border-green-200 dark:border-green-800">
                                 Real Market
                               </Badge>
                             )}
@@ -1336,7 +1336,7 @@ const HedgingInstruments = () => {
                               }
                             }}
                             disabled={useRealMarketPrices && getRealMarketPrice(commodity) !== null}
-                            className={`font-mono text-sm ${useRealMarketPrices && getRealMarketPrice(commodity) !== null ? 'bg-green-50 border-green-200' : ''}`}
+                            className={`font-mono text-sm ${useRealMarketPrices && getRealMarketPrice(commodity) !== null ? 'bg-green-50 dark:bg-green-950/30 border-green-200 dark:border-green-800' : ''}`}
                             placeholder="75.50"
                           />
                           {useRealMarketPrices && getRealMarketPrice(commodity) !== null && (
@@ -1388,7 +1388,7 @@ const HedgingInstruments = () => {
 
       {/* Individual Volatility Overrides Summary */}
       {instruments.some(inst => inst.impliedVolatility) && (
-        <Card className="mb-4 border-purple-200 bg-purple-50/50">
+        <Card className="mb-4 border-purple-200 dark:border-purple-800 bg-purple-50/50 dark:bg-purple-950/30">
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-medium text-purple-700 flex items-center gap-2">
               <TrendingUp className="h-4 w-4" />
@@ -1423,7 +1423,7 @@ const HedgingInstruments = () => {
 
       {/* Individual Spot Price Overrides Summary */}
       {instruments.some(inst => inst.impliedSpotPrice) && (
-        <Card className="mb-4 border-blue-200 bg-blue-50/50">
+        <Card className="mb-4 border-blue-200 dark:border-blue-800 bg-blue-50/50 dark:bg-blue-950/30">
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-medium text-blue-700 flex items-center gap-2">
               <TrendingUp className="h-4 w-4" />
@@ -1691,60 +1691,60 @@ const HedgingInstruments = () => {
                   </div>
                 </div>
               ) : (
-                <div className="w-full border rounded-lg overflow-hidden bg-white">
+                <div className="w-full border rounded-lg overflow-hidden bg-background">
                   <div className="overflow-x-auto" style={{ maxHeight: 'calc(100vh - 500px)', overflowY: 'auto' }}>
                     <Table className="min-w-full border-collapse">
-                     <TableHeader className="bg-gradient-to-r from-slate-50 to-slate-100 sticky top-0 z-10">
-                       <TableRow className="border-b-2 border-slate-200">
+                     <TableHeader className="bg-muted/50 dark:bg-muted/80 sticky top-0 z-10">
+                       <TableRow className="border-b-2 border-border">
                          {/* Fixed columns */}
-                         <TableHead rowSpan={2} className="bg-slate-50 font-semibold text-center border-r border-slate-200 w-[60px] sticky left-0 z-20 shadow-sm">ID</TableHead>
-                         <TableHead rowSpan={2} className="bg-slate-50 font-semibold text-center border-r border-slate-200 w-[90px]">Type</TableHead>
-                         <TableHead rowSpan={2} className="bg-slate-50 font-semibold text-center border-r border-slate-200 w-[100px]">Commodity</TableHead>
-                         <TableHead rowSpan={2} className="bg-slate-50 font-semibold text-center border-r border-slate-200 w-[80px]">Quantity (%)</TableHead>
-                         <TableHead rowSpan={2} className="bg-slate-50 font-semibold text-center border-r border-slate-200 w-[110px]">Unit Price (Initial)</TableHead>
-                         <TableHead rowSpan={2} className="bg-slate-50 font-semibold text-center border-r border-slate-200 w-[100px]">Today Price</TableHead>
-                         <TableHead rowSpan={2} className="bg-slate-50 font-semibold text-center border-r border-slate-200 w-[100px]">MTM</TableHead>
+                         <TableHead rowSpan={2} className="bg-muted/50 dark:bg-muted/80 font-semibold text-center border-r border-border w-[60px] sticky left-0 z-20 shadow-sm">ID</TableHead>
+                         <TableHead rowSpan={2} className="bg-muted/50 dark:bg-muted/80 font-semibold text-center border-r border-border w-[90px]">Type</TableHead>
+                         <TableHead rowSpan={2} className="bg-muted/50 dark:bg-muted/80 font-semibold text-center border-r border-border w-[100px]">Commodity</TableHead>
+                         <TableHead rowSpan={2} className="bg-muted/50 dark:bg-muted/80 font-semibold text-center border-r border-border w-[80px]">Quantity (%)</TableHead>
+                         <TableHead rowSpan={2} className="bg-muted/50 dark:bg-muted/80 font-semibold text-center border-r border-border w-[110px]">Unit Price (Initial)</TableHead>
+                         <TableHead rowSpan={2} className="bg-muted/50 dark:bg-muted/80 font-semibold text-center border-r border-border w-[100px]">Today Price</TableHead>
+                         <TableHead rowSpan={2} className="bg-muted/50 dark:bg-muted/80 font-semibold text-center border-r border-border w-[100px]">MTM</TableHead>
                          
                          {/* Dynamic columns with conditional Export */}
-                         <TableHead colSpan={showExportColumns ? 2 : 1} className="text-center border-b border-r border-slate-200 bg-blue-50 font-semibold w-[110px]">Time to Maturity</TableHead>
-                         <TableHead colSpan={showExportColumns ? 2 : 1} className="text-center border-b border-r border-slate-200 bg-green-50 font-semibold w-[100px]">Spot Price</TableHead>
-                         <TableHead colSpan={showExportColumns ? 2 : 1} className="text-center border-b border-r border-slate-200 bg-yellow-50 font-semibold w-[100px]">Volatility (%)</TableHead>
-                         <TableHead colSpan={showExportColumns ? 2 : 1} className="text-center border-b border-r border-slate-200 bg-purple-50 font-semibold w-[110px]">Risk-Free Rate (%)</TableHead>
-                         <TableHead colSpan={showExportColumns ? 2 : 1} className="text-center border-b border-r border-slate-200 bg-indigo-50 font-semibold w-[110px]">Forward Price</TableHead>
-                         <TableHead colSpan={showExportColumns ? 2 : 1} className="text-center border-b border-r border-slate-200 bg-orange-50 font-semibold w-[110px]">Strike Analysis</TableHead>
+                         <TableHead colSpan={showExportColumns ? 2 : 1} className="text-center border-b border-r border-border bg-blue-50 dark:bg-blue-950/30 font-semibold w-[110px]">Time to Maturity</TableHead>
+                         <TableHead colSpan={showExportColumns ? 2 : 1} className="text-center border-b border-r border-border bg-green-50 dark:bg-green-950/30 font-semibold w-[100px]">Spot Price</TableHead>
+                         <TableHead colSpan={showExportColumns ? 2 : 1} className="text-center border-b border-r border-border bg-yellow-50 dark:bg-yellow-950/30 font-semibold w-[100px]">Volatility (%)</TableHead>
+                         <TableHead colSpan={showExportColumns ? 2 : 1} className="text-center border-b border-r border-border bg-purple-50 dark:bg-purple-950/30 font-semibold w-[110px]">Risk-Free Rate (%)</TableHead>
+                         <TableHead colSpan={showExportColumns ? 2 : 1} className="text-center border-b border-r border-border bg-indigo-50 dark:bg-indigo-950/30 font-semibold w-[110px]">Forward Price</TableHead>
+                         <TableHead colSpan={showExportColumns ? 2 : 1} className="text-center border-b border-r border-border bg-orange-50 dark:bg-orange-950/30 font-semibold w-[110px]">Strike Analysis</TableHead>
                          
                          {/* Fixed end columns */}
-                         <TableHead rowSpan={2} className="bg-slate-50 font-semibold text-center border-r border-slate-200 w-[80px]">Barrier 1</TableHead>
-                         <TableHead rowSpan={2} className="bg-slate-50 font-semibold text-center border-r border-slate-200 w-[80px]">Barrier 2</TableHead>
-                         <TableHead rowSpan={2} className="bg-slate-50 font-semibold text-center border-r border-slate-200 w-[80px]">Rebate (%)</TableHead>
-                         <TableHead rowSpan={2} className="bg-slate-50 font-semibold text-center border-r border-slate-200 w-[90px]">Volume</TableHead>
-                         <TableHead rowSpan={2} className="bg-slate-50 font-semibold text-center border-r border-slate-200 w-[100px]">Notional</TableHead>
-                         <TableHead rowSpan={2} className="bg-slate-50 font-semibold text-center border-r border-slate-200 w-[100px]">Maturity</TableHead>
-                         <TableHead rowSpan={2} className="bg-slate-50 font-semibold text-center border-r border-slate-200 w-[80px]">Status</TableHead>
-                         <TableHead rowSpan={2} className="bg-slate-50 font-semibold text-center w-[120px]">Actions</TableHead>
+                         <TableHead rowSpan={2} className="bg-muted/50 dark:bg-muted/80 font-semibold text-center border-r border-border w-[80px]">Barrier 1</TableHead>
+                         <TableHead rowSpan={2} className="bg-muted/50 dark:bg-muted/80 font-semibold text-center border-r border-border w-[80px]">Barrier 2</TableHead>
+                         <TableHead rowSpan={2} className="bg-muted/50 dark:bg-muted/80 font-semibold text-center border-r border-border w-[80px]">Rebate (%)</TableHead>
+                         <TableHead rowSpan={2} className="bg-muted/50 dark:bg-muted/80 font-semibold text-center border-r border-border w-[90px]">Volume</TableHead>
+                         <TableHead rowSpan={2} className="bg-muted/50 dark:bg-muted/80 font-semibold text-center border-r border-border w-[100px]">Notional</TableHead>
+                         <TableHead rowSpan={2} className="bg-muted/50 dark:bg-muted/80 font-semibold text-center border-r border-border w-[100px]">Maturity</TableHead>
+                         <TableHead rowSpan={2} className="bg-muted/50 dark:bg-muted/80 font-semibold text-center border-r border-border w-[80px]">Status</TableHead>
+                         <TableHead rowSpan={2} className="bg-muted/50 dark:bg-muted/80 font-semibold text-center w-[120px]">Actions</TableHead>
                     </TableRow>
-                       <TableRow className="border-b border-slate-200">
+                       <TableRow className="border-b border-border">
                          {/* Sub-headers for dynamic columns */}
-                         {showExportColumns && <TableHead className="text-xs text-blue-600 bg-blue-50 border-r border-slate-200 font-medium">Export</TableHead>}
-                         <TableHead className="text-xs text-green-600 bg-blue-50 border-r border-slate-200 font-medium">Current</TableHead>
+                         {showExportColumns && <TableHead className="text-xs text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/30 border-r border-border font-medium">Export</TableHead>}
+                         <TableHead className="text-xs text-green-600 dark:text-green-400 bg-blue-50 dark:bg-blue-950/30 border-r border-border font-medium">Current</TableHead>
                          
-                         {showExportColumns && <TableHead className="text-xs text-blue-600 bg-green-50 border-r border-slate-200 font-medium">Export</TableHead>}
-                         <TableHead className="text-xs text-green-600 bg-green-50 border-r border-slate-200 font-medium">Current</TableHead>
+                         {showExportColumns && <TableHead className="text-xs text-blue-600 dark:text-blue-400 bg-green-50 dark:bg-green-950/30 border-r border-border font-medium">Export</TableHead>}
+                         <TableHead className="text-xs text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-950/30 border-r border-border font-medium">Current</TableHead>
                          
-                         {showExportColumns && <TableHead className="text-xs text-blue-600 bg-yellow-50 border-r border-slate-200 font-medium">Export</TableHead>}
-                         <TableHead className="text-xs text-green-600 bg-yellow-50 border-r border-slate-200 font-medium">Current</TableHead>
+                         {showExportColumns && <TableHead className="text-xs text-blue-600 dark:text-blue-400 bg-yellow-50 dark:bg-yellow-950/30 border-r border-border font-medium">Export</TableHead>}
+                         <TableHead className="text-xs text-green-600 dark:text-green-400 bg-yellow-50 dark:bg-yellow-950/30 border-r border-border font-medium">Current</TableHead>
                          
-                         {showExportColumns && <TableHead className="text-xs text-blue-600 bg-purple-50 border-r border-slate-200 font-medium">Export</TableHead>}
-                         <TableHead className="text-xs text-green-600 bg-purple-50 border-r border-slate-200 font-medium">Current</TableHead>
+                         {showExportColumns && <TableHead className="text-xs text-blue-600 dark:text-blue-400 bg-purple-50 dark:bg-purple-950/30 border-r border-border font-medium">Export</TableHead>}
+                         <TableHead className="text-xs text-green-600 dark:text-green-400 bg-purple-50 dark:bg-purple-950/30 border-r border-border font-medium">Current</TableHead>
                          
-                         {showExportColumns && <TableHead className="text-xs text-blue-600 bg-pink-50 border-r border-slate-200 font-medium">Export</TableHead>}
-                         <TableHead className="text-xs text-green-600 bg-pink-50 border-r border-slate-200 font-medium">Current</TableHead>
+                         {showExportColumns && <TableHead className="text-xs text-blue-600 dark:text-blue-400 bg-pink-50 dark:bg-pink-950/30 border-r border-border font-medium">Export</TableHead>}
+                         <TableHead className="text-xs text-green-600 dark:text-green-400 bg-pink-50 dark:bg-pink-950/30 border-r border-border font-medium">Current</TableHead>
                          
-                         {showExportColumns && <TableHead className="text-xs text-blue-600 bg-indigo-50 border-r border-slate-200 font-medium">Export</TableHead>}
-                         <TableHead className="text-xs text-green-600 bg-indigo-50 border-r border-slate-200 font-medium">Current</TableHead>
+                         {showExportColumns && <TableHead className="text-xs text-blue-600 dark:text-blue-400 bg-indigo-50 dark:bg-indigo-950/30 border-r border-border font-medium">Export</TableHead>}
+                         <TableHead className="text-xs text-green-600 dark:text-green-400 bg-indigo-50 dark:bg-indigo-950/30 border-r border-border font-medium">Current</TableHead>
                          
-                         {showExportColumns && <TableHead className="text-xs text-blue-600 bg-orange-50 border-r border-slate-200 font-medium">Export</TableHead>}
-                         <TableHead className="text-xs text-green-600 bg-orange-50 font-medium">Current</TableHead>
+                         {showExportColumns && <TableHead className="text-xs text-blue-600 dark:text-blue-400 bg-orange-50 dark:bg-orange-950/30 border-r border-border font-medium">Export</TableHead>}
+                         <TableHead className="text-xs text-green-600 dark:text-green-400 bg-orange-50 dark:bg-orange-950/30 font-medium">Current</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -1789,21 +1789,21 @@ const HedgingInstruments = () => {
                       const calculatedNotional = unitPrice * volumeToHedge;
                       
                       return (
-                         <TableRow key={instrument.id} className="hover:bg-slate-50/80 border-b border-slate-100 transition-all duration-200 group">
-                           <TableCell className="font-semibold bg-slate-50/90 border-r border-slate-200 text-center sticky left-0 z-20 shadow-sm text-slate-700 w-[60px]">
-                             <div className="px-2 py-1 rounded-md bg-white">
+                         <TableRow key={instrument.id} className="hover:bg-muted/50 dark:hover:bg-muted/30 border-b border-border transition-all duration-200 group">
+                           <TableCell className="font-semibold bg-muted/50 dark:bg-muted/80 border-r border-border text-center sticky left-0 z-20 shadow-sm text-foreground w-[60px]">
+                             <div className="px-2 py-1 rounded-md bg-background">
                                {instrument.id}
                              </div>
                            </TableCell>
                           <TableCell className="py-3">
                             <div className="flex items-center gap-3">
-                              <div className="p-2 rounded-lg bg-slate-100/50 group-hover:bg-slate-200/50 transition-colors">
+                              <div className="p-2 rounded-lg bg-muted/50 group-hover:bg-muted transition-colors">
                               {getInstrumentIcon(instrument.type)}
                               </div>
                               <div className="space-y-1">
-                                <div className="font-medium text-slate-900">{instrument.type}</div>
+                                <div className="font-medium text-foreground">{instrument.type}</div>
                                 {instrument.strategyName && (
-                                  <div className="text-xs text-slate-500 flex items-center gap-1">
+                                  <div className="text-xs text-muted-foreground flex items-center gap-1">
                                     <span className="w-1 h-1 bg-slate-400 rounded-full"></span>
                                     From: {instrument.strategyName}
                                   </div>
@@ -1818,17 +1818,17 @@ const HedgingInstruments = () => {
                             </div>
                           </TableCell>
                           <TableCell className="text-center">
-                            <Badge variant="outline" className="font-mono font-semibold px-3 py-1 bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100 transition-colors">
+                            <Badge variant="outline" className="font-mono font-semibold px-3 py-1 bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-800 hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors">
                               {instrument.currency}
                             </Badge>
                           </TableCell>
                           <TableCell className="text-center">
-                            <div className="inline-flex items-center justify-center px-3 py-1 rounded-full bg-green-50 text-green-700 font-mono font-semibold text-sm">
+                            <div className="inline-flex items-center justify-center px-3 py-1 rounded-full bg-green-50 dark:bg-green-950/30 text-green-700 dark:text-green-400 font-mono font-semibold text-sm">
                             {quantityToHedge.toFixed(1)}%
                             </div>
                           </TableCell>
                           <TableCell className="text-right">
-                            <div className="font-mono text-slate-700 font-semibold">
+                            <div className="font-mono text-foreground font-semibold">
                               {unitPrice > 0 ? unitPrice.toFixed(4) : 
                                 <span className="text-slate-400 italic">N/A</span>
                               }
@@ -1843,48 +1843,48 @@ const HedgingInstruments = () => {
                               // Détecter le modèle de pricing utilisé (EXACTEMENT la même logique que calculateTodayPrice)
                               const optionType = instrument.type.toLowerCase();
                               let modelName = "unknown";
-                              let modelColor = "bg-gray-50 text-gray-600";
+                              let modelColor = "bg-muted text-muted-foreground";
                               
                               // 1. OPTIONS DOUBLE BARRIÈRE - PRIORITÉ ABSOLUE (avant toutes les autres)
                               if (optionType.includes('double')) {
                                 modelName = "closed-form (double)";
-                                modelColor = "bg-purple-50 text-purple-700";
+                                modelColor = "bg-purple-50 dark:bg-purple-950/30 text-purple-700 dark:text-purple-400";
                               }
                               // 2. OPTIONS BARRIÈRES SIMPLES - DEUXIÈME PRIORITÉ
                               else if (optionType.includes('knock-out') || optionType.includes('knock-in') || 
                                   optionType.includes('barrier') || optionType.includes('ko ') || optionType.includes('ki ') ||
                                   optionType.includes('knockout') || optionType.includes('knockin') || optionType.includes('reverse')) {
                                 modelName = "closed-form";
-                                modelColor = "bg-blue-50 text-blue-700";
+                                modelColor = "bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-400";
                               }
                               // 3. OPTIONS DIGITALES - TROISIÈME PRIORITÉ
                               else if (optionType.includes('touch') || optionType.includes('binary') || 
                                        optionType.includes('digital')) {
                                 modelName = "monte-carlo";
-                                modelColor = "bg-orange-50 text-orange-700";
+                                modelColor = "bg-orange-50 dark:bg-orange-950/30 text-orange-700 dark:text-orange-400";
                               }
                               // 4. OPTIONS VANILLES EXPLICITES
                               else if (optionType === 'vanilla call' || optionType === 'vanilla put') {
                                 modelName = optionPricingModel === 'monte-carlo' ? "monte-carlo" : "black-scholes";
-                                modelColor = optionPricingModel === 'monte-carlo' ? "bg-orange-50 text-orange-700" : "bg-green-50 text-green-700";
+                                modelColor = optionPricingModel === 'monte-carlo' ? "bg-orange-50 dark:bg-orange-950/30 text-orange-700 dark:text-orange-400" : "bg-green-50 dark:bg-green-950/30 text-green-700 dark:text-green-400";
                               }
                               // 5. FORWARDS
                               else if (optionType === 'forward') {
                                 modelName = "commodity-forward";
-                                modelColor = "bg-cyan-50 text-cyan-700";
+                                modelColor = "bg-cyan-50 dark:bg-cyan-950/30 text-cyan-700 dark:text-cyan-400";
                               }
                               // 6. SWAPS
                               else if (optionType === 'swap') {
                                 modelName = "commodity-swap";
-                                modelColor = "bg-indigo-50 text-indigo-700";
+                                modelColor = "bg-indigo-50 dark:bg-indigo-950/30 text-indigo-700 dark:text-indigo-400";
                               }
                               // 7. OPTIONS VANILLES GÉNÉRIQUES - SEULEMENT si pas déjà traité
                               else if (optionType.includes('call') && !optionType.includes('knock')) {
                                 modelName = optionPricingModel === 'monte-carlo' ? "monte-carlo" : "black-scholes";
-                                modelColor = optionPricingModel === 'monte-carlo' ? "bg-orange-50 text-orange-700" : "bg-green-50 text-green-700";
+                                modelColor = optionPricingModel === 'monte-carlo' ? "bg-orange-50 dark:bg-orange-950/30 text-orange-700 dark:text-orange-400" : "bg-green-50 dark:bg-green-950/30 text-green-700 dark:text-green-400";
                               } else if (optionType.includes('put') && !optionType.includes('knock')) {
                                 modelName = optionPricingModel === 'monte-carlo' ? "monte-carlo" : "black-scholes";
-                                modelColor = optionPricingModel === 'monte-carlo' ? "bg-orange-50 text-orange-700" : "bg-green-50 text-green-700";
+                                modelColor = optionPricingModel === 'monte-carlo' ? "bg-orange-50 dark:bg-orange-950/30 text-orange-700 dark:text-orange-400" : "bg-green-50 dark:bg-green-950/30 text-green-700 dark:text-green-400";
                               }
                               
                               return (
@@ -1898,15 +1898,15 @@ const HedgingInstruments = () => {
                           <TableCell className="text-right">
                             <div className={`inline-flex items-center justify-center px-3 py-1 rounded-lg font-mono font-semibold ${
                               mtmValue >= 0 
-                                ? 'bg-green-50 text-green-700 border border-green-200' 
-                                : 'bg-red-50 text-red-700 border border-red-200'
+                                ? 'bg-green-50 dark:bg-green-950/30 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-800' 
+                                : 'bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-800'
                             }`}>
                               {Math.abs(mtmValue) > 0.0001 ? (mtmValue >= 0 ? '+' : '') + mtmValue.toFixed(4) : '0.0000'}
                             </div>
                           </TableCell>
                                                      {/* Time to Maturity - Export (conditional) */}
                            {showExportColumns && (
-                             <TableCell className="font-mono text-center bg-blue-50 border-r border-slate-200">
+                             <TableCell className="font-mono text-center bg-blue-50 dark:bg-blue-950/30 border-r border-border">
                               <div className="text-xs text-blue-600">
                               {instrument.exportTimeToMaturity ? 
                                 `${instrument.exportTimeToMaturity.toFixed(4)}y` : 
@@ -1922,7 +1922,7 @@ const HedgingInstruments = () => {
                            )}
                           
                           {/* Time to Maturity - Current */}
-                           <TableCell className="text-center bg-green-50/80 border-r border-slate-200">
+                           <TableCell className="text-center bg-green-50/80 dark:bg-green-950/30 border-r border-border">
                             <div className="space-y-1">
                               <div className={`text-sm font-mono font-semibold ${timeToMaturity === 0 ? 'text-red-600' : 'text-green-700'}`}>
                               {timeToMaturity.toFixed(4)}y
@@ -1938,7 +1938,7 @@ const HedgingInstruments = () => {
                           
                                                      {/* Spot Price - Export (conditional) */}
                            {showExportColumns && (
-                             <TableCell className="text-center bg-blue-50/80 border-r border-slate-200">
+                             <TableCell className="text-center bg-blue-50/80 dark:bg-blue-950/30 border-r border-border">
                                <div className="text-sm font-mono font-semibold text-blue-700">
                               {instrument.exportSpotPrice ? 
                                 instrument.exportSpotPrice.toFixed(6) : 
@@ -1949,7 +1949,7 @@ const HedgingInstruments = () => {
                            )}
                           
                           {/* Spot Price - Current */}
-                           <TableCell className="text-center bg-green-50/80 border-r border-slate-200">
+                           <TableCell className="text-center bg-green-50/80 dark:bg-green-950/30 border-r border-border">
                             {(() => {
                               const marketData = commodityMarketData[instrument.currency] || getMarketDataFromInstruments(instrument.currency) || { spot: 1.0000, volatility: 20, domesticRate: 1.0, foreignRate: 1.0 };
                               
@@ -1976,16 +1976,16 @@ const HedgingInstruments = () => {
                                       value={instrument.impliedSpotPrice ?? currentSpot}
                                       onChange={(e) => {
                                         if (!isUsingRealPrice) {
-                                          const value = parseFloat(e.target.value);
-                                          if (!isNaN(value) && value > 0) {
-                                            updateInstrumentSpotPrice(instrument.id, value);
+                                        const value = parseFloat(e.target.value);
+                                        if (!isNaN(value) && value > 0) {
+                                          updateInstrumentSpotPrice(instrument.id, value);
                                           }
                                         }
                                       }}
                                       placeholder={currentSpot.toFixed(6)}
                                       disabled={isUsingRealPrice}
-                                      className={`w-20 h-6 text-xs text-center border-green-200 focus:border-green-400 focus:ring-green-400/20 ${
-                                        isUsingRealPrice ? 'bg-green-50 border-green-300' : 'bg-white'
+                                      className={`w-20 h-6 text-xs text-center border-green-200 dark:border-green-800 focus:border-green-400 dark:focus:border-green-600 focus:ring-green-400/20 ${
+                                        isUsingRealPrice ? 'bg-green-50 dark:bg-green-950/30 border-green-300 dark:border-green-700' : 'bg-background'
                                       }`}
                                       step="0.0001"
                                       min="0"
@@ -2016,7 +2016,7 @@ const HedgingInstruments = () => {
                           
                                                      {/* Volatility - Export (conditional) */}
                            {showExportColumns && (
-                             <TableCell className="text-center bg-blue-50/80 border-r border-slate-200">
+                             <TableCell className="text-center bg-blue-50/80 dark:bg-blue-950/30 border-r border-border">
                                <div className="text-sm font-mono font-semibold text-blue-700">
                               {instrument.exportVolatility ? 
                                 `${instrument.exportVolatility.toFixed(2)}%` : 
@@ -2027,7 +2027,7 @@ const HedgingInstruments = () => {
                            )}
                           
                           {/* Volatility - Current */}
-                           <TableCell className="text-center bg-green-50/80 border-r border-slate-200">
+                           <TableCell className="text-center bg-green-50/80 dark:bg-green-950/30 border-r border-border">
                             <div className="space-y-1">
                               <div className="flex items-center gap-1">
                                 <Input
@@ -2040,7 +2040,7 @@ const HedgingInstruments = () => {
                                     }
                                   }}
                                   placeholder={volatility.toFixed(1)}
-                                  className="w-16 h-6 text-xs text-center bg-white border-green-200 focus:border-green-400 focus:ring-green-400/20"
+                                  className="w-16 h-6 text-xs text-center bg-background border-green-200 dark:border-green-800 focus:border-green-400 dark:focus:border-green-600 focus:ring-green-400/20"
                                   step="0.1"
                                   min="0"
                                   max="100"
@@ -2066,7 +2066,7 @@ const HedgingInstruments = () => {
                           
                                                      {/* Risk-Free Rate - Export (conditional) */}
                            {showExportColumns && (
-                             <TableCell className="font-mono text-center bg-blue-50 border-r border-slate-200">
+                             <TableCell className="font-mono text-center bg-blue-50 dark:bg-blue-950/30 border-r border-border">
                             <div className="text-xs text-blue-600">
                               {instrument.exportDomesticRate ? 
                                 `${instrument.exportDomesticRate.toFixed(3)}%` : 
@@ -2095,7 +2095,7 @@ const HedgingInstruments = () => {
                           
                                                      {/* Forward Price - Export (conditional) */}
                            {showExportColumns && (
-                             <TableCell className="font-mono text-center bg-blue-50 border-r border-slate-200">
+                             <TableCell className="font-mono text-center bg-blue-50 dark:bg-blue-950/30 border-r border-border">
                             <div className="text-xs text-blue-600">
                               {instrument.exportForwardPrice ? 
                                 instrument.exportForwardPrice.toFixed(6) : 
@@ -2143,7 +2143,7 @@ const HedgingInstruments = () => {
                           
                                                      {/* Strike - Export (conditional) */}
                            {showExportColumns && (
-                             <TableCell className="font-mono text-center bg-blue-50 border-r border-slate-200">
+                             <TableCell className="font-mono text-center bg-blue-50 dark:bg-blue-950/30 border-r border-border">
                             <div className="text-xs text-blue-600">
                               {(() => {
                                 // Calculer le strike d'export basé sur les paramètres d'export
@@ -2244,7 +2244,7 @@ const HedgingInstruments = () => {
                       );
                     })}
                   </TableBody>
-                    </Table>
+                </Table>
                   </div>
                 </div>
               )}

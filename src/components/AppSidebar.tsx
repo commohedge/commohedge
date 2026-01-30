@@ -17,7 +17,8 @@ import {
   Database,
   Newspaper,
   Calendar,
-  LineChart
+  LineChart,
+  Percent
 } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import {
@@ -57,6 +58,12 @@ const marketDataItems = [
     url: "/commodity-market",
     icon: Globe,
     description: "Real-time commodity market data and prices"
+  },
+  {
+    title: "Rate Explorer",
+    url: "/rate-explorer",
+    icon: Percent,
+    description: "Interest rate futures, IRS & yield curve bootstrapping"
   },
   {
     title: "Market News",

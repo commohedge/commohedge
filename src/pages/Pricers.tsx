@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Layout } from "@/components/Layout";
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -8,6 +8,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { 
   Calculator, 
   TrendingUp, 
@@ -18,13 +20,18 @@ import {
   Clock,
   Calendar,
   Percent,
-  Hash
+  Hash,
+  RefreshCw,
+  Target,
+  LineChart
 } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
 import { CURRENCY_PAIRS } from '@/pages/Index'; // Commodity data
 import PayoffChart from '@/components/PayoffChart';
 import { PricingService, Greeks } from '@/services/PricingService';
 import { Commodity, CommodityCategory, fetchCommoditiesData } from '@/services/commodityApi';
+import { useInterestRates } from '@/hooks/useInterestRates';
+import { fetchAllCountries, CountryBondData } from '@/services/rateExplorer/bondsApi';
 
 // Interface pour les commodities (adaptée du Strategy Builder)
 interface CurrencyPair { // Renamed to Commodity in a previous step, but still named CurrencyPair here for compatibility
@@ -90,9 +97,14 @@ const INSTRUMENT_TYPES = [
 const Pricers = () => {
   const { toast } = useToast();
   
-  // Helper functions for commodity pricing
-  const getRiskFreeRate = () => pricingInputs.interestRate / 100;
-  const calculateCostOfCarry = () => getRiskFreeRate();
+  // 🎯 Interest Rate Hook - Utilise les taux de Settings (Fixed Bank Rate ou Curve)
+  const { 
+    mode: interestRateMode, 
+    isCurveMode, 
+    getRate, 
+    fixedRates,
+    hasCurveData 
+  } = useInterestRates();
   
   // État principal
   const [selectedInstrument, setSelectedInstrument] = useState('call');
@@ -230,17 +242,110 @@ const Pricers = () => {
   const [underlyingPriceType, setUnderlyingPriceType] = useState<'forward' | 'spot'>('forward');
   
   // Inputs de pricing (adaptés pour commodities)
-  const [pricingInputs, setPricingInputs] = useState({
+  const [pricingInputs, setPricingInputs] = useState(() => {
+    // Initialiser avec le taux de Settings (Bank Rate USD par défaut)
+    const initialRate = (fixedRates?.USD || 4.5);
+    return {
     startDate: new Date().toISOString().split('T')[0],
     maturityDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 1 an par défaut
     spotPrice: 75.50, // WTI default price
-    interestRate: 5.0, // Risk-free rate (en pourcentage)
+      interestRate: initialRate, // 🎯 Risk-free rate depuis Settings (en pourcentage)
     timeToMaturity: 1.0,
     volatility: 25.0, // Commodity volatility (en pourcentage)
     numSimulations: 1000, // ✅ 1000 comme Strategy Builder
     storageCost: 0.0, // Storage cost (en pourcentage)
     convenienceYield: 0.0 // Convenience yield (en pourcentage)
+    };
   });
+  
+  // 🎯 Fonction pour obtenir la devise de la commodity sélectionnée
+  const getSelectedCurrency = useMemo(() => {
+    // La plupart des commodities sont cotées en USD
+    const currentPair = CURRENCY_PAIRS.find(p => p.symbol === selectedCurrencyPair);
+    return currentPair?.quote || 'USD';
+  }, [selectedCurrencyPair]);
+  
+  // 🎯 Fonction pour obtenir le taux d'intérêt selon les settings
+  const getInterestRateForPricing = useMemo(() => {
+    // Mode Curve: utilise la maturité pour interpoler le taux
+    // Mode Fixed: utilise le Bank Rate de la devise
+    const maturityYears = pricingInputs.timeToMaturity || 1.0;
+    const rate = getRate(getSelectedCurrency, maturityYears);
+    return rate * 100; // Convertir en pourcentage
+  }, [getRate, getSelectedCurrency, pricingInputs.timeToMaturity]);
+  
+  // 🎯 Mettre à jour le taux d'intérêt quand la devise ou la maturité change
+  useEffect(() => {
+    const newRate = getInterestRateForPricing;
+    if (Math.abs(newRate - pricingInputs.interestRate) > 0.001) {
+      setPricingInputs(prev => ({
+        ...prev,
+        interestRate: newRate
+      }));
+    }
+  }, [getInterestRateForPricing]);
+  
+  // 🌐 Auto-sync bank rates on mount if in fixed mode
+  useEffect(() => {
+    if (!isCurveMode) {
+      // Check if bond data is fresh (less than 1 hour old)
+      const lastUpdate = localStorage.getItem('bondDataLastUpdate');
+      const isFresh = lastUpdate ? (Date.now() - new Date(lastUpdate).getTime()) < 3600000 : false;
+      
+      if (!isFresh) {
+        // Auto-sync bank rates in background
+        const syncRates = async () => {
+          try {
+            const response = await fetchAllCountries();
+            if (response.success && response.data) {
+              const CURRENCY_TO_COUNTRY: Record<string, string> = {
+                USD: 'united-states',
+                EUR: 'germany',
+                GBP: 'united-kingdom',
+                CHF: 'switzerland',
+                JPY: 'japan',
+                CAD: 'canada',
+                AUD: 'australia',
+                NZD: 'new-zealand',
+              };
+              
+              const newRates: Record<string, number> = {};
+              Object.entries(CURRENCY_TO_COUNTRY).forEach(([currency, countrySlug]) => {
+                const countryData = response.data!.find((c: CountryBondData) => 
+                  c.countrySlug === countrySlug || 
+                  c.country.toLowerCase().replace(/\s+/g, '-') === countrySlug
+                );
+                if (countryData?.bankRate !== null && countryData?.bankRate !== undefined) {
+                  newRates[currency] = countryData.bankRate;
+                }
+              });
+              
+              if (Object.keys(newRates).length > 0) {
+                // Update settings
+                const currentSettings = JSON.parse(localStorage.getItem('fxRiskManagerSettings') || '{}');
+                currentSettings.pricing = {
+                  ...currentSettings.pricing,
+                  fixedRates: { ...currentSettings.pricing?.fixedRates, ...newRates }
+                };
+                localStorage.setItem('fxRiskManagerSettings', JSON.stringify(currentSettings));
+                localStorage.setItem('bondDataLastUpdate', response.scrapedAt || new Date().toISOString());
+                window.dispatchEvent(new CustomEvent('settingsUpdated'));
+                console.log('✅ Taux bancaires synchronisés automatiquement dans Pricers');
+              }
+            }
+          } catch (error) {
+            console.error('Erreur lors de la synchronisation automatique des taux:', error);
+          }
+        };
+        
+        syncRates();
+      }
+    }
+  }, [isCurveMode]); // Run once on mount and when mode changes
+  
+  // Helper functions for commodity pricing
+  const getRiskFreeRate = () => pricingInputs.interestRate / 100;
+  const calculateCostOfCarry = () => getRiskFreeRate();
 
   // Volume principal (simplifié)
   const [volume, setVolume] = useState(1000000);
@@ -1082,7 +1187,7 @@ const Pricers = () => {
                         // Real commodities from Commodity Market
                         <>
                           {/* Search Input */}
-                          <div className="p-2 border-b sticky top-0 bg-white z-10">
+                          <div className="p-2 border-b sticky top-0 bg-background z-10">
                             <Input
                               placeholder="Search by symbol or name..."
                               value={commoditySearchQuery}
@@ -1403,18 +1508,72 @@ const Pricers = () => {
                   />
                 </div>
 
-                {/* Risk-free Rate */}
+                {/* Risk-free Rate - avec indicateur de mode */}
                 <div className="space-y-2">
-                  <Label>
+                  <div className="flex items-center justify-between">
+                    <Label className="flex items-center gap-2">
                     Risk-free Rate (%)
-                    <span className="ml-1 text-xs text-muted-foreground" title="Risk-free interest rate for commodity pricing">?</span>
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger>
+                            <Info className="w-3 h-3 text-muted-foreground" />
+                          </TooltipTrigger>
+                          <TooltipContent className="max-w-xs">
+                            <p className="text-sm">
+                              {isCurveMode 
+                                ? `Mode Courbe: Taux interpolé depuis la courbe bootstrappée (IRS + Futures) pour une maturité de ${pricingInputs.timeToMaturity.toFixed(2)} an(s).`
+                                : `Mode Fixe: Bank Rate ${getSelectedCurrency} depuis Settings.`}
+                            </p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
                   </Label>
+                    <Badge 
+                      variant={isCurveMode ? "default" : "secondary"} 
+                      className="text-xs"
+                    >
+                      {isCurveMode ? (
+                        <><LineChart className="w-3 h-3 mr-1" />Curve</>
+                      ) : (
+                        <><Target className="w-3 h-3 mr-1" />Bank Rate</>
+                      )}
+                    </Badge>
+                  </div>
+                  <div className="flex gap-2">
                   <Input
                     type="number"
                     step="0.01"
                     value={pricingInputs.interestRate}
                     onChange={(e) => updatePricingInput('interestRate', parseFloat(e.target.value))}
+                      className="flex-1"
                   />
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant="outline"
+                            size="icon"
+                            onClick={() => {
+                              const newRate = getInterestRateForPricing;
+                              setPricingInputs(prev => ({ ...prev, interestRate: newRate }));
+                              toast({
+                                title: "Rate Updated",
+                                description: `Rate reset to ${newRate.toFixed(2)}% (${isCurveMode ? 'Curve' : 'Bank Rate'} - ${getSelectedCurrency})`,
+                              });
+                            }}
+                          >
+                            <RefreshCw className="w-4 h-4" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>Reset to market rate</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {getSelectedCurrency} • {isCurveMode ? `Maturité: ${pricingInputs.timeToMaturity.toFixed(2)}Y` : "Bank Rate"}
+                  </p>
                 </div>
 
 

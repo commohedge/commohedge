@@ -317,7 +317,7 @@ const Dashboard = () => {
         <div className="relative overflow-hidden">
           <div className="absolute inset-0 bg-gradient-to-r from-blue-900/5 via-indigo-900/5 to-purple-900/5 rounded-2xl" />
           
-          <div className="relative bg-white/80 backdrop-blur-sm border border-white/20 rounded-2xl p-8 shadow-xl">
+          <div className="relative bg-background/80 dark:bg-background/90 backdrop-blur-sm border border-border rounded-2xl p-8 shadow-xl">
             <div className="flex flex-col lg:flex-row lg:justify-between lg:items-start gap-6">
               <div className="space-y-3">
                 <div className="flex items-center gap-3">
@@ -328,7 +328,7 @@ const Dashboard = () => {
                     <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-900 to-indigo-600 bg-clip-text text-transparent">
                       Risk Management Dashboard
                     </h1>
-                    <p className="text-slate-600 font-medium">
+                    <p className="text-muted-foreground font-medium">
                       Real-time risk monitoring and commodity market analysis
                     </p>
                   </div>

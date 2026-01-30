@@ -292,7 +292,7 @@ export default function CommodityMarket() {
       <div className="relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-r from-blue-900/5 via-indigo-900/5 to-purple-900/5 rounded-2xl" />
         
-        <div className="relative bg-white/80 backdrop-blur-sm border border-white/20 rounded-2xl p-8 shadow-xl">
+        <div className="relative bg-background/80 dark:bg-background/90 backdrop-blur-sm border border-border rounded-2xl p-8 shadow-xl">
           <div className="flex flex-col lg:flex-row lg:justify-between lg:items-start gap-6">
             <div className="space-y-3">
               <div className="flex items-center gap-3">
@@ -303,7 +303,7 @@ export default function CommodityMarket() {
                   <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-900 to-indigo-600 bg-clip-text text-transparent">
                     Commodity Market
                   </h1>
-                  <p className="text-slate-600 font-medium">
+                  <p className="text-muted-foreground font-medium">
                     Real-time commodity prices from global markets
                   </p>
                 </div>
@@ -386,8 +386,8 @@ export default function CommodityMarket() {
               <CardContent className="p-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm text-slate-600">Total Tracked</p>
-                    <p className="text-2xl font-bold text-slate-900">{marketStats.total}</p>
+                    <p className="text-sm text-muted-foreground">Total Tracked</p>
+                    <p className="text-2xl font-bold text-foreground">{marketStats.total}</p>
                   </div>
                   <BarChart3 className="h-8 w-8 text-blue-600" />
                 </div>
@@ -398,7 +398,7 @@ export default function CommodityMarket() {
               <CardContent className="p-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm text-slate-600">Gainers</p>
+                    <p className="text-sm text-muted-foreground">Gainers</p>
                     <p className="text-2xl font-bold text-green-600">{marketStats.positive}</p>
                   </div>
                   <TrendingUp className="h-8 w-8 text-green-600" />
@@ -410,7 +410,7 @@ export default function CommodityMarket() {
               <CardContent className="p-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm text-slate-600">Losers</p>
+                    <p className="text-sm text-muted-foreground">Losers</p>
                     <p className="text-2xl font-bold text-red-600">{marketStats.negative}</p>
                   </div>
                   <TrendingDown className="h-8 w-8 text-red-600" />
@@ -422,7 +422,7 @@ export default function CommodityMarket() {
               <CardContent className="p-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm text-slate-600">Avg Change</p>
+                    <p className="text-sm text-muted-foreground">Avg Change</p>
                     <p className={`text-2xl font-bold ${marketStats.avgChange >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                       {marketStats.avgChange >= 0 ? '+' : ''}{marketStats.avgChange.toFixed(2)}%
                     </p>
@@ -443,7 +443,7 @@ export default function CommodityMarket() {
       )}
 
       {/* Main Tabs */}
-      <Card className="border-0 shadow-xl bg-white/50 backdrop-blur-sm">
+      <Card className="border-0 shadow-xl bg-card/50 dark:bg-card/80 backdrop-blur-sm">
         <CardContent className="p-0">
           <Tabs 
             defaultValue="metals" 
@@ -457,7 +457,7 @@ export default function CommodityMarket() {
                 {selectedDomains.includes('metals') && (
                   <TabsTrigger 
                     value="metals" 
-                    className="data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:border data-[state=active]:border-slate-200 rounded-lg px-4 py-3 font-medium transition-all duration-200 flex items-center gap-2"
+                    className="data-[state=active]:bg-background dark:data-[state=active]:bg-card data-[state=active]:shadow-sm data-[state=active]:border data-[state=active]:border-border rounded-lg px-4 py-3 font-medium transition-all duration-200 flex items-center gap-2"
                   >
                     <Factory size={16} />
                     <span>Metals</span>
@@ -466,7 +466,7 @@ export default function CommodityMarket() {
                 {selectedDomains.includes('agricultural') && (
                   <TabsTrigger 
                     value="agricultural" 
-                    className="data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:border data-[state=active]:border-slate-200 rounded-lg px-4 py-3 font-medium transition-all duration-200 flex items-center gap-2"
+                    className="data-[state=active]:bg-background dark:data-[state=active]:bg-card data-[state=active]:shadow-sm data-[state=active]:border data-[state=active]:border-border rounded-lg px-4 py-3 font-medium transition-all duration-200 flex items-center gap-2"
                   >
                     <Wheat size={16} />
                     <span>Agricultural</span>
@@ -475,7 +475,7 @@ export default function CommodityMarket() {
                 {selectedDomains.includes('energy') && (
                   <TabsTrigger 
                     value="energy" 
-                    className="data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:border data-[state=active]:border-slate-200 rounded-lg px-4 py-3 font-medium transition-all duration-200 flex items-center gap-2"
+                    className="data-[state=active]:bg-background dark:data-[state=active]:bg-card data-[state=active]:shadow-sm data-[state=active]:border data-[state=active]:border-border rounded-lg px-4 py-3 font-medium transition-all duration-200 flex items-center gap-2"
                   >
                     <Zap size={16} />
                     <span>Energy</span>
@@ -484,7 +484,7 @@ export default function CommodityMarket() {
                 {selectedDomains.includes('freight') && (
                   <TabsTrigger 
                     value="freight" 
-                    className="data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:border data-[state=active]:border-slate-200 rounded-lg px-4 py-3 font-medium transition-all duration-200 flex items-center gap-2"
+                    className="data-[state=active]:bg-background dark:data-[state=active]:bg-card data-[state=active]:shadow-sm data-[state=active]:border data-[state=active]:border-border rounded-lg px-4 py-3 font-medium transition-all duration-200 flex items-center gap-2"
                   >
                     <Ship size={16} />
                     <span>Freight</span>
@@ -493,7 +493,7 @@ export default function CommodityMarket() {
                 {selectedDomains.includes('bunker') && (
                   <TabsTrigger 
                     value="bunker" 
-                    className="data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:border data-[state=active]:border-slate-200 rounded-lg px-4 py-3 font-medium transition-all duration-200 flex items-center gap-2"
+                    className="data-[state=active]:bg-background dark:data-[state=active]:bg-card data-[state=active]:shadow-sm data-[state=active]:border data-[state=active]:border-border rounded-lg px-4 py-3 font-medium transition-all duration-200 flex items-center gap-2"
                   >
                     <Fuel size={16} />
                     <span>Bunker</span>
@@ -551,8 +551,8 @@ export default function CommodityMarket() {
                               <TableCell className="text-right">
                                 <PriceChangeBadge value={commodity.percentChange} isPercent />
                               </TableCell>
-                              <TableCell className="text-right font-mono text-sm text-slate-600">{commodity.high.toFixed(2)}</TableCell>
-                              <TableCell className="text-right font-mono text-sm text-slate-600">{commodity.low.toFixed(2)}</TableCell>
+                              <TableCell className="text-right font-mono text-sm text-muted-foreground">{commodity.high.toFixed(2)}</TableCell>
+                              <TableCell className="text-right font-mono text-sm text-muted-foreground">{commodity.low.toFixed(2)}</TableCell>
                               <TableCell>
                                 <span className={`px-2 py-1 rounded text-xs font-medium ${
                                   commodity.technicalEvaluation.toLowerCase().includes('buy') ? 'bg-green-100 text-green-700' :
@@ -615,8 +615,8 @@ export default function CommodityMarket() {
                               <TableCell className="text-right">
                                 <PriceChangeBadge value={commodity.percentChange} isPercent />
                               </TableCell>
-                              <TableCell className="text-right font-mono text-sm text-slate-600">{commodity.high.toFixed(2)}</TableCell>
-                              <TableCell className="text-right font-mono text-sm text-slate-600">{commodity.low.toFixed(2)}</TableCell>
+                              <TableCell className="text-right font-mono text-sm text-muted-foreground">{commodity.high.toFixed(2)}</TableCell>
+                              <TableCell className="text-right font-mono text-sm text-muted-foreground">{commodity.low.toFixed(2)}</TableCell>
                               <TableCell>
                                 <span className={`px-2 py-1 rounded text-xs font-medium ${
                                   commodity.technicalEvaluation.toLowerCase().includes('buy') ? 'bg-green-100 text-green-700' :
@@ -679,8 +679,8 @@ export default function CommodityMarket() {
                               <TableCell className="text-right">
                                 <PriceChangeBadge value={commodity.percentChange} isPercent />
                               </TableCell>
-                              <TableCell className="text-right font-mono text-sm text-slate-600">{commodity.high.toFixed(2)}</TableCell>
-                              <TableCell className="text-right font-mono text-sm text-slate-600">{commodity.low.toFixed(2)}</TableCell>
+                              <TableCell className="text-right font-mono text-sm text-muted-foreground">{commodity.high.toFixed(2)}</TableCell>
+                              <TableCell className="text-right font-mono text-sm text-muted-foreground">{commodity.low.toFixed(2)}</TableCell>
                               <TableCell>
                                 <span className={`px-2 py-1 rounded text-xs font-medium ${
                                   commodity.technicalEvaluation.toLowerCase().includes('buy') ? 'bg-green-100 text-green-700' :
@@ -785,8 +785,8 @@ export default function CommodityMarket() {
                               <TableCell className="text-right">
                                 <PriceChangeBadge value={commodity.percentChange} isPercent />
                               </TableCell>
-                              <TableCell className="text-right font-mono text-sm text-slate-600">{commodity.high.toFixed(2)}</TableCell>
-                              <TableCell className="text-right font-mono text-sm text-slate-600">{commodity.low.toFixed(2)}</TableCell>
+                              <TableCell className="text-right font-mono text-sm text-muted-foreground">{commodity.high.toFixed(2)}</TableCell>
+                              <TableCell className="text-right font-mono text-sm text-muted-foreground">{commodity.low.toFixed(2)}</TableCell>
                               <TableCell>
                                 <span className={`px-2 py-1 rounded text-xs font-medium ${
                                   commodity.technicalEvaluation.toLowerCase().includes('buy') ? 'bg-green-100 text-green-700' :

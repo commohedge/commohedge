@@ -886,7 +886,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { Plus, Trash2, Save, X, AlertTriangle, Table, PlusCircle, Trash, Upload, BarChart3, Calculator, Shield, Calendar, ChevronDown } from 'lucide-react';
+import { Plus, Trash2, Save, X, AlertTriangle, Table, PlusCircle, Trash, Upload, BarChart3, Calculator, Shield, Calendar, ChevronDown, Target, TrendingUp, RefreshCw, Info } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Link } from 'react-router-dom';
 import { CalculatorState, CustomPeriod } from '@/types/CalculatorState';
@@ -906,6 +906,9 @@ import ZeroCostStrategies from '@/components/ZeroCostStrategies';
 import ZeroCostTab from '@/components/ZeroCostTab';
 import { PricingService } from '@/services/PricingService';
 import { Commodity, CommodityCategory, fetchCommoditiesData } from '@/services/commodityApi';
+import { useInterestRates } from '@/hooks/useInterestRates';
+import { Tooltip as UITooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { fetchAllCountries, CountryBondData } from '@/services/rateExplorer/bondsApi';
 
 // Currency Pair interface
 interface CurrencyPair {
@@ -1283,6 +1286,15 @@ export const CURRENCY_PAIRS: CurrencyPair[] = [
 const Index = () => {
   const { toast } = useToast();
   
+  // 🎯 Interest Rate Hook - Utilise les taux de Settings (Fixed Bank Rate ou Curve)
+  const { 
+    mode: interestRateMode, 
+    isCurveMode, 
+    getRate, 
+    fixedRates,
+    hasCurveData 
+  } = useInterestRates();
+  
   const [customCurrencyPairs, setCustomCurrencyPairs] = useState<CurrencyPair[]>(() => {
     const savedPairs = localStorage.getItem('customCurrencyPairs');
     return savedPairs ? JSON.parse(savedPairs) : [];
@@ -1313,11 +1325,14 @@ const Index = () => {
 
   // Basic parameters state
   const [params, setParams] = useState(() => {
+    // 🎯 Obtenir le taux initial depuis Settings (Bank Rate USD par défaut)
+    const initialRate = fixedRates?.USD || 4.5;
+    
     const defaultParams = {
       startDate: new Date().toISOString().split('T')[0],           // Hedging Start Date
       strategyStartDate: new Date().toISOString().split('T')[0],   // Strategy Start Date (same as hedging start by default)
       monthsToHedge: 12,
-      interestRate: 2.0, // Domestic rate for backward compatibility
+      interestRate: initialRate, // 🎯 Risk-free rate depuis Settings (en pourcentage)
       domesticRate: 1.0, // EUR rate
       foreignRate: 0.5, // USD rate
       totalVolume: 10000000, // Main volume for calculations
@@ -1366,6 +1381,89 @@ const Index = () => {
 
   // Keep track of initial spot price
   const [initialSpotPrice, setInitialSpotPrice] = useState<number>(params.spotPrice);
+  
+  // 🎯 Obtenir la devise de la commodity sélectionnée
+  const getSelectedCurrency = useMemo(() => {
+    return params.currencyPair?.quote || 'USD';
+  }, [params.currencyPair]);
+  
+  // 🎯 Fonction pour obtenir le taux d'intérêt selon les settings
+  const getInterestRateForStrategy = useMemo(() => {
+    // Mode Curve: utilise la maturité moyenne pour interpoler le taux
+    // Mode Fixed: utilise le Bank Rate de la devise
+    const maturityYears = params.monthsToHedge / 12;
+    const rate = getRate(getSelectedCurrency, maturityYears);
+    return rate * 100; // Convertir en pourcentage
+  }, [getRate, getSelectedCurrency, params.monthsToHedge]);
+  
+  // 🎯 Mettre à jour le taux d'intérêt automatiquement quand la devise ou la maturité change
+  useEffect(() => {
+    const newRate = getInterestRateForStrategy;
+    // Ne pas écraser si l'utilisateur a manuellement modifié le taux
+    // Cette logique peut être ajustée selon les besoins
+    if (Math.abs(newRate - params.interestRate) > 0.5) {
+      // Afficher un toast suggérant de mettre à jour le taux
+      console.log(`💡 Suggested rate for ${getSelectedCurrency}: ${newRate.toFixed(2)}% (current: ${params.interestRate.toFixed(2)}%)`);
+    }
+  }, [getInterestRateForStrategy, getSelectedCurrency]);
+  
+  // 🌐 Auto-sync bank rates on mount if in fixed mode
+  useEffect(() => {
+    if (!isCurveMode) {
+      // Check if bond data is fresh (less than 1 hour old)
+      const lastUpdate = localStorage.getItem('bondDataLastUpdate');
+      const isFresh = lastUpdate ? (Date.now() - new Date(lastUpdate).getTime()) < 3600000 : false;
+      
+      if (!isFresh) {
+        // Auto-sync bank rates in background
+        const syncRates = async () => {
+          try {
+            const response = await fetchAllCountries();
+            if (response.success && response.data) {
+              const CURRENCY_TO_COUNTRY: Record<string, string> = {
+                USD: 'united-states',
+                EUR: 'germany',
+                GBP: 'united-kingdom',
+                CHF: 'switzerland',
+                JPY: 'japan',
+                CAD: 'canada',
+                AUD: 'australia',
+                NZD: 'new-zealand',
+              };
+              
+              const newRates: Record<string, number> = {};
+              Object.entries(CURRENCY_TO_COUNTRY).forEach(([currency, countrySlug]) => {
+                const countryData = response.data!.find((c: CountryBondData) => 
+                  c.countrySlug === countrySlug || 
+                  c.country.toLowerCase().replace(/\s+/g, '-') === countrySlug
+                );
+                if (countryData?.bankRate !== null && countryData?.bankRate !== undefined) {
+                  newRates[currency] = countryData.bankRate;
+                }
+              });
+              
+              if (Object.keys(newRates).length > 0) {
+                // Update settings
+                const currentSettings = JSON.parse(localStorage.getItem('fxRiskManagerSettings') || '{}');
+                currentSettings.pricing = {
+                  ...currentSettings.pricing,
+                  fixedRates: { ...currentSettings.pricing?.fixedRates, ...newRates }
+                };
+                localStorage.setItem('fxRiskManagerSettings', JSON.stringify(currentSettings));
+                localStorage.setItem('bondDataLastUpdate', response.scrapedAt || new Date().toISOString());
+                window.dispatchEvent(new CustomEvent('settingsUpdated'));
+                console.log('✅ Taux bancaires synchronisés automatiquement dans Strategy Builder');
+              }
+            }
+          } catch (error) {
+            console.error('Erreur lors de la synchronisation automatique des taux:', error);
+          }
+        };
+        
+        syncRates();
+      }
+    }
+  }, [isCurveMode]); // Run once on mount and when mode changes
 
   // State for using real data from Commodity Market
   const [useRealData, setUseRealData] = useState(() => {
@@ -5404,7 +5502,7 @@ const Index = () => {
     try {
       // Create a temporary element for the PDF content
       const tempDiv = document.createElement('div');
-      tempDiv.className = 'p-8 bg-white';
+      tempDiv.className = 'p-8 bg-background dark:bg-background';
       tempDiv.innerHTML = `
         <h1 class="text-2xl font-bold mb-4">Risk Matrix Results</h1>
         <div class="mb-4">
@@ -6780,7 +6878,7 @@ const pricingFunctions = {
             </CardHeader>
             <CardContent className="pt-4 space-y-4">
               {/* Section 1: Use Real Data Toggle */}
-              <div className="p-2.5 bg-blue-50 border border-blue-200 rounded-lg">
+              <div className="p-2.5 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-lg">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <Switch
@@ -6898,7 +6996,7 @@ const pricingFunctions = {
                         // Real commodities from Commodity Market
                         <>
                           {/* Search Input */}
-                          <div className="p-2 border-b sticky top-0 bg-white z-10">
+                          <div className="p-2 border-b sticky top-0 bg-background z-10">
                             <Input
                               placeholder="Search by symbol or name..."
                               value={commoditySearchQuery}
@@ -7340,7 +7438,29 @@ const pricingFunctions = {
                 
                 <div className="space-y-1">
                   <label className="text-sm font-medium text-foreground flex items-center justify-between">
+                    <div className="flex items-center gap-2">
                     <span>Risk-free Rate (r) %</span>
+                      <TooltipProvider>
+                        <UITooltip>
+                          <TooltipTrigger>
+                            <Info className="w-3 h-3 text-muted-foreground" />
+                          </TooltipTrigger>
+                          <TooltipContent className="max-w-xs">
+                            <p className="text-sm">
+                              {isCurveMode 
+                                ? `Mode Courbe: Taux interpolé depuis la courbe bootstrappée pour ${params.monthsToHedge} mois.`
+                                : `Mode Fixe: Bank Rate ${getSelectedCurrency} depuis Settings.`}
+                            </p>
+                          </TooltipContent>
+                        </UITooltip>
+                      </TooltipProvider>
+                      <Badge 
+                        variant={isCurveMode ? "default" : "secondary"} 
+                        className="text-[10px] px-1.5 py-0"
+                      >
+                        {isCurveMode ? "Curve" : "Bank Rate"}
+                      </Badge>
+                    </div>
                     <span className="text-xs text-muted-foreground font-mono">{(params.interestRate || 0).toFixed(2)}%</span>
                   </label>
                   <div className="flex items-center gap-2">
@@ -7356,12 +7476,39 @@ const pricingFunctions = {
                       type="number"
                       value={params.interestRate}
                       onChange={(e) => setParams({...params, interestRate: Number(e.target.value)})}
-                      className="w-16 h-8 text-center text-sm"
+                      className="w-14 h-8 text-center text-sm"
                       min={0}
                       max={15}
                       step={0.1}
                     />
+                    <TooltipProvider>
+                      <UITooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant="outline"
+                            size="icon"
+                            className="h-8 w-8"
+                            onClick={() => {
+                              const newRate = getInterestRateForStrategy;
+                              setParams({...params, interestRate: newRate});
+                              toast({
+                                title: "Rate Updated",
+                                description: `Rate set to ${newRate.toFixed(2)}% (${isCurveMode ? 'Curve' : 'Bank Rate'} - ${getSelectedCurrency})`,
+                              });
+                            }}
+                          >
+                            <RefreshCw className="w-3 h-3" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>Reset to market rate ({getInterestRateForStrategy.toFixed(2)}%)</p>
+                        </TooltipContent>
+                      </UITooltip>
+                    </TooltipProvider>
                   </div>
+                  <p className="text-[10px] text-muted-foreground">
+                    {getSelectedCurrency} • {isCurveMode ? `Maturité: ${(params.monthsToHedge / 12).toFixed(1)}Y` : "Bank Rate"}
+                  </p>
                 </div>
               </div>
 
@@ -7479,7 +7626,7 @@ const pricingFunctions = {
                      step="0.01"
                      placeholder="0.00"
                    />
-                   <div className="text-xs text-muted-foreground flex items-center gap-1 bg-blue-50 px-2 py-1 rounded border border-blue-100">
+                   <div className="text-xs text-muted-foreground flex items-center gap-1 bg-blue-50 dark:bg-blue-950/30 px-2 py-1 rounded border border-blue-100 dark:border-blue-800">
                      <span>📊</span>
                      <span>Effective: <span className="font-mono font-medium">${((params.spotPrice || 0) + (params.priceDifferential || 0)).toFixed(2)}</span></span>
                      {params.currencyPair?.base && (
@@ -7488,8 +7635,8 @@ const pricingFunctions = {
                    </div>
                    <div className="text-xs text-muted-foreground">
                      <span className="font-medium">ℹ️</span> Applied only to costs
-                   </div>
-                 </div>
+                  </div>
+                </div>
               </div>
 
               {/* Custom Periods - Compact Toggle */}
@@ -7767,7 +7914,7 @@ const pricingFunctions = {
                             type="number"
                             value={component.strike}
                             disabled
-                            className="bg-gray-100"
+                            className="bg-muted"
                           />
                         </div>
                         <div className="col-span-2">
@@ -7949,7 +8096,7 @@ const pricingFunctions = {
           <Card>
             <button
               onClick={() => toggleInputs('strategy')}
-              className="w-full text-left bg-white rounded-md"
+              className="w-full text-left bg-background rounded-md"
             >
               <div className="flex items-center justify-between p-3">
                 <span className="font-medium">Strategy Components</span>
@@ -8074,12 +8221,12 @@ const pricingFunctions = {
             </CardHeader>
             <CardContent>
               {/* Scenarios count indicator */}
-              <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+              <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-lg">
                 <div className="flex items-center justify-between text-sm">
-                  <span className="font-medium text-blue-800">
+                  <span className="font-medium text-blue-800 dark:text-blue-400">
                     📊 {Object.keys(stressTestScenarios).length} scenarios available
                   </span>
-                  <span className="text-blue-600">
+                  <span className="text-blue-600 dark:text-blue-400">
                     {Object.values(stressTestScenarios).filter(s => s.isCustom).length} Custom | 
                     {Object.values(stressTestScenarios).filter(s => !s.isCustom).length} Predefined
                   </span>
@@ -8088,11 +8235,11 @@ const pricingFunctions = {
               
               {/* Active scenario indicator */}
               {activeStressTest && stressTestScenarios[activeStressTest] && (
-                <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded-lg">
+                <div className="mt-4 p-3 bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded-lg">
                   <div className="flex items-center gap-2">
-                    <span className="font-medium text-green-700">✓ Active Scenario:</span>
-                    <span className="text-green-800">{stressTestScenarios[activeStressTest].name}</span>
-                    <span className="text-green-600 text-sm">
+                    <span className="font-medium text-green-700 dark:text-green-400">✓ Active Scenario:</span>
+                    <span className="text-green-800 dark:text-green-300">{stressTestScenarios[activeStressTest].name}</span>
+                    <span className="text-green-600 dark:text-green-400 text-sm">
                       (Vol: {((stressTestScenarios[activeStressTest]?.volatility || 0) * 100).toFixed(1)}%, 
                       Shock: {((stressTestScenarios[activeStressTest]?.priceShock || 0) * 100).toFixed(1)}%, 
                       Drift: {((stressTestScenarios[activeStressTest]?.drift || 0) * 100).toFixed(1)}%)
@@ -8104,14 +8251,14 @@ const pricingFunctions = {
               {/* Display scenarios in 3x3 grid */}
               <div className="grid grid-cols-3 gap-4">
                 {Object.entries(stressTestScenarios).map(([key, scenario]) => (
-                          <Card key={key} className={`p-4 transition-all duration-200 ${activeStressTest === key ? 'ring-2 ring-blue-500 bg-blue-50' : 'bg-white hover:shadow-md'}`}>
+                          <Card key={key} className={`p-4 transition-all duration-200 ${activeStressTest === key ? 'ring-2 ring-blue-500 bg-blue-50 dark:bg-blue-950/30' : 'bg-background hover:shadow-md'}`}>
                             <div className="space-y-3">
                               <div className="flex items-start justify-between">
                                 <div className="flex-1">
                                   <div className="flex items-center gap-2 mb-1">
                                     <h5 className="font-medium text-sm">{scenario.name}</h5>
                             {scenario.isCustom && (
-                              <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                              <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium bg-green-100 dark:bg-green-950/30 text-green-800 dark:text-green-400">
                                 Custom
                                       </span>
                                     )}
@@ -8265,8 +8412,8 @@ const pricingFunctions = {
                     <table className="w-full border-collapse">
                       <thead>
                         <tr>
-                          <th className="border p-2 bg-gray-50">Date</th>
-                          <th className="border p-2 bg-gray-50">Price</th>
+                          <th className="border p-2 bg-muted">Date</th>
+                          <th className="border p-2 bg-muted">Price</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -8287,9 +8434,9 @@ const pricingFunctions = {
                   <table className="w-full border-collapse">
                       <thead>
                         <tr>
-                          <th className="border p-2 bg-gray-50">Month</th>
-                          <th className="border p-2 bg-gray-50">Average Price</th>
-                          <th className="border p-2 bg-gray-50">Historical Volatility</th>
+                          <th className="border p-2 bg-muted">Month</th>
+                          <th className="border p-2 bg-muted">Average Price</th>
+                          <th className="border p-2 bg-muted">Historical Volatility</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -8353,11 +8500,11 @@ const pricingFunctions = {
               </div>
             </CardHeader>
             <CardContent>
-              <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+              <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-lg">
                 <div className="text-sm">
-                  <span className="font-medium text-blue-800">Current Setup:</span> 
-                  <span className="text-blue-700"> {params.currencyPair?.symbol} @ {params.spotPrice.toFixed(4)}</span>
-                  <span className="text-blue-600 ml-2">
+                  <span className="font-medium text-blue-800 dark:text-blue-400">Current Setup:</span> 
+                  <span className="text-blue-700 dark:text-blue-300"> {params.currencyPair?.symbol} @ {params.spotPrice.toFixed(4)}</span>
+                  <span className="text-blue-600 dark:text-blue-400 ml-2">
                     (Ranges auto-generated based on {params.currencyPair?.category} pair volatility)
                   </span>
                 </div>
@@ -9229,7 +9376,7 @@ const pricingFunctions = {
               )}
               
               {(!showMonteCarloVisualization || !results || !simulationData) && (
-                <div className="text-center py-8 bg-gray-50 rounded-md border border-gray-200">
+                <div className="text-center py-8 bg-muted rounded-md border border-border">
                   {!results ? (
                     <div>
                       <p className="text-gray-700 font-medium">Calculate Strategy Results First</p>
@@ -9467,8 +9614,8 @@ const pricingFunctions = {
                   
                   // Fonction pour appliquer une couleur en fonction de la valeur
                   const getPnLColor = (value: number) => {
-                    if (value > 0) return 'bg-green-100';
-                    if (value < 0) return 'bg-red-100';
+                    if (value > 0) return 'bg-green-100 dark:bg-green-950/30';
+                    if (value < 0) return 'bg-red-100 dark:bg-red-950/30';
                     return '';
                   };
                   
@@ -9485,7 +9632,7 @@ const pricingFunctions = {
                   return (
                     <table className="min-w-full border-collapse text-sm">
                       <thead>
-                        <tr className="bg-gray-100">
+                        <tr className="bg-muted">
                           <th className="border p-2 font-semibold text-left"></th>
                           {months.map(month => (
                             <th key={month} className="border p-2 font-semibold text-center w-20">{month}</th>
@@ -9513,7 +9660,7 @@ const pricingFunctions = {
                             </td>
                           </tr>
                         ))}
-                        <tr className="bg-gray-50">
+                        <tr className="bg-muted/50">
                           <td className="border p-2 font-semibold">Total</td>
                           {months.map(month => (
                             <td 

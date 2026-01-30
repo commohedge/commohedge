@@ -32,6 +32,7 @@ import UserManagement from "./pages/UserManagement";
 import Settings from "./pages/Settings";
 import DatabaseSync from "./pages/DatabaseSync";
 import RegressionAnalysis from "./pages/RegressionAnalysis";
+import RateExplorer from "./pages/RateExplorer";
 import LandingPage from "./pages/LandingPage";
 import SupabaseLogin from "./pages/SupabaseLogin";
 import AuthCallback from "./pages/AuthCallback";
@@ -95,6 +96,7 @@ const App = () => {
             <Route path="/database-sync" element={<ProtectedRoute><DatabaseSync /></ProtectedRoute>} />
             <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
             <Route path="/regression-analysis" element={<ProtectedRoute><RegressionAnalysis /></ProtectedRoute>} />
+            <Route path="/rate-explorer" element={<ProtectedRoute><RateExplorer /></ProtectedRoute>} />
             
             {/* Legacy routes - redirect /saved to /reports */}
             <Route path="/saved" element={<ProtectedRoute><Reports /></ProtectedRoute>} />

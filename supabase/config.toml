@@ -1,0 +1,13 @@
+# Rate Explorer Edge Functions Configuration
+# Note: These functions need to be deployed to Supabase project 
+# The project uses Firecrawl API for web scraping
+
+[functions.scrape-rates]
+verify_jwt = false
+
+[functions.scrape-irs]
+verify_jwt = false
+
+[functions.scrape-bonds]
+verify_jwt = false
+
