@@ -1383,9 +1383,16 @@ const Index = () => {
   const [initialSpotPrice, setInitialSpotPrice] = useState<number>(params.spotPrice);
   
   // 🎯 Obtenir la devise de la commodity sélectionnée
+  // Si on utilise des données réelles, essayer de récupérer la devise depuis la commodity
   const getSelectedCurrency = useMemo(() => {
+    if (useRealData && realCommodities.length > 0 && params.currencyPair?.symbol) {
+      const selectedCommodity = realCommodities.find(c => c.symbol === params.currencyPair?.symbol);
+      if (selectedCommodity?.currency) {
+        return selectedCommodity.currency;
+      }
+    }
     return params.currencyPair?.quote || 'USD';
-  }, [params.currencyPair]);
+  }, [params.currencyPair, useRealData, realCommodities]);
   
   // 🎯 Fonction pour obtenir le taux d'intérêt selon les settings
   const getInterestRateForStrategy = useMemo(() => {
@@ -1396,16 +1403,137 @@ const Index = () => {
     return rate * 100; // Convertir en pourcentage
   }, [getRate, getSelectedCurrency, params.monthsToHedge]);
   
-  // 🎯 Mettre à jour le taux d'intérêt automatiquement quand la devise ou la maturité change
-  useEffect(() => {
-    const newRate = getInterestRateForStrategy;
-    // Ne pas écraser si l'utilisateur a manuellement modifié le taux
-    // Cette logique peut être ajustée selon les besoins
-    if (Math.abs(newRate - params.interestRate) > 0.5) {
-      // Afficher un toast suggérant de mettre à jour le taux
-      console.log(`💡 Suggested rate for ${getSelectedCurrency}: ${newRate.toFixed(2)}% (current: ${params.interestRate.toFixed(2)}%)`);
+  // 🌐 Fonction pour récupérer le Bank Rate depuis Gov Bonds pour une devise donnée
+  const getBankRateForCurrency = useCallback(async (currency: string): Promise<number | null> => {
+    try {
+      const response = await fetchAllCountries();
+      if (response.success && response.data) {
+        // Mapping complet de toutes les devises disponibles dans Gov Bonds
+        const CURRENCY_TO_COUNTRY: Record<string, string> = {
+          // Major currencies
+          USD: 'united-states',
+          EUR: 'germany', // Using Germany as primary EUR country
+          GBP: 'united-kingdom',
+          JPY: 'japan',
+          CHF: 'switzerland',
+          CAD: 'canada',
+          AUD: 'australia',
+          NZD: 'new-zealand',
+          
+          // Asian currencies
+          CNY: 'china',
+          SGD: 'singapore',
+          HKD: 'hong-kong',
+          KRW: 'south-korea',
+          TWD: 'taiwan',
+          THB: 'thailand',
+          MYR: 'malaysia',
+          IDR: 'indonesia',
+          PHP: 'philippines',
+          VND: 'vietnam',
+          
+          // European currencies (non-EUR)
+          SEK: 'sweden',
+          NOK: 'norway',
+          DKK: 'denmark',
+          PLN: 'poland',
+          CZK: 'czech-republic',
+          HUF: 'hungary',
+          RON: 'romania',
+          ISK: 'iceland',
+          
+          // Middle Eastern currencies
+          SAR: 'saudi-arabia',
+          AED: 'united-arab-emirates',
+          QAR: 'qatar',
+          KWD: 'kuwait',
+          BHD: 'bahrain',
+          OMR: 'oman',
+          ILS: 'israel',
+          
+          // African currencies
+          ZAR: 'south-africa',
+          EGP: 'egypt',
+          NGN: 'nigeria',
+          KES: 'kenya',
+          MAD: 'morocco',
+          
+          // Latin American currencies
+          BRL: 'brazil',
+          MXN: 'mexico',
+          ARS: 'argentina',
+          CLP: 'chile',
+          COP: 'colombia',
+          PEN: 'peru',
+          
+          // Other currencies
+          INR: 'india',
+          RUB: 'russia',
+          TRY: 'turkey',
+          PKR: 'pakistan',
+          BDT: 'bangladesh',
+          LKR: 'sri-lanka',
+        };
+        
+        // First, try to find by country slug mapping
+        const countrySlug = CURRENCY_TO_COUNTRY[currency];
+        if (countrySlug) {
+          const countryData = response.data.find((c: CountryBondData) => 
+            c.countrySlug === countrySlug || 
+            c.country.toLowerCase().replace(/\s+/g, '-') === countrySlug
+          );
+          
+          if (countryData?.bankRate !== null && countryData?.bankRate !== undefined) {
+            return countryData.bankRate;
+          }
+        }
+        
+        // Fallback: search directly by currency code (for EUR countries or if mapping fails)
+        const countryDataByCurrency = response.data.find((c: CountryBondData) => 
+          c.currency === currency && c.bankRate !== null && c.bankRate !== undefined
+        );
+        
+        if (countryDataByCurrency) {
+          return countryDataByCurrency.bankRate;
+        }
+      }
+    } catch (error) {
+      console.error(`Erreur lors de la récupération du Bank Rate pour ${currency}:`, error);
     }
-  }, [getInterestRateForStrategy, getSelectedCurrency]);
+    return null;
+  }, []);
+
+  // 🎯 Synchroniser automatiquement le Risk-free Rate avec le Bank Rate quand la commodity change
+  useEffect(() => {
+    if (!isCurveMode && getSelectedCurrency) {
+      const syncRate = async () => {
+        const bankRate = await getBankRateForCurrency(getSelectedCurrency);
+        if (bankRate !== null) {
+          // Mettre à jour le taux automatiquement
+          setParams(prev => ({
+            ...prev,
+            interestRate: bankRate
+          }));
+          
+          // Mettre à jour aussi les fixedRates dans Settings pour cette devise
+          const currentSettings = JSON.parse(localStorage.getItem('fxRiskManagerSettings') || '{}');
+          currentSettings.pricing = {
+            ...currentSettings.pricing,
+            fixedRates: {
+              ...currentSettings.pricing?.fixedRates,
+              [getSelectedCurrency]: bankRate
+            }
+          };
+          localStorage.setItem('fxRiskManagerSettings', JSON.stringify(currentSettings));
+          window.dispatchEvent(new CustomEvent('settingsUpdated'));
+          
+          console.log(`✅ Risk-free Rate synchronisé avec Bank Rate pour ${getSelectedCurrency}: ${bankRate.toFixed(2)}%`);
+        }
+      };
+      
+      syncRate();
+    }
+  }, [getSelectedCurrency, isCurveMode, getBankRateForCurrency]);
   
   // 🌐 Auto-sync bank rates on mount if in fixed mode
   useEffect(() => {
@@ -6954,7 +7082,7 @@ const pricingFunctions = {
                             symbol: selectedCommodity.symbol,
                             name: selectedCommodity.name,
                             base: getUnitFromCommodity(selectedCommodity),
-                            quote: 'USD',
+                            quote: selectedCommodity.currency || 'USD', // ✅ Use commodity's actual currency
                             category: categoryMap[selectedCommodity.category] || 'others',
                             defaultSpotRate: selectedCommodity.price
                           };
@@ -6967,8 +7095,8 @@ const pricingFunctions = {
                           setInitialSpotPrice(selectedCommodity.price);
                           
                           toast({
-                            title: "Real Price Updated",
-                            description: `${selectedCommodity.name}: $${selectedCommodity.price.toFixed(2)}`,
+                            title: "Commodity Updated",
+                            description: `${selectedCommodity.name}: $${selectedCommodity.price.toFixed(2)} (${selectedCommodity.currency || 'USD'})`,
                           });
                         }
                       } else {
