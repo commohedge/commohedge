@@ -345,7 +345,7 @@ function extractCurrency(symbol: string, name: string, category: CommodityCatego
     }
   }
   
-  // Strategy 4: Exchange-specific currency mapping
+  // Strategy 4: Exchange-specific currency mapping (from exchange names in text)
   const exchangeCurrencyMap: Record<string, string> = {
     'ICE Futures Europe': 'GBP',
     'ICE Europe': 'GBP',
@@ -374,10 +374,65 @@ function extractCurrency(symbol: string, name: string, category: CommodityCatego
   
   for (const [exchange, currency] of Object.entries(exchangeCurrencyMap)) {
     if (combinedText.includes(exchange.toLowerCase())) {
-      console.log(`✅ Currency detected from exchange for ${symbol}: ${currency}`);
+      console.log(`✅ Currency detected from exchange name for ${symbol}: ${currency}`);
       return currency;
     }
   }
+  
+  // Strategy 4b: Exchange code mapping (from URL patterns like ICEEUR, ICEUS, CBOT, etc.)
+  const exchangeCodeCurrencyMap: Record<string, string> = {
+    // Europe
+    'ICEEUR': 'GBP',           // ICE Futures Europe (London)
+    'ICEUS': 'USD',            // ICE US
+    'LIFFE': 'GBP',            // London International Financial Futures Exchange
+    'EURONEXT': 'EUR',         // Euronext
+    'EUREX': 'EUR',            // Eurex
+    
+    // US
+    'CBOT': 'USD',             // Chicago Board of Trade
+    'CBOT_MINI': 'USD',        // CBOT Mini
+    'CBOT%5FMINI': 'USD',      // CBOT Mini (URL encoded)
+    'NYMEX': 'USD',            // New York Mercantile Exchange
+    'COMEX': 'USD',            // Commodity Exchange
+    'CME': 'USD',              // Chicago Mercantile Exchange
+    'CME_MINI': 'USD',         // CME Mini
+    
+    // Brésil
+    'BMFBOVESPA': 'BRL',       // BMF Bovespa
+    'BMF': 'BRL',              // BMF
+    
+    // Chine
+    'SHFE': 'CNY',             // Shanghai Futures Exchange
+    'DCE': 'CNY',              // Dalian Commodity Exchange
+    'CZCE': 'CNY',             // Zhengzhou Commodity Exchange
+    
+    // Inde
+    'NCDEX': 'INR',            // National Commodity & Derivatives Exchange
+    'MCX': 'INR',              // Multi Commodity Exchange
+    'NSE': 'INR',              // National Stock Exchange
+    'BSE': 'INR',              // Bombay Stock Exchange
+    
+    // Japon
+    'TOCOM': 'JPY',            // Tokyo Commodity Exchange
+    'OSE': 'JPY',              // Osaka Securities Exchange
+    
+    // Autres Asie
+    'MYX': 'MYR',              // Malaysia Derivatives Exchange
+    'SGX': 'SGD',              // Singapore Exchange
+    
+    // Océanie
+    'ASX': 'AUD',              // Australian Securities Exchange
+    'NZX': 'NZD',              // New Zealand Exchange
+    
+    // Autres
+    'TSX': 'CAD',              // Toronto Stock Exchange
+    'JSE': 'ZAR',              // Johannesburg Stock Exchange
+    'MOEX': 'RUB',             // Moscow Exchange
+    'HKEX': 'HKD'              // Hong Kong Exchange
+  };
+  
+  // Note: Cette stratégie sera utilisée dans parseCommoditiesData() pour extraire depuis l'URL
+  // On la garde ici pour référence mais elle sera appelée directement depuis parseCommoditiesData()
   
   // Strategy 5: Category-specific defaults with exceptions (fallback)
   const DEFAULT_CURRENCIES: Record<CommodityCategory, string> = {
@@ -493,6 +548,43 @@ function parseCommoditiesData(data: any, category: CommodityCategory): Commodity
       throw new Error("Failed to extract data");
     }
     
+    // Try to extract currency from JSON embedded data (if available)
+    // This is a global check for the entire page, individual rows will also check
+    let globalCurrencyMap: Map<string, string> = new Map();
+    try {
+      const jsonScripts = root.querySelectorAll('script[type="application/json"], script[id*="__NEXT_DATA__"], script[id*="__TV_DATA__"]');
+      for (const script of jsonScripts) {
+        try {
+          const jsonData = JSON.parse(script.text);
+          // Navigate through possible JSON structures to find symbols array with currency
+          const symbolsData = jsonData?.props?.pageProps?.symbols || 
+                             jsonData?.props?.pageProps?.data?.symbols ||
+                             jsonData?.data?.symbols ||
+                             jsonData?.symbols;
+          
+          if (Array.isArray(symbolsData)) {
+            symbolsData.forEach((symbolData: any) => {
+              if (symbolData?.symbol && symbolData?.currency) {
+                const symbolKey = symbolData.symbol.replace(/^[^-]+-/, '').replace('!', ''); // Remove exchange prefix
+                globalCurrencyMap.set(symbolKey, symbolData.currency.toUpperCase());
+              } else if (symbolData?.symbol && symbolData?.quoteCurrency) {
+                const symbolKey = symbolData.symbol.replace(/^[^-]+-/, '').replace('!', '');
+                globalCurrencyMap.set(symbolKey, symbolData.quoteCurrency.toUpperCase());
+              }
+            });
+          }
+        } catch (e) {
+          // Continue to next script
+        }
+      }
+      
+      if (globalCurrencyMap.size > 0) {
+        console.log(`✅ Found ${globalCurrencyMap.size} currencies in JSON embedded data`);
+      }
+    } catch (e) {
+      // Continue with HTML parsing
+    }
+    
     const commodities: Commodity[] = [];
     
     commodityRows.forEach((row, index) => {
@@ -507,6 +599,59 @@ function parseCommoditiesData(data: any, category: CommodityCategory): Commodity
         const firstCell = cells[0];
         let symbol = '';
         let name = '';
+        let currency: string | null = null;
+        
+        // Exchange code to currency mapping (from URL patterns)
+        const exchangeCodeCurrencyMap: Record<string, string> = {
+          // Europe
+          'ICEEUR': 'GBP',           // ICE Futures Europe (London)
+          'ICEUS': 'USD',            // ICE US
+          'LIFFE': 'GBP',            // London International Financial Futures Exchange
+          'EURONEXT': 'EUR',         // Euronext
+          'EUREX': 'EUR',            // Eurex
+          
+          // US
+          'CBOT': 'USD',             // Chicago Board of Trade
+          'CBOT_MINI': 'USD',        // CBOT Mini
+          'CBOT%5FMINI': 'USD',      // CBOT Mini (URL encoded)
+          'NYMEX': 'USD',            // New York Mercantile Exchange
+          'COMEX': 'USD',            // Commodity Exchange
+          'CME': 'USD',              // Chicago Mercantile Exchange
+          'CME_MINI': 'USD',         // CME Mini
+          
+          // Brésil
+          'BMFBOVESPA': 'BRL',       // BMF Bovespa
+          'BMF': 'BRL',              // BMF
+          
+          // Chine
+          'SHFE': 'CNY',             // Shanghai Futures Exchange
+          'DCE': 'CNY',              // Dalian Commodity Exchange
+          'CZCE': 'CNY',             // Zhengzhou Commodity Exchange
+          
+          // Inde
+          'NCDEX': 'INR',            // National Commodity & Derivatives Exchange
+          'MCX': 'INR',              // Multi Commodity Exchange
+          'NSE': 'INR',              // National Stock Exchange
+          'BSE': 'INR',              // Bombay Stock Exchange
+          
+          // Japon
+          'TOCOM': 'JPY',            // Tokyo Commodity Exchange
+          'OSE': 'JPY',              // Osaka Securities Exchange
+          
+          // Autres Asie
+          'MYX': 'MYR',              // Malaysia Derivatives Exchange
+          'SGX': 'SGD',              // Singapore Exchange
+          
+          // Océanie
+          'ASX': 'AUD',              // Australian Securities Exchange
+          'NZX': 'NZD',              // New Zealand Exchange
+          
+          // Autres
+          'TSX': 'CAD',              // Toronto Stock Exchange
+          'JSE': 'ZAR',              // Johannesburg Stock Exchange
+          'MOEX': 'RUB',             // Moscow Exchange
+          'HKEX': 'HKD'              // Hong Kong Exchange
+        };
         
         const symbolElement = firstCell.querySelector('.symbol-name');
         if (symbolElement) {
@@ -564,6 +709,23 @@ function parseCommoditiesData(data: any, category: CommodityCategory): Commodity
           return;
         }
         
+        // PRIORITÉ 1: Extract exchange from URL link (most reliable) - do this after symbol is extracted
+        if (!currency) {
+          const linkElement = firstCell.querySelector('a[href*="/symbols/"]');
+          if (linkElement) {
+            const href = linkElement.getAttribute('href') || '';
+            // Pattern: /symbols/ICEEUR-C1!/ or /symbols/CBOT%5FMINI-XC1!/
+            const exchangeMatch = href.match(/\/symbols\/([^-]+)-/);
+            if (exchangeMatch) {
+              const exchangeCode = exchangeMatch[1].replace(/%5F/g, '_'); // Decode URL encoding
+              if (exchangeCodeCurrencyMap[exchangeCode]) {
+                currency = exchangeCodeCurrencyMap[exchangeCode];
+                console.log(`✅ Currency extracted from URL exchange for ${symbol}: ${currency} (exchange: ${exchangeCode})`);
+              }
+            }
+          }
+        }
+        
         // Parse number function
         const parseNumber = (text: string): number => {
           if (!text) return 0;
@@ -616,13 +778,34 @@ function parseCommoditiesData(data: any, category: CommodityCategory): Commodity
         const technicalEvaluation = cells[6]?.text.trim() || 'Neutral';
         
         const type = getCommodityType(symbol, name, category);
-        const currency = extractCurrency(symbol, name, category);
+        
+        // Priority order for currency extraction:
+        // 1. Currency from URL exchange (already extracted above)
+        // 2. Currency from global JSON map (if available)
+        // 3. Currency from extractCurrency() heuristics
+        let finalCurrency = currency;
+        
+        if (!finalCurrency) {
+          // Check global currency map from JSON
+          const symbolKey = symbol.replace(/^[^-]+-/, '').replace('!', '');
+          if (globalCurrencyMap.has(symbolKey)) {
+            finalCurrency = globalCurrencyMap.get(symbolKey)!;
+            console.log(`✅ Currency extracted from JSON map for ${symbol}: ${finalCurrency}`);
+          }
+        }
+        
+        if (!finalCurrency) {
+          // Fallback to extractCurrency heuristics
+          finalCurrency = extractCurrency(symbol, name, category);
+        } else {
+          console.log(`✅ Using currency extracted from URL/JSON for ${symbol}: ${finalCurrency}`);
+        }
         
         commodities.push({
           symbol,
           name,
           price,
-          currency,
+          currency: finalCurrency,
           percentChange,
           absoluteChange,
           high,
