@@ -1,7 +1,13 @@
 import { createClient } from '@supabase/supabase-js'
 import { config } from '../config/environment'
 
-export const supabase = createClient(config.supabase.url, config.supabase.anonKey)
+export const supabase = createClient(config.supabase.url, config.supabase.anonKey, {
+  auth: {
+    storageKey: 'fx-pricers-supabase-auth',
+    persistSession: true,
+    autoRefreshToken: true,
+  },
+})
 
 // Types pour les données Forex
 export interface ForexStrategy {

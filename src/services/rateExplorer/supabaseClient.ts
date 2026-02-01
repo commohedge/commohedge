@@ -12,6 +12,7 @@ export const rateExplorerSupabase = createClient(
   RATE_EXPLORER_SUPABASE_KEY,
   {
     auth: {
+      storageKey: 'rate-explorer-supabase-auth',
       persistSession: false,
       autoRefreshToken: false,
     },
