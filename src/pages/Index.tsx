@@ -1382,26 +1382,6 @@ const Index = () => {
   // Keep track of initial spot price
   const [initialSpotPrice, setInitialSpotPrice] = useState<number>(params.spotPrice);
   
-  // 🎯 Obtenir la devise de la commodity sélectionnée
-  // Si on utilise des données réelles, essayer de récupérer la devise depuis la commodity
-  const getSelectedCurrency = useMemo(() => {
-    if (useRealData && realCommodities.length > 0 && params.currencyPair?.symbol) {
-      const selectedCommodity = realCommodities.find(c => c.symbol === params.currencyPair?.symbol);
-      if (selectedCommodity?.currency) {
-        return selectedCommodity.currency;
-      }
-    }
-    return params.currencyPair?.quote || 'USD';
-  }, [params.currencyPair, useRealData, realCommodities]);
-  
-  // 🎯 Fonction pour obtenir le taux d'intérêt selon les settings
-  const getInterestRateForStrategy = useMemo(() => {
-    // Mode Curve: utilise la maturité moyenne pour interpoler le taux
-    // Mode Fixed: utilise le Bank Rate de la devise
-    const maturityYears = params.monthsToHedge / 12;
-    const rate = getRate(getSelectedCurrency, maturityYears);
-    return rate * 100; // Convertir en pourcentage
-  }, [getRate, getSelectedCurrency, params.monthsToHedge]);
   
   // 🌐 Fonction pour récupérer le Bank Rate depuis Gov Bonds pour une devise donnée
   const getBankRateForCurrency = useCallback(async (currency: string): Promise<number | null> => {
@@ -1503,37 +1483,6 @@ const Index = () => {
     return null;
   }, []);
 
-  // 🎯 Synchroniser automatiquement le Risk-free Rate avec le Bank Rate quand la commodity change
-  useEffect(() => {
-    if (!isCurveMode && getSelectedCurrency) {
-      const syncRate = async () => {
-        const bankRate = await getBankRateForCurrency(getSelectedCurrency);
-        if (bankRate !== null) {
-          // Mettre à jour le taux automatiquement
-          setParams(prev => ({
-            ...prev,
-            interestRate: bankRate
-          }));
-          
-          // Mettre à jour aussi les fixedRates dans Settings pour cette devise
-          const currentSettings = JSON.parse(localStorage.getItem('fxRiskManagerSettings') || '{}');
-          currentSettings.pricing = {
-            ...currentSettings.pricing,
-            fixedRates: {
-              ...currentSettings.pricing?.fixedRates,
-              [getSelectedCurrency]: bankRate
-            }
-          };
-          localStorage.setItem('fxRiskManagerSettings', JSON.stringify(currentSettings));
-          window.dispatchEvent(new CustomEvent('settingsUpdated'));
-          
-          console.log(`✅ Risk-free Rate synchronisé avec Bank Rate pour ${getSelectedCurrency}: ${bankRate.toFixed(2)}%`);
-        }
-      };
-      
-      syncRate();
-    }
-  }, [getSelectedCurrency, isCurveMode, getBankRateForCurrency]);
   
   // 🌐 Auto-sync bank rates on mount if in fixed mode
   useEffect(() => {
@@ -1613,6 +1562,59 @@ const Index = () => {
   
   // State for commodity search filter
   const [commoditySearchQuery, setCommoditySearchQuery] = useState('');
+
+  // 🎯 Obtenir la devise de la commodity sélectionnée
+  // Si on utilise des données réelles, essayer de récupérer la devise depuis la commodity
+  const getSelectedCurrency = useMemo(() => {
+    if (useRealData && realCommodities.length > 0 && params.currencyPair?.symbol) {
+      const selectedCommodity = realCommodities.find(c => c.symbol === params.currencyPair?.symbol);
+      if (selectedCommodity?.currency) {
+        return selectedCommodity.currency;
+      }
+    }
+    return params.currencyPair?.quote || 'USD';
+  }, [params.currencyPair, useRealData, realCommodities]);
+
+  // 🎯 Fonction pour obtenir le taux d'intérêt selon les settings
+  const getInterestRateForStrategy = useMemo(() => {
+    // Mode Curve: utilise la maturité moyenne pour interpoler le taux
+    // Mode Fixed: utilise le Bank Rate de la devise
+    const maturityYears = params.monthsToHedge / 12;
+    const rate = getRate(getSelectedCurrency, maturityYears);
+    return rate * 100; // Convertir en pourcentage
+  }, [getRate, getSelectedCurrency, params.monthsToHedge]);
+
+  // 🎯 Synchroniser automatiquement le Risk-free Rate avec le Bank Rate quand la commodity change
+  useEffect(() => {
+    if (!isCurveMode && getSelectedCurrency) {
+      const syncRate = async () => {
+        const bankRate = await getBankRateForCurrency(getSelectedCurrency);
+        if (bankRate !== null) {
+          // Mettre à jour le taux automatiquement
+          setParams(prev => ({
+            ...prev,
+            interestRate: bankRate
+          }));
+          
+          // Mettre à jour aussi les fixedRates dans Settings pour cette devise
+          const currentSettings = JSON.parse(localStorage.getItem('fxRiskManagerSettings') || '{}');
+          currentSettings.pricing = {
+            ...currentSettings.pricing,
+            fixedRates: {
+              ...currentSettings.pricing?.fixedRates,
+              [getSelectedCurrency]: bankRate
+            }
+          };
+          localStorage.setItem('fxRiskManagerSettings', JSON.stringify(currentSettings));
+          window.dispatchEvent(new CustomEvent('settingsUpdated'));
+          
+          console.log(`✅ Risk-free Rate synchronisé avec Bank Rate pour ${getSelectedCurrency}: ${bankRate.toFixed(2)}%`);
+        }
+      };
+      
+      syncRate();
+    }
+  }, [getSelectedCurrency, isCurveMode, getBankRateForCurrency]);
 
   // ✅ Helper function to map CURRENCY_PAIRS category to CommodityCategory
   const mapCurrencyPairCategoryToDomain = (category: string): CommodityCategory | null => {
