@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Layout } from "@/components/Layout";
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -259,11 +259,18 @@ const Pricers = () => {
   });
   
   // 🎯 Fonction pour obtenir la devise de la commodity sélectionnée
+  // Si on utilise des données réelles, essayer de récupérer la devise depuis la commodity
   const getSelectedCurrency = useMemo(() => {
-    // La plupart des commodities sont cotées en USD
+    if (useRealData && realCommodities.length > 0 && selectedCurrencyPair) {
+      const selectedCommodity = realCommodities.find(c => c.symbol === selectedCurrencyPair);
+      if (selectedCommodity?.currency) {
+        return selectedCommodity.currency;
+      }
+    }
+    // Fallback vers CURRENCY_PAIRS ou USD
     const currentPair = CURRENCY_PAIRS.find(p => p.symbol === selectedCurrencyPair);
     return currentPair?.quote || 'USD';
-  }, [selectedCurrencyPair]);
+  }, [selectedCurrencyPair, useRealData, realCommodities]);
   
   // 🎯 Fonction pour obtenir le taux d'intérêt selon les settings
   const getInterestRateForPricing = useMemo(() => {
@@ -342,6 +349,138 @@ const Pricers = () => {
       }
     }
   }, [isCurveMode]); // Run once on mount and when mode changes
+
+  // 🌐 Fonction pour récupérer le Bank Rate depuis Gov Bonds pour une devise donnée
+  const getBankRateForCurrency = useCallback(async (currency: string): Promise<number | null> => {
+    try {
+      const response = await fetchAllCountries();
+      if (response.success && response.data) {
+        // Mapping complet de toutes les devises disponibles dans Gov Bonds
+        const CURRENCY_TO_COUNTRY: Record<string, string> = {
+          // Major currencies
+          USD: 'united-states',
+          EUR: 'germany', // Using Germany as primary EUR country
+          GBP: 'united-kingdom',
+          JPY: 'japan',
+          CHF: 'switzerland',
+          CAD: 'canada',
+          AUD: 'australia',
+          NZD: 'new-zealand',
+          
+          // Asian currencies
+          CNY: 'china',
+          SGD: 'singapore',
+          HKD: 'hong-kong',
+          KRW: 'south-korea',
+          TWD: 'taiwan',
+          THB: 'thailand',
+          MYR: 'malaysia',
+          IDR: 'indonesia',
+          PHP: 'philippines',
+          VND: 'vietnam',
+          
+          // European currencies (non-EUR)
+          SEK: 'sweden',
+          NOK: 'norway',
+          DKK: 'denmark',
+          PLN: 'poland',
+          CZK: 'czech-republic',
+          HUF: 'hungary',
+          RON: 'romania',
+          ISK: 'iceland',
+          
+          // Middle Eastern currencies
+          SAR: 'saudi-arabia',
+          AED: 'united-arab-emirates',
+          QAR: 'qatar',
+          KWD: 'kuwait',
+          BHD: 'bahrain',
+          OMR: 'oman',
+          ILS: 'israel',
+          
+          // African currencies
+          ZAR: 'south-africa',
+          EGP: 'egypt',
+          NGN: 'nigeria',
+          KES: 'kenya',
+          MAD: 'morocco',
+          
+          // Latin American currencies
+          BRL: 'brazil',
+          MXN: 'mexico',
+          ARS: 'argentina',
+          CLP: 'chile',
+          COP: 'colombia',
+          PEN: 'peru',
+          
+          // Other currencies
+          INR: 'india',
+          RUB: 'russia',
+          TRY: 'turkey',
+          PKR: 'pakistan',
+          BDT: 'bangladesh',
+          LKR: 'sri-lanka',
+        };
+        
+        // First, try to find by country slug mapping
+        const countrySlug = CURRENCY_TO_COUNTRY[currency];
+        if (countrySlug) {
+          const countryData = response.data.find((c: CountryBondData) => 
+            c.countrySlug === countrySlug || 
+            c.country.toLowerCase().replace(/\s+/g, '-') === countrySlug
+          );
+          
+          if (countryData?.bankRate !== null && countryData?.bankRate !== undefined) {
+            return countryData.bankRate;
+          }
+        }
+        
+        // Fallback: search directly by currency code (for EUR countries or if mapping fails)
+        const countryDataByCurrency = response.data.find((c: CountryBondData) => 
+          c.currency === currency && c.bankRate !== null && c.bankRate !== undefined
+        );
+        
+        if (countryDataByCurrency) {
+          return countryDataByCurrency.bankRate;
+        }
+      }
+    } catch (error) {
+      console.error(`Erreur lors de la récupération du Bank Rate pour ${currency}:`, error);
+    }
+    return null;
+  }, []);
+
+  // 🎯 Synchroniser automatiquement le Risk-free Rate avec le Bank Rate quand la commodity change
+  useEffect(() => {
+    if (!isCurveMode && getSelectedCurrency) {
+      const syncRate = async () => {
+        const bankRate = await getBankRateForCurrency(getSelectedCurrency);
+        if (bankRate !== null) {
+          // Mettre à jour le taux automatiquement
+          setPricingInputs(prev => ({
+            ...prev,
+            interestRate: bankRate
+          }));
+          
+          // Mettre à jour aussi les fixedRates dans Settings pour cette devise
+          const currentSettings = JSON.parse(localStorage.getItem('fxRiskManagerSettings') || '{}');
+          currentSettings.pricing = {
+            ...currentSettings.pricing,
+            fixedRates: {
+              ...currentSettings.pricing?.fixedRates,
+              [getSelectedCurrency]: bankRate
+            }
+          };
+          localStorage.setItem('fxRiskManagerSettings', JSON.stringify(currentSettings));
+          window.dispatchEvent(new CustomEvent('settingsUpdated'));
+          
+          console.log(`✅ Risk-free Rate synchronisé avec Bank Rate pour ${getSelectedCurrency}: ${bankRate.toFixed(2)}%`);
+        }
+      };
+      
+      syncRate();
+    }
+  }, [getSelectedCurrency, isCurveMode, getBankRateForCurrency]);
   
   // Helper functions for commodity pricing
   const getRiskFreeRate = () => pricingInputs.interestRate / 100;

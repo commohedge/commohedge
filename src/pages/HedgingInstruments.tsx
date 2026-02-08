@@ -1692,7 +1692,7 @@ const HedgingInstruments = () => {
                 </div>
               ) : (
                 <div className="w-full border rounded-lg overflow-hidden bg-background">
-                  <div className="overflow-x-auto" style={{ maxHeight: 'calc(100vh - 500px)', overflowY: 'auto' }}>
+                  <div className="overflow-x-auto" style={{ maxHeight: 'calc(100vh - 250px)', minHeight: '600px', overflowY: 'auto' }}>
                     <Table className="min-w-full border-collapse">
                      <TableHeader className="bg-muted/50 dark:bg-muted/80 sticky top-0 z-10">
                        <TableRow className="border-b-2 border-border">
@@ -2250,45 +2250,6 @@ const HedgingInstruments = () => {
               )}
             </TabsContent>
           </Tabs>
-        </CardContent>
-      </Card>
-
-      {/* Hedge Effectiveness Summary */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Hedge Effectiveness Summary</CardTitle>
-          <CardDescription>
-            Overview of hedge accounting qualifying instruments
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            {instruments.filter(inst => inst.hedge_accounting).map((instrument) => (
-              <div key={instrument.id} className="flex items-center justify-between p-4 border rounded-lg">
-                <div className="flex items-center gap-4">
-                  {getInstrumentIcon(instrument.type)}
-                  <div>
-                    <div className="font-medium">{instrument.id} - {instrument.type}</div>
-                    <div className="text-sm text-muted-foreground">
-                      {instrument.currency} • {formatCurrency(instrument.notional)}
-                    </div>
-                  </div>
-                </div>
-                <div className="flex items-center gap-4">
-                  <div className="text-right">
-                    <div className="text-sm font-medium">Effectiveness Ratio</div>
-                    <div className="text-lg font-bold">
-                      {instrument.effectiveness_ratio}%
-                    </div>
-                  </div>
-                  <Progress 
-                    value={instrument.effectiveness_ratio || 0} 
-                    className="w-24 h-3" 
-                  />
-                </div>
-              </div>
-            ))}
-          </div>
         </CardContent>
       </Card>
 

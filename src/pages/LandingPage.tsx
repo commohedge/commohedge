@@ -108,6 +108,14 @@ const LandingPage = () => {
       icon: <TrendingUp className="w-6 h-6" />,
       highlights: ["Yield Curve Bootstrapping", "Government Bonds", "Interest Rate Futures", "Multiple Interpolation Methods"],
       path: "/rate-explorer"
+    },
+    {
+      title: "Hedge Assistant",
+      description: "Assistant hedging FX et matières premières : stratégies, pricing forwards/options, données de l'app, analyse de risque.",
+      image: "/landing-page/{E5FFC7FA-3620-4616-9061-260F9BECE65D}.png",
+      icon: <Target className="w-6 h-6" />,
+      highlights: ["FX & Commodities", "Stratégies", "Données app", "Pricing"],
+      path: "/hedge-helper"
     }
   ];
 
@@ -217,7 +225,7 @@ const LandingPage = () => {
   ];
 
   return (
-    <div className="min-h-screen bg-black text-white overflow-x-hidden">
+    <div className="min-h-screen bg-black text-white">
       {/* Navigation */}
       <LandingNav />
       

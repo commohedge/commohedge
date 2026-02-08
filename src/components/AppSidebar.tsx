@@ -18,7 +18,8 @@ import {
   Newspaper,
   Calendar,
   LineChart,
-  Percent
+  Percent,
+  MessageSquare
 } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import {
@@ -82,6 +83,12 @@ const marketDataItems = [
     url: "/advanced-chart",
     icon: LineChart,
     description: "Interactive trading chart with technical analysis"
+  },
+  {
+    title: "Hedge Assistant",
+    url: "/hedge-helper",
+    icon: MessageSquare,
+    description: "Assistant hedging FX et matières premières"
   }
 ];
 

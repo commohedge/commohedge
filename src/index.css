@@ -103,6 +103,9 @@
     font-family: var(--font-sans);
     scroll-behavior: smooth;
     -webkit-overflow-scrolling: touch;
+    /* Allow horizontal scrolling when content overflows */
+    overflow-x: auto;
+    overflow-y: auto;
   }
 
   h1, h2, h3, h4, h5, h6 {

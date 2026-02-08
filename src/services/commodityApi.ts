@@ -1896,7 +1896,8 @@ function createBunkerCommodity(
   high: number = 0,
   low: number = 0
 ): Commodity {
-  const currency = extractCurrency(symbol, name, 'bunker');
+  // ✅ Bunker commodities are always in USD
+  const currency = 'USD';
   return {
     symbol,
     name,

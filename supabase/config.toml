@@ -11,3 +11,6 @@ verify_jwt = false
 [functions.scrape-bonds]
 verify_jwt = false
 
+[functions.forex-chat]
+verify_jwt = false
+
