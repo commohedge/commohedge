@@ -41,7 +41,8 @@ import {
   ZoomIn,
   ZoomOut,
   Monitor,
-  Landmark
+  Landmark,
+  Key
 } from "lucide-react";
 import { useCompanySettings, companySettingsEmitter } from "@/hooks/useCompanySettings";
 import { getLocalStorageStats, performEmergencyRecovery } from "@/utils/emergencyRecovery";
@@ -153,6 +154,11 @@ interface AppSettings {
     approvalWorkflow: boolean;
     documentationRequired: string[];
   };
+
+  // API keys (Hedge Assistant, etc.)
+  api: {
+    geminiApiKey: string;
+  };
 }
 
 const Settings = () => {
@@ -253,6 +259,9 @@ const Settings = () => {
       settlementPreferences: "physical",
       approvalWorkflow: true,
       documentationRequired: ["ISDA", "CSA", "Confirmation"]
+    },
+    api: {
+      geminiApiKey: ""
     }
   });
 
@@ -424,10 +433,13 @@ const Settings = () => {
             setSettings(prev => ({
               ...prev,
               ...parsed,
-              // S'assurer que company existe toujours
               company: {
                 ...prev.company,
                 ...parsed.company
+              },
+              api: {
+                ...prev.api,
+                ...parsed.api
               }
             }));
           }
@@ -846,7 +858,7 @@ const Settings = () => {
       )}
 
       <Tabs defaultValue="general" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-9">
+        <TabsList className="grid w-full grid-cols-10">
           <TabsTrigger value="general">General</TabsTrigger>
           <TabsTrigger value="risk">Risk</TabsTrigger>
           <TabsTrigger value="pricing">Pricing</TabsTrigger>
@@ -855,6 +867,7 @@ const Settings = () => {
           <TabsTrigger value="data">Data</TabsTrigger>
           <TabsTrigger value="commodityexposures">Commodity Exposures</TabsTrigger>
           <TabsTrigger value="hedging">Hedging</TabsTrigger>
+          <TabsTrigger value="api">API</TabsTrigger>
           <TabsTrigger value="diagnostic">Diagnostic</TabsTrigger>
         </TabsList>
 
@@ -2529,6 +2542,46 @@ const Settings = () => {
                     id="additional-docs"
                     placeholder="Enter additional documentation requirements..."
                     rows={3}
+                  />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="api">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Key className="h-5 w-5" />
+                Clés API
+              </CardTitle>
+              <CardDescription>
+                Gestion des clés API pour les services de l'application (Hedge Assistant, etc.). Enregistrez avec le bouton Save en haut pour conserver les modifications.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="space-y-4">
+                <div className="rounded-lg border border-border bg-muted/30 p-4 space-y-3">
+                  <div className="flex items-center gap-2">
+                    <Label className="text-sm font-medium">Clé API Gemini (Google AI Studio)</Label>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Utilisée par le Hedge Assistant pour le modèle Gemini 2.5 Flash. Si renseignée ici, elle sera disponible pour le chat (vous pouvez aussi la saisir dans Configuration de l'Assistant). Obtenez une clé sur Google AI Studio.
+                  </p>
+                  <Input
+                    type="password"
+                    placeholder="AIza..."
+                    value={settings.api?.geminiApiKey ?? ""}
+                    onChange={(e) => {
+                      setSettings(prev => ({
+                        ...prev,
+                        api: { ...prev.api, geminiApiKey: e.target.value }
+                      }));
+                      setHasChanges(true);
+                    }}
+                    className="font-mono text-sm"
+                    autoComplete="off"
                   />
                 </div>
               </div>

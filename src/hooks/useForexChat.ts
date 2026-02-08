@@ -1,6 +1,31 @@
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { Message, ChatSettings, DEFAULT_SETTINGS, AppCommodityContext } from "@/types/chat";
 import { toast } from "sonner";
+
+const CHAT_SETTINGS_STORAGE_KEY = "hedge-assistant-chat-settings";
+
+function loadStoredChatSettings(): ChatSettings {
+  try {
+    const raw = localStorage.getItem(CHAT_SETTINGS_STORAGE_KEY);
+    let parsed: Partial<ChatSettings> = {};
+    if (raw) parsed = JSON.parse(raw) as Partial<ChatSettings>;
+    const merged = { ...DEFAULT_SETTINGS, ...parsed };
+    if (!merged.geminiApiKey?.trim()) {
+      try {
+        const globalRaw = localStorage.getItem("fxRiskManagerSettings");
+        if (globalRaw) {
+          const global = JSON.parse(globalRaw) as { api?: { geminiApiKey?: string } };
+          if (global?.api?.geminiApiKey?.trim()) merged.geminiApiKey = global.api.geminiApiKey;
+        }
+      } catch {
+        /* ignore */
+      }
+    }
+    return merged;
+  } catch {
+    return DEFAULT_SETTINGS;
+  }
+}
 
 // Chat uses hedge-assistant-chat; if not on same project as DB, set VITE_SUPABASE_CHAT_URL to the project where it's deployed
 const SUPABASE_CHAT_BASE = import.meta.env.VITE_SUPABASE_CHAT_URL || import.meta.env.VITE_SUPABASE_URL || "https://sudujoijxndsohgfxoad.supabase.co";
@@ -13,9 +38,18 @@ export interface UseForexChatOptions {
 export function useForexChat(options?: UseForexChatOptions) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [settings, setSettings] = useState<ChatSettings>(DEFAULT_SETTINGS);
+  const [settings, setSettings] = useState<ChatSettings>(loadStoredChatSettings);
   const appContextRef = useRef<AppCommodityContext | null | undefined>(options?.appCommodityContext);
   appContextRef.current = options?.appCommodityContext;
+
+  const saveSettingsToStorage = useCallback(() => {
+    try {
+      localStorage.setItem(CHAT_SETTINGS_STORAGE_KEY, JSON.stringify(settings));
+      toast.success("Paramètres enregistrés");
+    } catch {
+      toast.error("Erreur lors de l'enregistrement");
+    }
+  }, [settings]);
 
   const sendMessage = useCallback(async (input: string) => {
     if (!input.trim() || isLoading) return;
@@ -130,5 +164,5 @@ export function useForexChat(options?: UseForexChatOptions) {
     setMessages([]);
   }, []);
 
-  return { messages, isLoading, sendMessage, clearMessages, settings, setSettings };
+  return { messages, isLoading, sendMessage, clearMessages, settings, setSettings, saveSettingsToStorage };
 }

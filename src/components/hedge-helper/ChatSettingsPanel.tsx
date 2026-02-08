@@ -1,4 +1,4 @@
-import { Settings, Database, Zap, MessageSquare, LayoutGrid, Code, TrendingUp, Wheat, Key } from "lucide-react";
+import { Settings, Database, Zap, MessageSquare, LayoutGrid, Code, TrendingUp, Wheat, Key, Save } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
@@ -19,6 +19,7 @@ import { Button } from "@/components/ui/button";
 interface ChatSettingsPanelProps {
   settings: ChatSettings;
   onSettingsChange: (settings: ChatSettings) => void;
+  onSave?: () => void;
 }
 
 const RESPONSE_STYLES: { value: ResponseStyle; label: string; description: string }[] = [
@@ -37,7 +38,7 @@ const ASSET_CLASSES: { value: AssetClass; label: string; description: string; ic
   { value: "commodities", label: "Commodities", description: "Matières premières", icon: Wheat },
 ];
 
-export function ChatSettingsPanel({ settings, onSettingsChange }: ChatSettingsPanelProps) {
+export function ChatSettingsPanel({ settings, onSettingsChange, onSave }: ChatSettingsPanelProps) {
   const updateSetting = <K extends keyof ChatSettings>(key: K, value: ChatSettings[K]) => {
     onSettingsChange({ ...settings, [key]: value });
   };
@@ -57,8 +58,14 @@ export function ChatSettingsPanel({ settings, onSettingsChange }: ChatSettingsPa
             Configuration de l'Assistant
           </SheetTitle>
           <SheetDescription>
-            Personnalisez le comportement de Hedge Assistant (modèle Gemini 2.5 Flash)
+            Personnalisez le comportement de Hedge Assistant (modèle Gemini 2.5 Flash). Cliquez sur Enregistrer pour conserver les paramètres.
           </SheetDescription>
+          {onSave && (
+            <Button onClick={onSave} className="mt-2 gap-2" size="sm">
+              <Save className="h-4 w-4" />
+              Enregistrer
+            </Button>
+          )}
         </SheetHeader>
 
         <Tabs defaultValue="assistant" className="mt-6">

@@ -48,7 +48,7 @@ export default function HedgeHelper() {
     () => buildAppCommodityContext(marketData, exposures),
     [marketData, exposures]
   );
-  const { messages, isLoading, sendMessage, clearMessages, settings, setSettings } = useForexChat({ appCommodityContext });
+  const { messages, isLoading, sendMessage, clearMessages, settings, setSettings, saveSettingsToStorage } = useForexChat({ appCommodityContext });
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -74,7 +74,7 @@ export default function HedgeHelper() {
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <ChatSettingsPanel settings={settings} onSettingsChange={setSettings} />
+              <ChatSettingsPanel settings={settings} onSettingsChange={setSettings} onSave={saveSettingsToStorage} />
               {messages.length > 0 && (
                 <Button
                   variant="ghost"
