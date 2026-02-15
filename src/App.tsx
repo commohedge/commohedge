@@ -34,6 +34,7 @@ import DatabaseSync from "./pages/DatabaseSync";
 import RegressionAnalysis from "./pages/RegressionAnalysis";
 import RateExplorer from "./pages/RateExplorer";
 import HedgeHelper from "./pages/HedgeHelper";
+import TickerPeekPro from "./pages/TickerPeekPro";
 import LandingPage from "./pages/LandingPage";
 import SupabaseLogin from "./pages/SupabaseLogin";
 import AuthCallback from "./pages/AuthCallback";
@@ -99,6 +100,7 @@ const App = () => {
             <Route path="/regression-analysis" element={<ProtectedRoute><RegressionAnalysis /></ProtectedRoute>} />
             <Route path="/rate-explorer" element={<ProtectedRoute><RateExplorer /></ProtectedRoute>} />
             <Route path="/hedge-helper" element={<ProtectedRoute><HedgeHelper /></ProtectedRoute>} />
+            <Route path="/ticker-peek-pro" element={<ProtectedRoute><TickerPeekPro /></ProtectedRoute>} />
             
             {/* Legacy routes - redirect /saved to /reports */}
             <Route path="/saved" element={<ProtectedRoute><Reports /></ProtectedRoute>} />

@@ -89,6 +89,12 @@ const marketDataItems = [
     url: "/hedge-helper",
     icon: MessageSquare,
     description: "Assistant hedging FX et matières premières"
+  },
+  {
+    title: "Ticker Peek Pro",
+    url: "/ticker-peek-pro",
+    icon: BarChart3,
+    description: "Commodities terminal: futures, options, volatility & Vol Surface 3D (Barchart)"
   }
 ];
 
