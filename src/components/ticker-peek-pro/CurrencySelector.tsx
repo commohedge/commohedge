@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { RefreshCw, BarChart3, Activity, Boxes } from "lucide-react";
+import { RefreshCw, BarChart3, Activity, Boxes, Table2 } from "lucide-react";
 import { fetchCurrencies, COMMODITY_CATEGORIES, type CurrencyData, type CommodityCategory } from "@/lib/ticker-peek-pro/barchart";
 
 interface CurrencySelectorProps {
@@ -8,9 +8,10 @@ interface CurrencySelectorProps {
   onLoadFutures: () => void;
   onLoadVolatility: () => void;
   onLoadVolSurface: () => void;
+  onLoadIvMatrix: () => void;
 }
 
-export function CurrencySelector({ selectedCurrency, onSelect, onLoadFutures, onLoadVolatility, onLoadVolSurface }: CurrencySelectorProps) {
+export function CurrencySelector({ selectedCurrency, onSelect, onLoadFutures, onLoadVolatility, onLoadVolSurface, onLoadIvMatrix }: CurrencySelectorProps) {
   const [currencies, setCurrencies] = useState<CurrencyData[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -124,6 +125,13 @@ export function CurrencySelector({ selectedCurrency, onSelect, onLoadFutures, on
             >
               <Boxes className="w-3.5 h-3.5" />
               Vol Surface 3D
+            </button>
+            <button
+              onClick={onLoadIvMatrix}
+              className="flex items-center gap-2 px-4 py-1.5 rounded-md bg-warning/10 text-warning hover:bg-warning/20 text-sm font-medium transition-colors border border-warning/20"
+            >
+              <Table2 className="w-3.5 h-3.5" />
+              Matrice IV
             </button>
           </>
         )}

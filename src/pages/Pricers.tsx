@@ -32,6 +32,16 @@ import { PricingService, Greeks } from '@/services/PricingService';
 import { Commodity, CommodityCategory, fetchCommoditiesData } from '@/services/commodityApi';
 import { useInterestRates } from '@/hooks/useInterestRates';
 import { fetchAllCountries, CountryBondData } from '@/services/rateExplorer/bondsApi';
+import {
+  fetchCurrencies as fetchTppCurrencies,
+  fetchFutures as fetchTppFutures,
+  fetchVolSurface as fetchTppVolSurface,
+  fetchVolSurfaceStrikes as fetchTppVolSurfaceStrikes,
+  type CurrencyData as TppCurrencyData,
+  type SurfacePoint as TppSurfacePoint,
+  type CommodityCategory as TppCommodityCategory,
+} from '@/lib/ticker-peek-pro/barchart';
+import { interpolateSurface } from '@/lib/ticker-peek-pro/volSurfaceInterpolation';
 
 // Interface pour les commodities (adaptée du Strategy Builder)
 interface CurrencyPair { // Renamed to Commodity in a previous step, but still named CurrencyPair here for compatibility
@@ -126,6 +136,21 @@ const Pricers = () => {
   
   // State for commodity search filter
   const [commoditySearchQuery, setCommoditySearchQuery] = useState('');
+
+  // ── Ticker Peek Pro Integration ──
+  const [useTickerPeekPro, setUseTickerPeekPro] = useState(() => {
+    try {
+      const saved = localStorage.getItem('pricersUseTickerPeekPro');
+      return saved ? JSON.parse(saved) : false;
+    } catch { return false; }
+  });
+  const [tppCurrencies, setTppCurrencies] = useState<TppCurrencyData[]>([]);
+  const [tppCurrenciesByCategory, setTppCurrenciesByCategory] = useState<Record<string, TppCurrencyData[]>>({});
+  const [tppLoadingCurrencies, setTppLoadingCurrencies] = useState(false);
+  const [tppLoadingFutures, setTppLoadingFutures] = useState(false);
+  const [tppLoadingSurface, setTppLoadingSurface] = useState(false);
+  const [tppSurfacePoints, setTppSurfacePoints] = useState<TppSurfacePoint[]>([]);
+  const [tppSearchQuery, setTppSearchQuery] = useState('');
 
   // ✅ Helper function to map CURRENCY_PAIRS category to CommodityCategory
   const mapCurrencyPairCategoryToDomain = (category: string): CommodityCategory | null => {
@@ -224,13 +249,139 @@ const Pricers = () => {
     }
   };
 
+  // ── Ticker Peek Pro: Load all commodities from all categories ──
+  const loadAllTppCurrencies = async () => {
+    setTppLoadingCurrencies(true);
+    const categories: TppCommodityCategory[] = ['energies', 'metals', 'grains', 'livestock', 'currencies', 'indices'];
+    const categorized: Record<string, TppCurrencyData[]> = {};
+    const results = await Promise.allSettled(
+      categories.map(cat => fetchTppCurrencies(cat))
+    );
+    categories.forEach((cat, idx) => {
+      const result = results[idx];
+      if (result.status === 'fulfilled' && result.value.success && result.value.data) {
+        const unique = result.value.data.reduce<TppCurrencyData[]>((acc, c) => {
+          if (!acc.find(x => x.symbol === c.symbol)) acc.push(c);
+          return acc;
+        }, []);
+        categorized[cat] = unique;
+      }
+    });
+    setTppCurrenciesByCategory(categorized);
+    setTppCurrencies(Object.values(categorized).flat());
+    setTppLoadingCurrencies(false);
+  };
+
+  // ── Ticker Peek Pro: Load Cash price from Futures + IV surface ──
+  const loadTppData = async (symbol: string) => {
+    // 1. Load futures to get Cash price
+    setTppLoadingFutures(true);
+    try {
+      const futuresResult = await fetchTppFutures(symbol);
+      if (futuresResult.success && futuresResult.data && futuresResult.data.length > 0) {
+        const cashContract = futuresResult.data.find(f =>
+          f.month.toLowerCase().includes('cash') || f.contract.toLowerCase().includes('cash')
+        ) || futuresResult.data[0];
+        const cashPrice = parseFloat(cashContract.last.replace(/,/g, ''));
+        if (!isNaN(cashPrice) && cashPrice > 0) {
+          setPricingInputs(prev => ({ ...prev, spotPrice: cashPrice }));
+          toast({ title: "Ticker Peek Pro — Cash Price", description: `${symbol}: ${cashPrice.toFixed(2)}` });
+        }
+      }
+    } catch (error) {
+      console.error('Error loading TPP futures:', error);
+    } finally {
+      setTppLoadingFutures(false);
+    }
+
+    // 2. Load IV surface for volatility interpolation
+    setTppLoadingSurface(true);
+    setTppSurfacePoints([]);
+    try {
+      const strikesResult = await fetchTppVolSurfaceStrikes(symbol, symbol, 50);
+      if (strikesResult.success && strikesResult.strikes && strikesResult.strikes.length > 0) {
+        const allStrikes = strikesResult.strikes;
+        const surfaceResult = await fetchTppVolSurface(
+          symbol, symbol, 50, false, allStrikes[0], allStrikes[allStrikes.length - 1]
+        );
+        if (surfaceResult.success && surfaceResult.surfacePoints && surfaceResult.surfacePoints.length > 0) {
+          setTppSurfacePoints(surfaceResult.surfacePoints);
+          toast({
+            title: "IV Surface Loaded",
+            description: `${surfaceResult.surfacePoints.length} data points for vol interpolation`,
+          });
+        }
+      }
+    } catch (error) {
+      console.error('Error loading TPP IV surface:', error);
+    } finally {
+      setTppLoadingSurface(false);
+    }
+  };
+
+  // ── Ticker Peek Pro: Bilinear IV interpolation ──
+  const interpolateTppIV = useCallback((absoluteStrike: number, dte: number, type: 'call' | 'put'): number | null => {
+    if (tppSurfacePoints.length === 0) return null;
+    const filtered = tppSurfacePoints.filter(p => p.type === type);
+    if (filtered.length === 0) return null;
+
+    const strikes = [...new Set(filtered.map(p => p.strike))].sort((a, b) => a - b);
+    const dtes = [...new Set(filtered.map(p => p.dte))].sort((a, b) => a - b);
+    if (strikes.length < 2 || dtes.length < 2) return null;
+
+    let z: (number | null)[][] = dtes.map(d =>
+      strikes.map(s => {
+        const point = filtered.find(p => p.dte === d && p.strike === s);
+        return point?.iv != null && point.iv > 0 ? point.iv : null;
+      })
+    );
+    z = interpolateSurface(z, strikes, dtes);
+
+    let si = strikes.findIndex(s => s >= absoluteStrike);
+    let di = dtes.findIndex(d => d >= dte);
+    if (si <= 0) si = 1;
+    if (si >= strikes.length) si = strikes.length - 1;
+    if (di <= 0) di = 1;
+    if (di >= dtes.length) di = dtes.length - 1;
+
+    const s0 = strikes[si - 1], s1 = strikes[si];
+    const d0 = dtes[di - 1], d1 = dtes[di];
+    const z00 = z[di - 1]?.[si - 1], z01 = z[di - 1]?.[si];
+    const z10 = z[di]?.[si - 1], z11 = z[di]?.[si];
+    const vals = [z00, z01, z10, z11].filter(v => v !== null) as number[];
+    if (vals.length === 0) return null;
+    if (vals.length < 4) return vals.reduce((a, b) => a + b, 0) / vals.length;
+
+    const ts = s1 !== s0 ? (absoluteStrike - s0) / (s1 - s0) : 0.5;
+    const td = d1 !== d0 ? (dte - d0) / (d1 - d0) : 0.5;
+    return z00! * (1 - ts) * (1 - td) + z01! * ts * (1 - td) + z10! * (1 - ts) * td + z11! * ts * td;
+  }, [tppSurfacePoints]);
+
   // Load real commodities when useRealData is enabled
   useEffect(() => {
     if (useRealData) {
       loadRealCommodities();
     }
   }, [useRealData]);
-  
+
+  // Load TPP commodities when toggle is on
+  useEffect(() => {
+    if (useTickerPeekPro) {
+      loadAllTppCurrencies();
+      if (useRealData) {
+        setUseRealData(false);
+        localStorage.setItem('pricersUseRealData', 'false');
+      }
+    }
+  }, [useTickerPeekPro]);
+
+  // Load TPP futures (Cash price) and IV surface when commodity changes
+  useEffect(() => {
+    if (useTickerPeekPro && selectedCurrencyPair) {
+      loadTppData(selectedCurrencyPair);
+    }
+  }, [selectedCurrencyPair, useTickerPeekPro]);
+
   // ✅ AJOUT: Sélection du modèle de pricing pour les barrières
   const [barrierPricingModel, setBarrierPricingModel] = useState<'closed-form' | 'monte-carlo'>('closed-form');
   // ✅ AJOUT: Sélection du modèle de pricing vanille (même logique que Strategy Builder)
@@ -261,16 +412,16 @@ const Pricers = () => {
   // 🎯 Fonction pour obtenir la devise de la commodity sélectionnée
   // Si on utilise des données réelles, essayer de récupérer la devise depuis la commodity
   const getSelectedCurrency = useMemo(() => {
+    if (useTickerPeekPro) return 'USD';
     if (useRealData && realCommodities.length > 0 && selectedCurrencyPair) {
       const selectedCommodity = realCommodities.find(c => c.symbol === selectedCurrencyPair);
       if (selectedCommodity?.currency) {
         return selectedCommodity.currency;
       }
     }
-    // Fallback vers CURRENCY_PAIRS ou USD
     const currentPair = CURRENCY_PAIRS.find(p => p.symbol === selectedCurrencyPair);
     return currentPair?.quote || 'USD';
-  }, [selectedCurrencyPair, useRealData, realCommodities]);
+  }, [selectedCurrencyPair, useRealData, realCommodities, useTickerPeekPro]);
   
   // 🎯 Fonction pour obtenir le taux d'intérêt selon les settings
   const getInterestRateForPricing = useMemo(() => {
@@ -505,6 +656,21 @@ const Pricers = () => {
     timeToPayoff: 1.0 // Temps jusqu'au payoff pour les options one-touch (en années)
   });
 
+  // Auto-interpolate IV from TPP surface when strike/maturity/instrument changes
+  useEffect(() => {
+    if (!useTickerPeekPro || tppSurfacePoints.length === 0) return;
+    const absoluteStrike = strategyComponent.strikeType === 'percent'
+      ? pricingInputs.spotPrice * (strategyComponent.strike / 100)
+      : strategyComponent.strike;
+    const dte = Math.max(1, Math.round(pricingInputs.timeToMaturity * 365));
+    const type: 'call' | 'put' = selectedInstrument.includes('put') ? 'put' : 'call';
+    const iv = interpolateTppIV(absoluteStrike, dte, type);
+    if (iv !== null && iv > 0) {
+      setStrategyComponent(prev => ({ ...prev, volatility: parseFloat(iv.toFixed(2)) }));
+    }
+  }, [useTickerPeekPro, tppSurfacePoints, strategyComponent.strike, strategyComponent.strikeType,
+      pricingInputs.spotPrice, pricingInputs.timeToMaturity, selectedInstrument, interpolateTppIV]);
+
   // Résultats
   const [pricingResults, setPricingResults] = useState<PricingResult[]>([]);
   const [isCalculating, setIsCalculating] = useState(false);
@@ -525,10 +691,10 @@ const Pricers = () => {
     setPricingInputs(prev => ({ ...prev, timeToMaturity }));
   }, [pricingInputs.startDate, pricingInputs.maturityDate]);
 
-  // Mettre à jour le spot price quand la commodity change
+  // Mettre à jour le spot price quand la commodity change (sauf en mode TPP)
   useEffect(() => {
+    if (useTickerPeekPro) return;
     if (useRealData && realCommodities.length > 0) {
-      // Use real commodities from Commodity Market
       const selectedCommodity = realCommodities.find(c => c.symbol === selectedCurrencyPair);
       if (selectedCommodity) {
         setPricingInputs(prev => ({ ...prev, spotPrice: selectedCommodity.price }));
@@ -537,19 +703,17 @@ const Pricers = () => {
           description: `${selectedCommodity.name}: $${selectedCommodity.price.toFixed(2)}`,
         });
       } else if (realCommodities.length > 0 && !realCommodities.find(c => c.symbol === selectedCurrencyPair)) {
-        // If selected symbol doesn't exist in real commodities, select first one
         const firstCommodity = realCommodities[0];
         setSelectedCurrencyPair(firstCommodity.symbol);
         setPricingInputs(prev => ({ ...prev, spotPrice: firstCommodity.price }));
       }
     } else {
-      // Use default commodities list (CURRENCY_PAIRS)
       const pair = CURRENCY_PAIRS.find(p => p.symbol === selectedCurrencyPair);
       if (pair) {
         setPricingInputs(prev => ({ ...prev, spotPrice: pair.defaultSpotRate }));
       }
     }
-  }, [selectedCurrencyPair, useRealData, realCommodities]);
+  }, [selectedCurrencyPair, useRealData, realCommodities, useTickerPeekPro]);
 
   // Mettre à jour le type d'instrument dans le composant stratégie
   useEffect(() => {
@@ -864,18 +1028,28 @@ const Pricers = () => {
     return 'text-gray-900 dark:text-gray-100';
   };
 
-  // Obtenir la commodity sélectionnée (réelle ou par défaut)
+  // Obtenir la commodity sélectionnée (TPP, réelle ou par défaut)
   const selectedCommodity = useRealData && realCommodities.length > 0
     ? realCommodities.find(c => c.symbol === selectedCurrencyPair)
     : null;
-  const selectedPair = useRealData && selectedCommodity
+  const tppSelectedCurrency = useTickerPeekPro
+    ? tppCurrencies.find(c => c.symbol === selectedCurrencyPair)
+    : null;
+  const selectedPair = useTickerPeekPro && tppSelectedCurrency
     ? {
-        symbol: selectedCommodity.symbol,
-        name: selectedCommodity.name,
+        symbol: tppSelectedCurrency.symbol,
+        name: tppSelectedCurrency.name,
         category: 'others' as const,
-        defaultSpotRate: selectedCommodity.price
+        defaultSpotRate: parseFloat(tppSelectedCurrency.last.replace(/,/g, '')) || 0,
       }
-    : CURRENCY_PAIRS.find(p => p.symbol === selectedCurrencyPair);
+    : useRealData && selectedCommodity
+      ? {
+          symbol: selectedCommodity.symbol,
+          name: selectedCommodity.name,
+          category: 'others' as const,
+          defaultSpotRate: selectedCommodity.price,
+        }
+      : CURRENCY_PAIRS.find(p => p.symbol === selectedCurrencyPair);
 
   // Calculs complémentaires pour l'affichage des résultats
   // Volume principal pour les calculs
@@ -1283,11 +1457,20 @@ const Pricers = () => {
                         onCheckedChange={(checked) => {
                           setUseRealData(checked);
                           localStorage.setItem('pricersUseRealData', JSON.stringify(checked));
+                          if (checked && useTickerPeekPro) {
+                            setUseTickerPeekPro(false);
+                            localStorage.setItem('pricersUseTickerPeekPro', 'false');
+                          }
                         }}
                       />
                       <label className="text-sm font-medium text-foreground cursor-pointer" onClick={() => {
-                        setUseRealData(!useRealData);
-                        localStorage.setItem('pricersUseRealData', JSON.stringify(!useRealData));
+                        const next = !useRealData;
+                        setUseRealData(next);
+                        localStorage.setItem('pricersUseRealData', JSON.stringify(next));
+                        if (next && useTickerPeekPro) {
+                          setUseTickerPeekPro(false);
+                          localStorage.setItem('pricersUseTickerPeekPro', 'false');
+                        }
                       }}>
                         Use Real Data from Commodity Market
                       </label>
@@ -1300,12 +1483,69 @@ const Pricers = () => {
                   </div>
                   {useRealData && (
                     <p className="text-xs text-muted-foreground mt-2">
-                      Real-time prices from Commodity Market will be used. Prices update automatically when you select a commodity.
+                      Real-time prices from Commodity Market will be used.
                     </p>
                   )}
                 </div>
 
-                {/* Paire de devises */}
+                {/* Use Ticker Peek Pro Toggle */}
+                <div className={`p-2.5 rounded-lg border ${useTickerPeekPro ? 'bg-orange-50 dark:bg-orange-950/30 border-orange-200 dark:border-orange-800' : 'bg-muted/30 border-border'}`}>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Switch
+                        checked={useTickerPeekPro}
+                        onCheckedChange={(checked) => {
+                          setUseTickerPeekPro(checked);
+                          localStorage.setItem('pricersUseTickerPeekPro', JSON.stringify(checked));
+                          if (checked && useRealData) {
+                            setUseRealData(false);
+                            localStorage.setItem('pricersUseRealData', 'false');
+                          }
+                        }}
+                      />
+                      <label className="text-sm font-medium text-foreground cursor-pointer" onClick={() => {
+                        const next = !useTickerPeekPro;
+                        setUseTickerPeekPro(next);
+                        localStorage.setItem('pricersUseTickerPeekPro', JSON.stringify(next));
+                        if (next && useRealData) {
+                          setUseRealData(false);
+                          localStorage.setItem('pricersUseRealData', 'false');
+                        }
+                      }}>
+                        Use Data from Ticker Peek Pro
+                      </label>
+                    </div>
+                    {useTickerPeekPro && (
+                      <span className="text-xs text-muted-foreground">
+                        {tppLoadingCurrencies ? 'Loading...' : `${tppCurrencies.length} instruments`}
+                      </span>
+                    )}
+                  </div>
+                  {useTickerPeekPro && (
+                    <div className="mt-2 space-y-1">
+                      <p className="text-xs text-muted-foreground">
+                        Spot = Cash Futures price, Vol = interpolated from IV Matrix.
+                      </p>
+                      {tppLoadingFutures && (
+                        <p className="text-xs text-orange-600 dark:text-orange-400 flex items-center gap-1">
+                          <RefreshCw className="w-3 h-3 animate-spin" /> Loading Cash price...
+                        </p>
+                      )}
+                      {tppLoadingSurface && (
+                        <p className="text-xs text-orange-600 dark:text-orange-400 flex items-center gap-1">
+                          <RefreshCw className="w-3 h-3 animate-spin" /> Building IV surface...
+                        </p>
+                      )}
+                      {!tppLoadingSurface && tppSurfacePoints.length > 0 && (
+                        <p className="text-xs text-green-600 dark:text-green-400">
+                          IV Surface ready ({tppSurfacePoints.length} pts)
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* Commodity Selector */}
                 <div className="space-y-2">
                   <Label>Commodity</Label>
                   <Select 
@@ -1314,18 +1554,80 @@ const Pricers = () => {
                     onOpenChange={(open) => {
                       if (!open) {
                         setCommoditySearchQuery('');
+                        setTppSearchQuery('');
                       }
                     }}
-                    disabled={useRealData && loadingRealCommodities}
+                    disabled={(useRealData && loadingRealCommodities) || (useTickerPeekPro && tppLoadingCurrencies)}
                   >
                     <SelectTrigger>
-                      <SelectValue placeholder={useRealData && loadingRealCommodities ? "Loading commodities..." : "Select commodity"} />
+                      <SelectValue placeholder={
+                        useTickerPeekPro && tppLoadingCurrencies ? "Loading TPP instruments..." :
+                        useRealData && loadingRealCommodities ? "Loading commodities..." :
+                        "Select commodity"
+                      } />
                     </SelectTrigger>
                     <SelectContent>
-                      {useRealData && realCommodities.length > 0 ? (
-                        // Real commodities from Commodity Market
+                      {useTickerPeekPro ? (
                         <>
-                          {/* Search Input */}
+                          <div className="p-2 border-b sticky top-0 bg-background z-10">
+                            <Input
+                              placeholder="Search by symbol or name..."
+                              value={tppSearchQuery}
+                              onChange={(e) => setTppSearchQuery(e.target.value)}
+                              className="h-8 text-sm"
+                              onClick={(e) => e.stopPropagation()}
+                              onKeyDown={(e) => e.stopPropagation()}
+                            />
+                          </div>
+                          {(() => {
+                            const searchLower = tppSearchQuery.toLowerCase().trim();
+                            const categoryConfig: { key: string; label: string; icon: string }[] = [
+                              { key: 'energies', label: 'Energies', icon: '⚡' },
+                              { key: 'metals', label: 'Metals', icon: '🔩' },
+                              { key: 'grains', label: 'Grains', icon: '🌾' },
+                              { key: 'livestock', label: 'Livestock', icon: '🐄' },
+                              { key: 'currencies', label: 'Currencies', icon: '💱' },
+                              { key: 'indices', label: 'Indices', icon: '📊' },
+                            ];
+                            const groups = categoryConfig.map(cat => {
+                              const items = tppCurrenciesByCategory[cat.key] || [];
+                              const filtered = searchLower
+                                ? items.filter(c =>
+                                    c.symbol.toLowerCase().includes(searchLower) ||
+                                    c.name.toLowerCase().includes(searchLower))
+                                : items;
+                              return { ...cat, items: filtered };
+                            }).filter(g => g.items.length > 0);
+
+                            if (groups.length === 0) {
+                              return (
+                                <div className="p-4 text-center text-sm text-muted-foreground">
+                                  {tppSearchQuery ? `No results for "${tppSearchQuery}"` : 'No instruments loaded yet.'}
+                                </div>
+                              );
+                            }
+                            return groups.map(group => (
+                              <div key={group.key}>
+                                <div className="p-2 text-xs font-medium text-muted-foreground border-b border-t">
+                                  {group.icon} {group.label}
+                                </div>
+                                {group.items.map(c => (
+                                  <SelectItem key={c.symbol} value={c.symbol}>
+                                    <div className="flex flex-col">
+                                      <div className="flex justify-between items-center w-full">
+                                        <span className="font-mono">{c.symbol}</span>
+                                        <span className="text-xs text-muted-foreground font-mono ml-2">{c.last}</span>
+                                      </div>
+                                      <span className="text-xs text-muted-foreground">{c.name}</span>
+                                    </div>
+                                  </SelectItem>
+                                ))}
+                              </div>
+                            ));
+                          })()}
+                        </>
+                      ) : useRealData && realCommodities.length > 0 ? (
+                        <>
                           <div className="p-2 border-b sticky top-0 bg-background z-10">
                             <Input
                               placeholder="Search by symbol or name..."
@@ -1336,8 +1638,6 @@ const Pricers = () => {
                               onKeyDown={(e) => e.stopPropagation()}
                             />
                           </div>
-                          
-                          {/* Filtered commodities by category */}
                           {(() => {
                             const searchLower = commoditySearchQuery.toLowerCase().trim();
                             const filteredEnergy = searchLower 
@@ -1475,7 +1775,6 @@ const Pricers = () => {
                           })()}
                         </>
                       ) : (
-                        // Default commodities list - filtered by selected domains
                         (() => {
                           const filteredPairs = getFilteredDefaultCommodities();
                           if (filteredPairs.length === 0) {

@@ -42,7 +42,9 @@ import {
   ZoomOut,
   Monitor,
   Landmark,
-  Key
+  Key,
+  Plus,
+  FolderOpen
 } from "lucide-react";
 import { useCompanySettings, companySettingsEmitter } from "@/hooks/useCompanySettings";
 import { getLocalStorageStats, performEmergencyRecovery } from "@/utils/emergencyRecovery";
@@ -281,6 +283,72 @@ const Settings = () => {
     const saved = localStorage.getItem('includeLogoInPdf');
     return saved ? JSON.parse(saved) : false;
   });
+
+  // Portfolios & counterparties (shared with Hedging Instruments, localStorage)
+  type PortfolioOrCounterparty = { id: string; name: string };
+  const DEFAULT_COUNTERPARTIES: PortfolioOrCounterparty[] = [
+    { id: "deutsche-bank", name: "Deutsche Bank" },
+    { id: "hsbc", name: "HSBC" },
+    { id: "jpmorgan", name: "JPMorgan" },
+    { id: "bnp-paribas", name: "BNP Paribas" },
+  ];
+  const loadHedgingList = <T,>(key: string, defaultVal: T): T => {
+    try {
+      const s = localStorage.getItem(key);
+      return s ? JSON.parse(s) : defaultVal;
+    } catch { return defaultVal; }
+  };
+  const [hedgingPortfolios, setHedgingPortfolios] = useState<PortfolioOrCounterparty[]>(() =>
+    loadHedgingList("hedgingPortfolios", [])
+  );
+  const [hedgingCounterparties, setHedgingCounterparties] = useState<PortfolioOrCounterparty[]>(() =>
+    loadHedgingList("hedgingCounterparties", DEFAULT_COUNTERPARTIES)
+  );
+  const [newPortfolioName, setNewPortfolioName] = useState("");
+  const [newCounterpartyName, setNewCounterpartyName] = useState("");
+
+  const saveHedgingPortfolios = (list: PortfolioOrCounterparty[]) => {
+    setHedgingPortfolios(list);
+    localStorage.setItem("hedgingPortfolios", JSON.stringify(list));
+  };
+  const saveHedgingCounterparties = (list: PortfolioOrCounterparty[]) => {
+    setHedgingCounterparties(list);
+    localStorage.setItem("hedgingCounterparties", JSON.stringify(list));
+  };
+  const addHedgingPortfolio = () => {
+    const name = newPortfolioName.trim();
+    if (!name) return;
+    const id = name.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "") || `portfolio-${Date.now()}`;
+    if (hedgingPortfolios.some((p) => p.id === id)) {
+      toast({ title: "Already exists", description: "A portfolio with this name already exists.", variant: "destructive" });
+      return;
+    }
+    saveHedgingPortfolios([...hedgingPortfolios, { id, name }]);
+    setNewPortfolioName("");
+    toast({ title: "Portfolio added", description: `"${name}" has been added.` });
+  };
+  const addHedgingCounterparty = () => {
+    const name = newCounterpartyName.trim();
+    if (!name) return;
+    const id = name.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "") || `counterparty-${Date.now()}`;
+    if (hedgingCounterparties.some((c) => c.id === id)) {
+      toast({ title: "Existe déjà", description: "Une contrepartie avec ce nom existe déjà.", variant: "destructive" });
+      return;
+    }
+    saveHedgingCounterparties([...hedgingCounterparties, { id, name }]);
+    setNewCounterpartyName("");
+    toast({ title: "Counterparty added", description: `"${name}" has been added.` });
+  };
+  const removeHedgingPortfolio = (id: string) => {
+    const name = hedgingPortfolios.find((p) => p.id === id)?.name;
+    saveHedgingPortfolios(hedgingPortfolios.filter((p) => p.id !== id));
+    toast({ title: "Portefeuille supprimé", description: name ? `"${name}" a été supprimé.` : undefined });
+  };
+  const removeHedgingCounterparty = (id: string) => {
+    const name = hedgingCounterparties.find((c) => c.id === id)?.name;
+    saveHedgingCounterparties(hedgingCounterparties.filter((c) => c.id !== id));
+    toast({ title: "Counterparty removed", description: name ? `"${name}" has been removed.` : undefined });
+  };
   
   // 🌐 Bank Rates from World Government Bonds
   const [isLoadingBankRates, setIsLoadingBankRates] = useState(false);
@@ -2543,6 +2611,120 @@ const Settings = () => {
                     placeholder="Enter additional documentation requirements..."
                     rows={3}
                   />
+                </div>
+              </div>
+
+              <Separator />
+
+              <div className="space-y-6">
+                <h4 className="text-lg font-medium flex items-center gap-2">
+                  <FolderOpen className="h-5 w-5" />
+                  Portfolios and counterparties
+                </h4>
+                <p className="text-sm text-muted-foreground">
+                  Manage portfolios and counterparties used in Hedging Instruments. Lists are shared with the Hedging Instruments page.
+                </p>
+
+                <div className="grid gap-6 md:grid-cols-2">
+                  {/* Portfolios */}
+                  <div className="space-y-3 rounded-lg border border-border p-4">
+                    <Label className="text-base font-semibold">Portfolios</Label>
+                    <div className="flex gap-2">
+                      <Input
+                        placeholder="Portfolio name"
+                        value={newPortfolioName}
+                        onChange={(e) => setNewPortfolioName(e.target.value)}
+                        onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addHedgingPortfolio())}
+                      />
+                      <Button type="button" onClick={addHedgingPortfolio} size="sm">
+                        <Plus className="h-4 w-4 mr-1" />
+                        Add
+                      </Button>
+                    </div>
+                    <ul className="space-y-2 max-h-48 overflow-y-auto">
+                      {hedgingPortfolios.length === 0 ? (
+                        <li className="text-sm text-muted-foreground">No portfolios</li>
+                      ) : (
+                        hedgingPortfolios.map((p) => (
+                          <li key={p.id} className="flex items-center justify-between gap-2 rounded-md bg-muted/50 px-3 py-2 text-sm">
+                            <span>{p.name}</span>
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button type="button" variant="ghost" size="sm" className="text-destructive hover:text-destructive h-8 w-8 p-0">
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>Delete portfolio?</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    Are you sure you want to delete the portfolio &quot;{p.name}&quot;? This action cannot be undone. Instruments linked to this portfolio will not be deleted but will no longer show a portfolio.
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                  <AlertDialogAction
+                                    onClick={() => removeHedgingPortfolio(p.id)}
+                                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                  >
+                                    Delete
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+                          </li>
+                        ))
+                      )}
+                    </ul>
+                  </div>
+
+                  {/* Counterparties */}
+                  <div className="space-y-3 rounded-lg border border-border p-4">
+                    <Label className="text-base font-semibold">Counterparties</Label>
+                    <div className="flex gap-2">
+                      <Input
+                        placeholder="Counterparty name"
+                        value={newCounterpartyName}
+                        onChange={(e) => setNewCounterpartyName(e.target.value)}
+                        onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addHedgingCounterparty())}
+                      />
+                      <Button type="button" onClick={addHedgingCounterparty} size="sm">
+                        <Plus className="h-4 w-4 mr-1" />
+                        Add
+                      </Button>
+                    </div>
+                    <ul className="space-y-2 max-h-48 overflow-y-auto">
+                      {hedgingCounterparties.map((c) => (
+                        <li key={c.id} className="flex items-center justify-between gap-2 rounded-md bg-muted/50 px-3 py-2 text-sm">
+                          <span>{c.name}</span>
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button type="button" variant="ghost" size="sm" className="text-destructive hover:text-destructive h-8 w-8 p-0">
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                                <AlertDialogHeader>
+                                <AlertDialogTitle>Delete counterparty?</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  Are you sure you want to delete the counterparty &quot;{c.name}&quot;? This action cannot be undone. Instruments linked to this counterparty will not be deleted but will no longer show a counterparty.
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                <AlertDialogAction
+                                  onClick={() => removeHedgingCounterparty(c.id)}
+                                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                >
+                                  Delete
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
                 </div>
               </div>
             </CardContent>

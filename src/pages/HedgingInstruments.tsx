@@ -32,6 +32,32 @@ import {
 import StrategyImportService, { HedgingInstrument } from "@/services/StrategyImportService";
 import { PricingService } from "@/services/PricingService";
 import { Commodity } from "@/services/commodityApi";
+import { CURRENCY_PAIRS } from "@/pages/Index";
+// ✅ Types d'instruments alignés avec Strategy Builder / Pricers (mêmes libellés que StrategyImportService)
+const HEDGING_INSTRUMENT_TYPES = [
+  { value: "Vanilla Call", label: "Vanilla Call" },
+  { value: "Vanilla Put", label: "Vanilla Put" },
+  { value: "Forward", label: "Forward" },
+  { value: "Swap", label: "Swap" },
+  { value: "Knock-Out Call", label: "Knock-Out Call" },
+  { value: "Reverse Knock-Out Call", label: "Reverse Knock-Out Call" },
+  { value: "Double Knock-Out Call", label: "Double Knock-Out Call" },
+  { value: "Knock-Out Put", label: "Knock-Out Put" },
+  { value: "Reverse Knock-Out Put", label: "Reverse Knock-Out Put" },
+  { value: "Double Knock-Out Put", label: "Double Knock-Out Put" },
+  { value: "Knock-In Call", label: "Knock-In Call" },
+  { value: "Reverse Knock-In Call", label: "Reverse Knock-In Call" },
+  { value: "Double Knock-In Call", label: "Double Knock-In Call" },
+  { value: "Knock-In Put", label: "Knock-In Put" },
+  { value: "Reverse Knock-In Put", label: "Reverse Knock-In Put" },
+  { value: "Double Knock-In Put", label: "Double Knock-In Put" },
+  { value: "One-Touch", label: "One-Touch (beta)" },
+  { value: "Double-Touch", label: "Double-Touch (beta)" },
+  { value: "No-Touch", label: "No-Touch (beta)" },
+  { value: "Double-No-Touch", label: "Double-No-Touch (beta)" },
+  { value: "Range Binary", label: "Range Binary (beta)" },
+  { value: "Outside Binary", label: "Outside Binary (beta)" },
+];
 // ✅ IMPORT EXACT DES FONCTIONS EXPORTÉES D'INDEX.TSX UTILISÉES PAR STRATEGY BUILDER
 // ✅ STRICTEMENT : Black-Scholes et Monte Carlo pour put/call simples
 // ✅ STRICTEMENT : Closed-form pour les options avec barrières
@@ -119,6 +145,109 @@ const HedgingInstruments = () => {
   const [selectedTab, setSelectedTab] = useState("all");
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [showExportColumns, setShowExportColumns] = useState(false);
+  // Add Instrument form state (tous les inputs comme dans Pricers)
+  const [addFormType, setAddFormType] = useState("");
+  const [addFormCommodity, setAddFormCommodity] = useState("");
+  const [addFormNotional, setAddFormNotional] = useState("1000000");
+  const [addFormRate, setAddFormRate] = useState("1.0850");
+  const [addFormStrikeType, setAddFormStrikeType] = useState<"percent" | "absolute">("absolute");
+  const [addFormStartDate, setAddFormStartDate] = useState(() => new Date().toISOString().split("T")[0]);
+  const [addFormMaturity, setAddFormMaturity] = useState("");
+  const [addFormSpotPrice, setAddFormSpotPrice] = useState("75.50");
+  const [addFormQuantity, setAddFormQuantity] = useState("100");
+  const [addFormVolatility, setAddFormVolatility] = useState("25");
+  const [addFormInterestRate, setAddFormInterestRate] = useState("4.5");
+  const [addFormBarrier, setAddFormBarrier] = useState("");
+  const [addFormSecondBarrier, setAddFormSecondBarrier] = useState("");
+  const [addFormBarrierType, setAddFormBarrierType] = useState<"percent" | "absolute">("percent");
+  const [addFormRebate, setAddFormRebate] = useState("1");
+  const [addFormTimeToPayoff, setAddFormTimeToPayoff] = useState("1");
+  const [addFormStorageCost, setAddFormStorageCost] = useState("0");
+  const [addFormConvenienceYield, setAddFormConvenienceYield] = useState("0");
+  const [addFormCounterparty, setAddFormCounterparty] = useState("");
+  const [addFormPortfolio, setAddFormPortfolio] = useState("");
+
+  // Portfolios and counterparties (persisted in localStorage)
+  type PortfolioOrCounterparty = { id: string; name: string };
+  const DEFAULT_COUNTERPARTIES: PortfolioOrCounterparty[] = [
+    { id: "deutsche-bank", name: "Deutsche Bank" },
+    { id: "hsbc", name: "HSBC" },
+    { id: "jpmorgan", name: "JPMorgan" },
+    { id: "bnp-paribas", name: "BNP Paribas" },
+  ];
+  const loadList = <T,>(key: string, defaultVal: T): T => {
+    try {
+      const s = localStorage.getItem(key);
+      return s ? JSON.parse(s) : defaultVal;
+    } catch { return defaultVal; }
+  };
+  const [portfolios, setPortfolios] = useState<PortfolioOrCounterparty[]>(() =>
+    loadList("hedgingPortfolios", [])
+  );
+  const [counterparties, setCounterparties] = useState<PortfolioOrCounterparty[]>(() =>
+    loadList("hedgingCounterparties", DEFAULT_COUNTERPARTIES)
+  );
+  const [filterByPortfolio, setFilterByPortfolio] = useState<string>("");
+  const [filterByCounterparty, setFilterByCounterparty] = useState<string>("");
+  const [isAddPortfolioOpen, setIsAddPortfolioOpen] = useState(false);
+  const [newPortfolioName, setNewPortfolioName] = useState("");
+  const [isAddCounterpartyOpen, setIsAddCounterpartyOpen] = useState(false);
+  const [newCounterpartyName, setNewCounterpartyName] = useState("");
+
+  const savePortfolios = useCallback((list: PortfolioOrCounterparty[]) => {
+    setPortfolios(list);
+    localStorage.setItem("hedgingPortfolios", JSON.stringify(list));
+  }, []);
+  const saveCounterparties = useCallback((list: PortfolioOrCounterparty[]) => {
+    setCounterparties(list);
+    localStorage.setItem("hedgingCounterparties", JSON.stringify(list));
+  }, []);
+
+  const addPortfolio = useCallback(() => {
+    const name = newPortfolioName.trim();
+    if (!name) return;
+    const id = name.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "") || `portfolio-${Date.now()}`;
+    if (portfolios.some((p) => p.id === id)) {
+      toast({ title: "Portfolio exists", description: "A portfolio with this name already exists.", variant: "destructive" });
+      return;
+    }
+    savePortfolios([...portfolios, { id, name }]);
+    setNewPortfolioName("");
+    setIsAddPortfolioOpen(false);
+    setAddFormPortfolio(id);
+    toast({ title: "Portfolio added", description: `"${name}" has been added.` });
+  }, [newPortfolioName, portfolios, savePortfolios, toast]);
+
+  const addCounterparty = useCallback(() => {
+    const name = newCounterpartyName.trim();
+    if (!name) return;
+    const id = name.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "") || `counterparty-${Date.now()}`;
+    if (counterparties.some((c) => c.id === id)) {
+      toast({ title: "Counterparty exists", description: "A counterparty with this name already exists.", variant: "destructive" });
+      return;
+    }
+    saveCounterparties([...counterparties, { id, name }]);
+    setNewCounterpartyName("");
+    setIsAddCounterpartyOpen(false);
+    setAddFormCounterparty(id);
+    toast({ title: "Counterparty added", description: `"${name}" has been added.` });
+  }, [newCounterpartyName, counterparties, saveCounterparties, toast]);
+
+  useEffect(() => {
+    if (addFormCommodity && isAddDialogOpen) {
+      const pair = CURRENCY_PAIRS.find((p) => p.symbol === addFormCommodity);
+      if (pair) setAddFormSpotPrice(String(pair.defaultSpotRate));
+    }
+  }, [addFormCommodity, isAddDialogOpen]);
+
+  const addFormTimeToMaturity = useMemo(() => {
+    if (!addFormStartDate || !addFormMaturity) return 1;
+    const start = new Date(addFormStartDate).getTime();
+    const end = new Date(addFormMaturity).getTime();
+    if (end <= start) return 1;
+    return (end - start) / (365.25 * 24 * 60 * 60 * 1000);
+  }, [addFormStartDate, addFormMaturity]);
+
   const [instruments, setInstruments] = useState<HedgingInstrument[]>(() => {
     try {
       const saved = localStorage.getItem('hedgingInstruments');
@@ -1095,6 +1224,75 @@ const HedgingInstruments = () => {
     });
   };
 
+  const handleAddInstrument = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!addFormType || !addFormCommodity) {
+      toast({
+        title: "Missing fields",
+        description: "Please select Type and Commodity.",
+        variant: "destructive",
+      });
+      return;
+    }
+    const pair = CURRENCY_PAIRS.find(p => p.symbol === addFormCommodity);
+    const spot = Number(addFormSpotPrice) || 75.5;
+    const strikeVal = Number(addFormRate) || 0;
+    const strike = addFormStrikeType === "percent" ? (spot * strikeVal) / 100 : strikeVal;
+    const maturityDate = addFormMaturity || new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+    const newInstrument: HedgingInstrument = {
+      id: `manual-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+      type: addFormType,
+      currency: addFormCommodity,
+      notional: Number(addFormNotional) || 1000000,
+      strike,
+      maturity: maturityDate,
+      status: "active",
+      mtm: 0,
+      hedge_accounting: false,
+      counterparty: addFormCounterparty || "",
+      portfolio: addFormPortfolio || undefined,
+      quantity: Number(addFormQuantity) || 100,
+      volatility: Number(addFormVolatility) || undefined,
+      barrier: addFormBarrier ? Number(addFormBarrier) : undefined,
+      secondBarrier: addFormSecondBarrier ? Number(addFormSecondBarrier) : undefined,
+      rebate: addFormRebate ? Number(addFormRebate) : undefined,
+      exportSpotPrice: spot,
+      exportDomesticRate: Number(addFormInterestRate) || undefined,
+      exportHedgingStartDate: addFormStartDate,
+      exportStrategyStartDate: addFormStartDate,
+      exportVolatility: Number(addFormVolatility) || undefined,
+      exportTimeToMaturity: addFormTimeToMaturity,
+    };
+    importService.addInstrument(newInstrument);
+    setInstruments(importService.getHedgingInstruments());
+    window.dispatchEvent(new CustomEvent("hedgingInstrumentsUpdated"));
+    setIsAddDialogOpen(false);
+    setAddFormType("");
+    setAddFormCommodity("");
+    setAddFormNotional("1000000");
+    setAddFormRate("1.0850");
+    setAddFormStrikeType("absolute");
+    setAddFormStartDate(new Date().toISOString().split("T")[0]);
+    setAddFormMaturity("");
+    setAddFormSpotPrice("75.50");
+    setAddFormQuantity("100");
+    setAddFormVolatility("25");
+    setAddFormInterestRate("4.5");
+    setAddFormBarrier("");
+    setAddFormSecondBarrier("");
+    setAddFormBarrierType("percent");
+    setAddFormRebate("1");
+    setAddFormTimeToPayoff("1");
+    setAddFormStorageCost("0");
+    setAddFormConvenienceYield("0");
+    setAddFormCounterparty("");
+    setAddFormPortfolio("");
+    toast({
+      title: "Instrument added",
+      description: `${addFormType} on ${pair?.name ?? addFormCommodity} has been added.`,
+    });
+  };
+
   // View instrument function
   const viewInstrument = (instrument: HedgingInstrument) => {
     setSelectedInstrument(instrument);
@@ -1124,7 +1322,7 @@ const HedgingInstruments = () => {
     });
   };
 
-  // ✅ OPTIMISATION : Memoization des calculs coûteux
+  // ✅ OPTIMISATION : Memoization des calculs coûteux (tab + portfolio + counterparty)
   const filteredInstruments = useMemo(() => {
     return instruments.filter(instrument => {
     const isOption = instrument.type.includes("Call") || 
@@ -1141,9 +1339,12 @@ const HedgingInstruments = () => {
                       (selectedTab === "swaps" && instrument.type === "Swap") ||
                       (selectedTab === "hedge-accounting" && instrument.hedge_accounting);
     
-    return matchesTab;
+    const matchesPortfolio = !filterByPortfolio || (instrument.portfolio || "") === filterByPortfolio;
+    const matchesCounterparty = !filterByCounterparty || (instrument.counterparty || "") === filterByCounterparty;
+    
+    return matchesTab && matchesPortfolio && matchesCounterparty;
   });
-  }, [instruments, selectedTab]);
+  }, [instruments, selectedTab, filterByPortfolio, filterByCounterparty]);
 
   // ✅ OPTIMISATION : Memoization des calculs de résumé
   const totalNotional = useMemo(() => {
@@ -1386,41 +1587,6 @@ const HedgingInstruments = () => {
         </CardContent>
       </Card>
 
-      {/* Individual Volatility Overrides Summary */}
-      {instruments.some(inst => inst.impliedVolatility) && (
-        <Card className="mb-4 border-purple-200 dark:border-purple-800 bg-purple-50/50 dark:bg-purple-950/30">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium text-purple-700 flex items-center gap-2">
-              <TrendingUp className="h-4 w-4" />
-              Individual Volatility Overrides
-            </CardTitle>
-            <CardDescription className="text-xs">
-              Instruments using custom volatility instead of global market parameters
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="pt-0">
-            <div className="flex flex-wrap gap-2">
-              {instruments
-                .filter(inst => inst.impliedVolatility)
-                .map(inst => (
-                  <Badge key={inst.id} variant="secondary" className="text-xs bg-purple-100 text-purple-700">
-                    {inst.id}: {inst.impliedVolatility?.toFixed(1)}%
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-3 w-3 p-0 ml-1 text-purple-500 hover:text-red-500"
-                      onClick={() => resetInstrumentVolatility(inst.id)}
-                      title="Reset to global volatility"
-                    >
-                      ×
-                    </Button>
-                  </Badge>
-                ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
       {/* Individual Spot Price Overrides Summary */}
       {instruments.some(inst => inst.impliedSpotPrice) && (
         <Card className="mb-4 border-blue-200 dark:border-blue-800 bg-blue-50/50 dark:bg-blue-950/30">
@@ -1549,109 +1715,257 @@ const HedgingInstruments = () => {
                 <Trash2 className="h-4 w-4 mr-2" />
                 Delete All
               </Button>
-              <DialogContent className="sm:max-w-[600px]">
+              <DialogContent className="sm:max-w-[640px] max-h-[90vh] flex flex-col">
                 <DialogHeader>
                   <DialogTitle>Add New Commodity Hedging Instrument</DialogTitle>
                   <DialogDescription>
-                    Create a new commodity hedging instrument entry.
+                    Create a new commodity hedging instrument entry. Same inputs as Pricers.
                   </DialogDescription>
                 </DialogHeader>
+                <form onSubmit={handleAddInstrument} className="flex flex-col min-h-0">
+                  <div className="grid gap-4 py-4 overflow-y-auto pr-1 space-y-4">
+                    <div className="grid grid-cols-4 items-center gap-4">
+                      <Label className="text-right">Type</Label>
+                      <Select value={addFormType} onValueChange={setAddFormType}>
+                        <SelectTrigger className="col-span-3">
+                          <SelectValue placeholder="Select instrument type" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {HEDGING_INSTRUMENT_TYPES.map((opt) => (
+                            <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="grid grid-cols-4 items-center gap-4">
+                      <Label className="text-right">Commodity</Label>
+                      <Select value={addFormCommodity} onValueChange={setAddFormCommodity}>
+                        <SelectTrigger className="col-span-3">
+                          <SelectValue placeholder="Select commodity" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {CURRENCY_PAIRS.map((pair) => (
+                            <SelectItem key={pair.symbol} value={pair.symbol}>{pair.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="border-t pt-3 mt-1">
+                      <p className="text-xs font-medium text-muted-foreground mb-2">Dates</p>
+                      <div className="grid gap-3">
+                        <div className="grid grid-cols-4 items-center gap-4">
+                          <Label className="text-right">Start Date</Label>
+                          <Input type="date" className="col-span-3" value={addFormStartDate} onChange={(e) => setAddFormStartDate(e.target.value)} />
+                        </div>
+                        <div className="grid grid-cols-4 items-center gap-4">
+                          <Label className="text-right">Maturity Date</Label>
+                          <Input type="date" className="col-span-3" value={addFormMaturity} onChange={(e) => setAddFormMaturity(e.target.value)} />
+                        </div>
+                        <div className="grid grid-cols-4 items-center gap-4">
+                          <Label className="text-right">Maturity (years)</Label>
+                          <Input type="number" step="0.01" className="col-span-3 bg-muted" readOnly value={addFormTimeToMaturity.toFixed(2)} />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="border-t pt-3">
+                      <p className="text-xs font-medium text-muted-foreground mb-2">Basic Parameters</p>
+                      <div className="grid gap-3">
+                        <div className="grid grid-cols-4 items-center gap-4">
+                          <Label className="text-right">Spot Price</Label>
+                          <Input type="number" step="0.0001" className="col-span-3" value={addFormSpotPrice} onChange={(e) => setAddFormSpotPrice(e.target.value)} />
+                        </div>
+                        <div className="grid grid-cols-4 items-center gap-4">
+                          <Label className="text-right">Strike Price</Label>
+                          <div className="col-span-3 flex gap-2">
+                            <Input type="number" step="0.01" className="flex-1" value={addFormRate} onChange={(e) => setAddFormRate(e.target.value)} />
+                            <Select value={addFormStrikeType} onValueChange={(v: "percent" | "absolute") => setAddFormStrikeType(v)}>
+                              <SelectTrigger className="w-20"><SelectValue /></SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="percent">%</SelectItem>
+                                <SelectItem value="absolute">Abs</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-4 items-center gap-4">
+                          <Label className="text-right">Quantity</Label>
+                          <Input type="number" step="1" className="col-span-3" value={addFormQuantity} onChange={(e) => setAddFormQuantity(e.target.value)} />
+                        </div>
+                        <div className="grid grid-cols-4 items-center gap-4">
+                          <Label className="text-right">Notional (Volume)</Label>
+                          <Input type="number" step="1000" className="col-span-3" value={addFormNotional} onChange={(e) => setAddFormNotional(e.target.value)} />
+                        </div>
+                        <div className="grid grid-cols-4 items-center gap-4">
+                          <Label className="text-right">Volatility (%)</Label>
+                          <Input type="number" step="0.1" className="col-span-3" value={addFormVolatility} onChange={(e) => setAddFormVolatility(e.target.value)} />
+                        </div>
+                        <div className="grid grid-cols-4 items-center gap-4">
+                          <Label className="text-right">Risk-free Rate (%)</Label>
+                          <Input type="number" step="0.01" className="col-span-3" value={addFormInterestRate} onChange={(e) => setAddFormInterestRate(e.target.value)} />
+                        </div>
+                      </div>
+                    </div>
+
+                    {(addFormType.includes("Knock") || addFormType.includes("Touch")) && (
+                      <div className="border-t pt-3">
+                        <p className="text-xs font-medium text-muted-foreground mb-2">Barrier</p>
+                        <div className="grid gap-3">
+                          <div className="grid grid-cols-4 items-center gap-4">
+                            <Label className="text-right">Barrier</Label>
+                            <div className="col-span-3 flex gap-2">
+                              <Input type="number" step="0.01" className="flex-1" placeholder="e.g. 110" value={addFormBarrier} onChange={(e) => setAddFormBarrier(e.target.value)} />
+                              <Select value={addFormBarrierType} onValueChange={(v: "percent" | "absolute") => setAddFormBarrierType(v)}>
+                                <SelectTrigger className="w-20"><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="percent">%</SelectItem>
+                                  <SelectItem value="absolute">Abs</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          </div>
+                          {addFormType.includes("Double") && (
+                            <div className="grid grid-cols-4 items-center gap-4">
+                              <Label className="text-right">Second Barrier</Label>
+                              <div className="col-span-3 flex gap-2">
+                                <Input type="number" step="0.01" className="flex-1" value={addFormSecondBarrier} onChange={(e) => setAddFormSecondBarrier(e.target.value)} />
+                                <Select value={addFormBarrierType} onValueChange={(v: "percent" | "absolute") => setAddFormBarrierType(v)}>
+                                  <SelectTrigger className="w-20"><SelectValue /></SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="percent">%</SelectItem>
+                                    <SelectItem value="absolute">Abs</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {(addFormType.includes("Touch") || addFormType.includes("Binary")) && (
+                      <div className="border-t pt-3">
+                        <p className="text-xs font-medium text-muted-foreground mb-2">Digital options</p>
+                        <div className="grid gap-3">
+                          <div className="grid grid-cols-4 items-center gap-4">
+                            <Label className="text-right">Rebate (%)</Label>
+                            <Input type="number" step="0.1" className="col-span-3" value={addFormRebate} onChange={(e) => setAddFormRebate(e.target.value)} />
+                          </div>
+                          {addFormType === "One-Touch" && (
+                            <div className="grid grid-cols-4 items-center gap-4">
+                              <Label className="text-right">Time to Payoff (years)</Label>
+                              <Input type="number" step="0.01" className="col-span-3" value={addFormTimeToPayoff} onChange={(e) => setAddFormTimeToPayoff(e.target.value)} />
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="border-t pt-3">
+                      <div className="grid grid-cols-4 items-center gap-4">
+                        <Label className="text-right">Storage Cost (%)</Label>
+                        <Input type="number" step="0.01" className="col-span-3" value={addFormStorageCost} onChange={(e) => setAddFormStorageCost(e.target.value)} />
+                      </div>
+                      <div className="grid grid-cols-4 items-center gap-4 mt-3">
+                        <Label className="text-right">Convenience Yield (%)</Label>
+                        <Input type="number" step="0.01" className="col-span-3" value={addFormConvenienceYield} onChange={(e) => setAddFormConvenienceYield(e.target.value)} />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-4 items-center gap-4 border-t pt-3">
+                      <Label className="text-right">Portfolio</Label>
+                      <div className="col-span-3 flex gap-2">
+                        <Select value={addFormPortfolio || "__none__"} onValueChange={(v) => setAddFormPortfolio(v === "__none__" ? "" : v)}>
+                          <SelectTrigger className="flex-1">
+                            <SelectValue placeholder="Select portfolio (optional)" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="__none__">— None —</SelectItem>
+                            {portfolios.map((p) => (
+                              <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <Button type="button" variant="outline" size="sm" onClick={() => setIsAddPortfolioOpen(true)}>
+                          <Plus className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-4 items-center gap-4">
+                      <Label className="text-right">Counterparty</Label>
+                      <div className="col-span-3 flex gap-2">
+                        <Select value={addFormCounterparty} onValueChange={setAddFormCounterparty}>
+                          <SelectTrigger className="flex-1">
+                            <SelectValue placeholder="Select counterparty" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {counterparties.map((c) => (
+                              <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <Button type="button" variant="outline" size="sm" onClick={() => setIsAddCounterpartyOpen(true)}>
+                          <Plus className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                  <DialogFooter className="border-t pt-4 mt-2 shrink-0">
+                    <Button type="submit">Add Instrument</Button>
+                  </DialogFooter>
+                </form>
+              </DialogContent>
+            </Dialog>
+
+            {/* Dialog Add portfolio */}
+            <Dialog open={isAddPortfolioOpen} onOpenChange={setIsAddPortfolioOpen}>
+              <DialogContent className="sm:max-w-[360px]">
+                <DialogHeader>
+                  <DialogTitle>Add portfolio</DialogTitle>
+                  <DialogDescription>Create a new portfolio to assign to instruments.</DialogDescription>
+                </DialogHeader>
                 <div className="grid gap-4 py-4">
-                  <div className="grid grid-cols-4 items-center gap-4">
-                    <Label htmlFor="instrument-type" className="text-right">
-                      Type
-                    </Label>
-                    <Select>
-                      <SelectTrigger className="col-span-3">
-                        <SelectValue placeholder="Select instrument type" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="forward">Forward Contract</SelectItem>
-                        <SelectItem value="vanilla-call">Vanilla Call</SelectItem>
-                        <SelectItem value="vanilla-put">Vanilla Put</SelectItem>
-                        <SelectItem value="collar">Collar</SelectItem>
-                        <SelectItem value="swap">Commodity Swap</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  
-                  <div className="grid grid-cols-4 items-center gap-4">
-                    <Label htmlFor="commodity" className="text-right">
-                      Commodity
-                    </Label>
-                    <Select>
-                      <SelectTrigger className="col-span-3">
-                        <SelectValue placeholder="Select commodity" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="WTI">WTI Crude Oil</SelectItem>
-                        <SelectItem value="BRENT">Brent Crude Oil</SelectItem>
-                        <SelectItem value="NATGAS">Natural Gas</SelectItem>
-                        <SelectItem value="GOLD">Gold</SelectItem>
-                        <SelectItem value="SILVER">Silver</SelectItem>
-                        <SelectItem value="COPPER">Copper</SelectItem>
-                        <SelectItem value="CORN">Corn</SelectItem>
-                        <SelectItem value="WHEAT">Wheat</SelectItem>
-                        <SelectItem value="SOYBEAN">Soybeans</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  
-                  <div className="grid grid-cols-4 items-center gap-4">
-                    <Label htmlFor="notional" className="text-right">
-                      Notional
-                    </Label>
+                  <div className="grid gap-2">
+                    <Label htmlFor="new-portfolio-name">Name</Label>
                     <Input
-                      id="notional"
-                      type="number"
-                      placeholder="1000000"
-                      className="col-span-3"
+                      id="new-portfolio-name"
+                      value={newPortfolioName}
+                      onChange={(e) => setNewPortfolioName(e.target.value)}
+                      placeholder="e.g. Trading Book"
+                      onKeyDown={(e) => e.key === "Enter" && addPortfolio()}
                     />
-                  </div>
-                  
-                  <div className="grid grid-cols-4 items-center gap-4">
-                    <Label htmlFor="rate" className="text-right">
-                      Rate/Strike
-                    </Label>
-                    <Input
-                      id="rate"
-                      type="number"
-                      step="0.0001"
-                      placeholder="1.0850"
-                      className="col-span-3"
-                    />
-                  </div>
-                  
-                  <div className="grid grid-cols-4 items-center gap-4">
-                    <Label htmlFor="maturity" className="text-right">
-                      Maturity
-                    </Label>
-                    <Input
-                      id="maturity"
-                      type="date"
-                      className="col-span-3"
-                    />
-                  </div>
-                  
-                  <div className="grid grid-cols-4 items-center gap-4">
-                    <Label htmlFor="counterparty" className="text-right">
-                      Counterparty
-                    </Label>
-                    <Select>
-                      <SelectTrigger className="col-span-3">
-                        <SelectValue placeholder="Select counterparty" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="deutsche-bank">Deutsche Bank</SelectItem>
-                        <SelectItem value="hsbc">HSBC</SelectItem>
-                        <SelectItem value="jpmorgan">JPMorgan</SelectItem>
-                        <SelectItem value="bnp-paribas">BNP Paribas</SelectItem>
-                      </SelectContent>
-                    </Select>
                   </div>
                 </div>
                 <DialogFooter>
-                  <Button type="submit">Add Instrument</Button>
+                  <Button variant="outline" onClick={() => setIsAddPortfolioOpen(false)}>Cancel</Button>
+                  <Button onClick={addPortfolio}>Add</Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+
+            {/* Dialog Add counterparty */}
+            <Dialog open={isAddCounterpartyOpen} onOpenChange={setIsAddCounterpartyOpen}>
+              <DialogContent className="sm:max-w-[360px]">
+                <DialogHeader>
+                  <DialogTitle>Add counterparty</DialogTitle>
+                  <DialogDescription>Create a new counterparty to assign to instruments.</DialogDescription>
+                </DialogHeader>
+                <div className="grid gap-4 py-4">
+                  <div className="grid gap-2">
+                    <Label htmlFor="new-counterparty-name">Name</Label>
+                    <Input
+                      id="new-counterparty-name"
+                      value={newCounterpartyName}
+                      onChange={(e) => setNewCounterpartyName(e.target.value)}
+                      placeholder="e.g. Goldman Sachs"
+                      onKeyDown={(e) => e.key === "Enter" && addCounterparty()}
+                    />
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setIsAddCounterpartyOpen(false)}>Cancel</Button>
+                  <Button onClick={addCounterparty}>Add</Button>
                 </DialogFooter>
               </DialogContent>
             </Dialog>
@@ -1659,6 +1973,37 @@ const HedgingInstruments = () => {
           </div>
         </CardHeader>
         <CardContent>
+          {/* Filters by portfolio and counterparty */}
+          <div className="flex flex-wrap items-center gap-4 mb-4">
+            <div className="space-y-1.5">
+              <Label className="text-muted-foreground text-sm">Display by portfolio</Label>
+              <Select value={filterByPortfolio || "all"} onValueChange={(v) => setFilterByPortfolio(v === "all" ? "" : v)}>
+                <SelectTrigger className="w-[200px] bg-muted/50">
+                  <SelectValue placeholder="All instruments" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All instruments</SelectItem>
+                  {portfolios.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-muted-foreground text-sm">Display by counterparty</Label>
+              <Select value={filterByCounterparty || "all"} onValueChange={(v) => setFilterByCounterparty(v === "all" ? "" : v)}>
+                <SelectTrigger className="w-[200px] bg-muted/50">
+                  <SelectValue placeholder="All instruments" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All instruments</SelectItem>
+                  {counterparties.map((c) => (
+                    <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
           {/* Tabs */}
           <Tabs value={selectedTab} onValueChange={setSelectedTab}>
             <TabsList className="grid w-full grid-cols-5">
@@ -1697,7 +2042,7 @@ const HedgingInstruments = () => {
                      <TableHeader className="bg-muted/50 dark:bg-muted/80 sticky top-0 z-10">
                        <TableRow className="border-b-2 border-border">
                          {/* Fixed columns */}
-                         <TableHead rowSpan={2} className="bg-muted/50 dark:bg-muted/80 font-semibold text-center border-r border-border w-[60px] sticky left-0 z-20 shadow-sm">ID</TableHead>
+                         <TableHead rowSpan={2} className="bg-muted/50 dark:bg-muted/80 font-semibold text-center border-r border-border w-[60px] sticky left-0 z-[1] shadow-sm">ID</TableHead>
                          <TableHead rowSpan={2} className="bg-muted/50 dark:bg-muted/80 font-semibold text-center border-r border-border w-[90px]">Type</TableHead>
                          <TableHead rowSpan={2} className="bg-muted/50 dark:bg-muted/80 font-semibold text-center border-r border-border w-[100px]">Commodity</TableHead>
                          <TableHead rowSpan={2} className="bg-muted/50 dark:bg-muted/80 font-semibold text-center border-r border-border w-[80px]">Quantity (%)</TableHead>
@@ -1717,8 +2062,8 @@ const HedgingInstruments = () => {
                          <TableHead rowSpan={2} className="bg-muted/50 dark:bg-muted/80 font-semibold text-center border-r border-border w-[80px]">Barrier 1</TableHead>
                          <TableHead rowSpan={2} className="bg-muted/50 dark:bg-muted/80 font-semibold text-center border-r border-border w-[80px]">Barrier 2</TableHead>
                          <TableHead rowSpan={2} className="bg-muted/50 dark:bg-muted/80 font-semibold text-center border-r border-border w-[80px]">Rebate (%)</TableHead>
-                         <TableHead rowSpan={2} className="bg-muted/50 dark:bg-muted/80 font-semibold text-center border-r border-border w-[90px]">Volume</TableHead>
-                         <TableHead rowSpan={2} className="bg-muted/50 dark:bg-muted/80 font-semibold text-center border-r border-border w-[100px]">Notional</TableHead>
+                         <TableHead rowSpan={2} className="bg-muted/50 dark:bg-muted/80 font-semibold text-center border-r border-border w-[90px]">Notional</TableHead>
+                         <TableHead rowSpan={2} className="bg-muted/50 dark:bg-muted/80 font-semibold text-center border-r border-border w-[100px]">Total premium</TableHead>
                          <TableHead rowSpan={2} className="bg-muted/50 dark:bg-muted/80 font-semibold text-center border-r border-border w-[100px]">Maturity</TableHead>
                          <TableHead rowSpan={2} className="bg-muted/50 dark:bg-muted/80 font-semibold text-center border-r border-border w-[80px]">Status</TableHead>
                          <TableHead rowSpan={2} className="bg-muted/50 dark:bg-muted/80 font-semibold text-center w-[120px]">Actions</TableHead>
@@ -1790,7 +2135,7 @@ const HedgingInstruments = () => {
                       
                       return (
                          <TableRow key={instrument.id} className="hover:bg-muted/50 dark:hover:bg-muted/30 border-b border-border transition-all duration-200 group">
-                           <TableCell className="font-semibold bg-muted/50 dark:bg-muted/80 border-r border-border text-center sticky left-0 z-20 shadow-sm text-foreground w-[60px]">
+                           <TableCell className="font-semibold bg-muted/50 dark:bg-muted/80 border-r border-border text-center sticky left-0 z-[1] shadow-sm text-foreground w-[60px]">
                              <div className="px-2 py-1 rounded-md bg-background">
                                {instrument.id}
                              </div>
@@ -1809,7 +2154,7 @@ const HedgingInstruments = () => {
                                   </div>
                                 )}
                                 {instrument.repricingData && (
-                                  <div className="text-xs text-blue-600 flex items-center gap-1">
+                                  <div className="text-xs text-blue-600 dark:text-blue-400 flex items-center gap-1">
                                     <span className="w-1 h-1 bg-blue-400 rounded-full"></span>
                                     Period Data ✓
                                   </div>
@@ -1907,14 +2252,14 @@ const HedgingInstruments = () => {
                                                      {/* Time to Maturity - Export (conditional) */}
                            {showExportColumns && (
                              <TableCell className="font-mono text-center bg-blue-50 dark:bg-blue-950/30 border-r border-border">
-                              <div className="text-xs text-blue-600">
+                              <div className="text-xs text-blue-600 dark:text-blue-400">
                               {instrument.exportTimeToMaturity ? 
                                 `${instrument.exportTimeToMaturity.toFixed(4)}y` : 
                                 'N/A'
                               }
                             </div>
                             {instrument.exportTimeToMaturity && (
-                              <div className="text-xs text-gray-500">
+                              <div className="text-xs text-gray-500 dark:text-gray-400">
                                 {(instrument.exportTimeToMaturity * 365).toFixed(0)}d
                               </div>
                             )}
@@ -1924,13 +2269,13 @@ const HedgingInstruments = () => {
                           {/* Time to Maturity - Current */}
                            <TableCell className="text-center bg-green-50/80 dark:bg-green-950/30 border-r border-border">
                             <div className="space-y-1">
-                              <div className={`text-sm font-mono font-semibold ${timeToMaturity === 0 ? 'text-red-600' : 'text-green-700'}`}>
+                              <div className={`text-sm font-mono font-semibold ${timeToMaturity === 0 ? 'text-red-600 dark:text-red-400' : 'text-green-700 dark:text-green-400'}`}>
                               {timeToMaturity.toFixed(4)}y
                             </div>
-                              <div className={`text-xs px-2 py-1 rounded-md ${timeToMaturity === 0 ? 'text-red-600 bg-red-100/50' : 'text-green-600 bg-green-100/50'}`}>
+                              <div className={`text-xs px-2 py-1 rounded-md ${timeToMaturity === 0 ? 'text-red-600 dark:text-red-400 bg-red-100/50 dark:bg-red-950/30' : 'text-green-600 dark:text-green-400 bg-green-100/50 dark:bg-green-950/30'}`}>
                               {timeToMaturity === 0 ? 'EXPIRED' : `${(timeToMaturity * 365).toFixed(0)}d`}
                               </div>
-                              <div className={`text-xs px-2 py-1 rounded-md ${timeToMaturity === 0 ? 'text-red-500 bg-red-50' : 'text-green-500 bg-green-50'}`}>
+                              <div className={`text-xs px-2 py-1 rounded-md ${timeToMaturity === 0 ? 'text-red-500 dark:text-red-400 bg-red-50 dark:bg-red-950/30' : 'text-green-500 dark:text-green-400 bg-green-50 dark:bg-green-950/30'}`}>
                                 {timeToMaturity === 0 ? `Expired on ${instrument.maturity}` : `From ${valuationDate} to ${instrument.maturity}`}
                               </div>
                             </div>
@@ -1939,7 +2284,7 @@ const HedgingInstruments = () => {
                                                      {/* Spot Price - Export (conditional) */}
                            {showExportColumns && (
                              <TableCell className="text-center bg-blue-50/80 dark:bg-blue-950/30 border-r border-border">
-                               <div className="text-sm font-mono font-semibold text-blue-700">
+                               <div className="text-sm font-mono font-semibold text-blue-700 dark:text-blue-400">
                               {instrument.exportSpotPrice ? 
                                 instrument.exportSpotPrice.toFixed(6) : 
                                    <span className="text-blue-400 italic">N/A</span>
@@ -2004,8 +2349,8 @@ const HedgingInstruments = () => {
                                   </div>
                                 <div className={`text-xs px-2 py-1 rounded-md ${
                                   isUsingRealPrice 
-                                    ? 'text-green-700 bg-green-100/70' 
-                                    : 'text-green-600 bg-green-100/50'
+                                    ? 'text-green-700 dark:text-green-400 bg-green-100/70 dark:bg-green-950/30' 
+                                    : 'text-green-600 dark:text-green-400 bg-green-100/50 dark:bg-green-950/30'
                                 }`}>
                                     {isUsingRealPrice ? 'Real Market: ' : 'Using: '}{currentSpot.toFixed(6)}
                                   </div>
@@ -2017,7 +2362,7 @@ const HedgingInstruments = () => {
                                                      {/* Volatility - Export (conditional) */}
                            {showExportColumns && (
                              <TableCell className="text-center bg-blue-50/80 dark:bg-blue-950/30 border-r border-border">
-                               <div className="text-sm font-mono font-semibold text-blue-700">
+                               <div className="text-sm font-mono font-semibold text-blue-700 dark:text-blue-400">
                               {instrument.exportVolatility ? 
                                 `${instrument.exportVolatility.toFixed(2)}%` : 
                                    <span className="text-blue-400 italic">N/A</span>
@@ -2058,7 +2403,7 @@ const HedgingInstruments = () => {
                                   </Button>
                                 )}
                               </div>
-                                                              <div className="text-xs text-green-600 bg-green-100/50 px-2 py-1 rounded-md">
+                                                              <div className="text-xs text-green-600 dark:text-green-400 bg-green-100/50 dark:bg-green-950/30 px-2 py-1 rounded-md">
                                 Using: {instrument.impliedVolatility || volatility}%
                               </div>
                             </div>
@@ -2067,7 +2412,7 @@ const HedgingInstruments = () => {
                                                      {/* Risk-Free Rate - Export (conditional) */}
                            {showExportColumns && (
                              <TableCell className="font-mono text-center bg-blue-50 dark:bg-blue-950/30 border-r border-border">
-                            <div className="text-xs text-blue-600">
+                            <div className="text-xs text-blue-600 dark:text-blue-400">
                               {instrument.exportDomesticRate ? 
                                 `${instrument.exportDomesticRate.toFixed(3)}%` : 
                                 'N/A'
@@ -2077,7 +2422,7 @@ const HedgingInstruments = () => {
                            )}
                           
                           {/* Risk-Free Rate - Current */}
-                          <TableCell className="font-mono text-center bg-green-50">
+                          <TableCell className="font-mono text-center bg-green-50 dark:bg-green-950/30">
                             {(() => {
                               const marketData = commodityMarketData[instrument.currency] || getMarketDataFromInstruments(instrument.currency) || { 
                                 spot: 1.0000, 
@@ -2085,7 +2430,7 @@ const HedgingInstruments = () => {
                                 riskFreeRate: 1.0
                               };
                               return (
-                                <div className="text-xs text-green-600">
+                                <div className="text-xs text-green-600 dark:text-green-400">
                                   {marketData.riskFreeRate.toFixed(3)}%
                                 </div>
                               );
@@ -2096,8 +2441,8 @@ const HedgingInstruments = () => {
                                                      {/* Forward Price - Export (conditional) */}
                            {showExportColumns && (
                              <TableCell className="font-mono text-center bg-blue-50 dark:bg-blue-950/30 border-r border-border">
-                            <div className="text-xs text-blue-600">
-                              {instrument.exportForwardPrice ? 
+<div className="text-xs text-blue-600 dark:text-blue-400">
+                                {instrument.exportForwardPrice ?
                                 instrument.exportForwardPrice.toFixed(6) : 
                                 'N/A'
                               }
@@ -2106,7 +2451,7 @@ const HedgingInstruments = () => {
                            )}
                           
                           {/* Forward Price - Current */}
-                          <TableCell className="font-mono text-center bg-green-50">
+                          <TableCell className="font-mono text-center bg-green-50 dark:bg-green-950/30">
                             {(() => {
                               const marketData = commodityMarketData[instrument.currency] || getMarketDataFromInstruments(instrument.currency) || { 
                                 spot: 1.0000, 
@@ -2134,7 +2479,7 @@ const HedgingInstruments = () => {
                               const currentForward = currentSpot * Math.exp(r_d * currentTimeToMat);
                               console.log(`[DEBUG] ${instrument.id}: Forward Price - Current using Simple Logic, TTM: ${currentTimeToMat.toFixed(4)}y, Forward: ${currentForward.toFixed(6)}`);
                               return (
-                                <div className="text-xs text-green-600">
+                                <div className="text-xs text-green-600 dark:text-green-400">
                                   {currentForward.toFixed(6)}
                                 </div>
                               );
@@ -2144,9 +2489,9 @@ const HedgingInstruments = () => {
                                                      {/* Strike - Export (conditional) */}
                            {showExportColumns && (
                              <TableCell className="font-mono text-center bg-blue-50 dark:bg-blue-950/30 border-r border-border">
-                            <div className="text-xs text-blue-600">
-                              {(() => {
-                                // Calculer le strike d'export basé sur les paramètres d'export
+<div className="text-xs text-blue-600 dark:text-blue-400">
+                                {(() => {
+                                  // Calculer le strike d'export basé sur les paramètres d'export
                                 if (instrument.originalComponent && instrument.exportSpotPrice) {
                                   const exportStrike = instrument.originalComponent.strikeType === 'percent' 
                                     ? instrument.exportSpotPrice * (instrument.originalComponent.strike / 100)
@@ -2157,7 +2502,7 @@ const HedgingInstruments = () => {
                               })()}
                             </div>
                             {instrument.originalComponent && (
-                              <div className="text-xs text-gray-500">
+                              <div className="text-xs text-gray-500 dark:text-gray-400">
                                 {instrument.originalComponent.strikeType}: {instrument.originalComponent.strike}
                               </div>
                             )}
@@ -2165,17 +2510,17 @@ const HedgingInstruments = () => {
                            )}
                           
                           {/* Strike - Current */}
-                          <TableCell className="font-mono text-center bg-green-50">
-                            <div className="text-xs text-green-600">
+                          <TableCell className="font-mono text-center bg-green-50 dark:bg-green-950/30">
+                            <div className="text-xs text-green-600 dark:text-green-400">
                             {instrument.strike ? instrument.strike.toFixed(4) : 'N/A'}
                             </div>
                             {instrument.originalComponent && (
-                              <div className="text-xs text-gray-500">
+                              <div className="text-xs text-gray-500 dark:text-gray-400">
                                 Current calculation
                               </div>
                             )}
                             {instrument.dynamicStrikeInfo && (
-                              <div className="text-xs text-orange-600">
+                              <div className="text-xs text-orange-600 dark:text-orange-400">
                                 Dyn: {instrument.dynamicStrikeInfo.calculatedStrikePercent}
                               </div>
                             )}
@@ -2211,7 +2556,7 @@ const HedgingInstruments = () => {
                             <span className="text-muted-foreground">N/A</span>
                           )}
                         </TableCell>
-                        <TableCell>{getStatusBadge(instrument.status)}</TableCell>
+                        <TableCell>{getStatusBadge(timeToMaturity === 0 ? 'matured' : (instrument.status || 'active').toLowerCase())}</TableCell>
                         <TableCell>
                           <div className="flex items-center gap-2">
                             <Button 

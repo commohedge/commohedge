@@ -5,12 +5,13 @@ import { FuturesPanel } from "@/components/ticker-peek-pro/FuturesPanel";
 import { OptionsPanel } from "@/components/ticker-peek-pro/OptionsPanel";
 import { VolatilityPanel } from "@/components/ticker-peek-pro/VolatilityPanel";
 import { VolSurfacePanel } from "@/components/ticker-peek-pro/VolSurfacePanel";
+import { IvMatrixPanel } from "@/components/ticker-peek-pro/IvMatrixPanel";
 import { CurrencySelector } from "@/components/ticker-peek-pro/CurrencySelector";
 import type { Breadcrumb } from "@/lib/ticker-peek-pro/types";
 import type { CurrencyData, FuturesContract } from "@/lib/ticker-peek-pro/barchart";
 
 const TickerPeekPro = () => {
-  const [view, setView] = useState<"home" | "futures" | "options" | "volatility" | "volsurface">("home");
+  const [view, setView] = useState<"home" | "futures" | "options" | "volatility" | "volsurface" | "ivmatrix">("home");
   const [selectedCurrency, setSelectedCurrency] = useState<CurrencyData | null>(null);
   const [selectedFuture, setSelectedFuture] = useState<FuturesContract | null>(null);
   const [optionSymbol, setOptionSymbol] = useState("");
@@ -82,6 +83,31 @@ const TickerPeekPro = () => {
     ]);
   };
 
+  const handleLoadIvMatrix = () => {
+    if (!selectedCurrency) return;
+    setOptionSymbol(selectedCurrency.symbol);
+    if (!selectedFuture) {
+      setSelectedFuture({
+        contract: selectedCurrency.symbol,
+        month: "",
+        last: selectedCurrency.last,
+        change: selectedCurrency.change,
+        percentChange: selectedCurrency.percentChange,
+        open: "",
+        high: selectedCurrency.high,
+        low: selectedCurrency.low,
+        volume: selectedCurrency.volume,
+        openInterest: "",
+        time: selectedCurrency.time,
+      });
+    }
+    setView("ivmatrix");
+    setBreadcrumbs([
+      { label: "Home", view: "home" },
+      { label: `${selectedCurrency.symbol} Matrice IV`, view: "ivmatrix" },
+    ]);
+  };
+
   const handleSelectFuture = (future: FuturesContract) => {
     setSelectedFuture(future);
     setView("options");
@@ -128,6 +154,7 @@ const TickerPeekPro = () => {
               onLoadFutures={handleLoadFutures}
               onLoadVolatility={handleLoadVolatility}
               onLoadVolSurface={handleLoadVolSurface}
+              onLoadIvMatrix={handleLoadIvMatrix}
             />
           </div>
 
@@ -142,6 +169,9 @@ const TickerPeekPro = () => {
           )}
           {view === "volsurface" && selectedFuture != null && optionSymbol !== "" && (
             <VolSurfacePanel futureSymbol={selectedFuture.contract} optionSymbol={optionSymbol} />
+          )}
+          {view === "ivmatrix" && selectedFuture != null && optionSymbol !== "" && (
+            <IvMatrixPanel futureSymbol={selectedFuture.contract} optionSymbol={optionSymbol} />
           )}
         </main>
       </div>

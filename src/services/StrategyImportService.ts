@@ -33,6 +33,7 @@ export interface HedgingInstrument {
   hedge_accounting: boolean;
   effectiveness_ratio?: number;
   counterparty: string;
+  portfolio?: string;  // Portefeuille (id)
   barrier?: number;
   secondBarrier?: number;
   rebate?: number;
@@ -496,10 +497,16 @@ class StrategyImportService {
       'swap': 'Swap',
       'call-knockout': 'Knock-Out Call',
       'put-knockout': 'Knock-Out Put',
-      'call-knockin': 'Knock-In Call',
-      'put-knockin': 'Knock-In Put',
+      'call-reverse-knockout': 'Reverse Knock-Out Call',
+      'put-reverse-knockout': 'Reverse Knock-Out Put',
       'call-double-knockout': 'Double Knock-Out Call',
       'put-double-knockout': 'Double Knock-Out Put',
+      'call-knockin': 'Knock-In Call',
+      'put-knockin': 'Knock-In Put',
+      'call-reverse-knockin': 'Reverse Knock-In Call',
+      'put-reverse-knockin': 'Reverse Knock-In Put',
+      'call-double-knockin': 'Double Knock-In Call',
+      'put-double-knockin': 'Double Knock-In Put',
       'one-touch': 'One-Touch',
       'no-touch': 'No-Touch',
       'double-touch': 'Double-Touch',
@@ -642,6 +649,11 @@ class StrategyImportService {
       this.hedgingInstruments[index] = { ...this.hedgingInstruments[index], ...updates };
       this.saveToStorage();
     }
+  }
+
+  addInstrument(instrument: HedgingInstrument): void {
+    this.hedgingInstruments.push(instrument);
+    this.saveToStorage();
   }
 
   clearAllData(): void {
