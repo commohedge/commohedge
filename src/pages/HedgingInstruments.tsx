@@ -33,6 +33,13 @@ import StrategyImportService, { HedgingInstrument } from "@/services/StrategyImp
 import { PricingService } from "@/services/PricingService";
 import { Commodity } from "@/services/commodityApi";
 import { CURRENCY_PAIRS } from "@/pages/Index";
+import { fetchAllCountries, CountryBondData } from "@/services/rateExplorer/bondsApi";
+import {
+  fetchVolSurface,
+  fetchVolSurfaceStrikes,
+  type SurfacePoint,
+} from "@/lib/ticker-peek-pro/barchart";
+import { interpolateSurface } from "@/lib/ticker-peek-pro/volSurfaceInterpolation";
 // ✅ Types d'instruments alignés avec Strategy Builder / Pricers (mêmes libellés que StrategyImportService)
 const HEDGING_INSTRUMENT_TYPES = [
   { value: "Vanilla Call", label: "Vanilla Call" },
@@ -104,6 +111,14 @@ const COMMODITY_SYMBOL_MAP: { [key: string]: { tradingViewSymbol: string; catego
   'CATTLE': { tradingViewSymbol: 'LE1!', category: 'agricultural' },
   'HOGS': { tradingViewSymbol: 'HE1!', category: 'agricultural' },
 };
+
+/** Map HedgingInstruments commodity (e.g. WTI) to Ticker Peek Pro futures symbol (e.g. CL). */
+function getTppSymbolForCommodity(currency: string): string | null {
+  const m = COMMODITY_SYMBOL_MAP[currency];
+  if (!m?.tradingViewSymbol) return null;
+  const s = m.tradingViewSymbol;
+  return s.replace(/\d+!?$/g, "").replace("!", "").trim() || s.slice(0, 3);
+}
 
 // Interface pour les paramètres de marché par commodity
 interface CommodityMarketData {
@@ -310,6 +325,97 @@ const HedgingInstruments = () => {
     
     return null;
   }, []);
+
+  // Risk-free rate from Rate Explorer (Bank Rate) – same source as Pricers
+  const getRealRiskFreeRate = useCallback(async (currency: string): Promise<number | null> => {
+    try {
+      const CURRENCY_TO_COUNTRY: Record<string, string> = {
+        USD: 'united-states', EUR: 'germany', GBP: 'united-kingdom', JPY: 'japan', CHF: 'switzerland',
+        CAD: 'canada', AUD: 'australia', NZD: 'new-zealand', CNY: 'china', SGD: 'singapore', HKD: 'hong-kong',
+        KRW: 'south-korea', SEK: 'sweden', NOK: 'norway', DKK: 'denmark', BRL: 'brazil', MXN: 'mexico',
+        ZAR: 'south-africa', INR: 'india', RUB: 'russia', TRY: 'turkey',
+      };
+      const response = await fetchAllCountries();
+      if (!response.success || !response.data) return null;
+      const countrySlug = CURRENCY_TO_COUNTRY[currency];
+      if (countrySlug) {
+        const countryData = response.data.find((c: CountryBondData) =>
+          c.countrySlug === countrySlug || c.country.toLowerCase().replace(/\s+/g, '-') === countrySlug
+        );
+        if (countryData?.bankRate != null) return countryData.bankRate;
+      }
+      const byCurrency = response.data.find((c: CountryBondData) => c.currency === currency && c.bankRate != null);
+      return byCurrency ? byCurrency.bankRate : null;
+    } catch (e) {
+      console.error(`[REAL RATE] Error fetching bank rate for ${currency}:`, e);
+      return null;
+    }
+  }, []);
+
+  // Volatility from Pricers (calculatorState) – same as "Risk-free Rate" / volatility in Pricers
+  const getRealVolatility = useCallback((): number | null => {
+    try {
+      const saved = localStorage.getItem('calculatorState');
+      if (!saved) return null;
+      const state = JSON.parse(saved);
+      const vol = state?.strategyComponent?.volatility;
+      return typeof vol === 'number' && vol > 0 ? vol : null;
+    } catch {
+      return null;
+    }
+  }, []);
+
+  // Interpolate IV from TPP surface at (strike, dte). Returns IV in percentage (e.g. 25 for 25%).
+  const interpolateIVFromSurface = useCallback((
+    surface: SurfacePoint[],
+    absoluteStrike: number,
+    dteDays: number,
+    type: "call" | "put"
+  ): number | null => {
+    const filtered = surface.filter((p) => p.type === type);
+    if (filtered.length === 0) return null;
+    const strikes = [...new Set(filtered.map((p) => p.strike))].sort((a, b) => a - b);
+    const dtes = [...new Set(filtered.map((p) => p.dte))].sort((a, b) => a - b);
+    if (strikes.length < 2 || dtes.length < 2) return null;
+    let z: (number | null)[][] = dtes.map((d) =>
+      strikes.map((s) => {
+        const point = filtered.find((p) => p.dte === d && p.strike === s);
+        const iv = point?.iv;
+        return iv != null && iv > 0 ? iv : null;
+      })
+    );
+    z = interpolateSurface(z, strikes, dtes);
+    let si = strikes.findIndex((s) => s >= absoluteStrike);
+    let di = dtes.findIndex((d) => d >= dteDays);
+    if (si <= 0) si = 1;
+    if (si >= strikes.length) si = strikes.length - 1;
+    if (di <= 0) di = 1;
+    if (di >= dtes.length) di = dtes.length - 1;
+    const s0 = strikes[si - 1],
+      s1 = strikes[si];
+    const d0 = dtes[di - 1],
+      d1 = dtes[di];
+    const z00 = z[di - 1]?.[si - 1],
+      z01 = z[di - 1]?.[si];
+    const z10 = z[di]?.[si - 1],
+      z11 = z[di]?.[si];
+    const vals = [z00, z01, z10, z11].filter((v) => v !== null) as number[];
+    if (vals.length === 0) return null;
+    if (vals.length < 4) return (vals.reduce((a, b) => a + b, 0) / vals.length) * 100;
+    const ts = s1 !== s0 ? (absoluteStrike - s0) / (s1 - s0) : 0.5;
+    const td = d1 !== d0 ? (dteDays - d0) / (d1 - d0) : 0.5;
+    const ivDecimal =
+      z00! * (1 - ts) * (1 - td) + z01! * ts * (1 - td) + z10! * (1 - ts) * td + z11! * ts * td;
+    return ivDecimal * 100;
+  }, []);
+
+  const [realBankRateUsd, setRealBankRateUsd] = useState<number | null>(null);
+
+  // Per-strike real-time IV from Ticker Peek Pro vol surface when "Use real-time data" is on
+  const [realTimeVolByInstrumentId, setRealTimeVolByInstrumentId] = useState<Record<string, number>>({});
+  const [tppSurfaceByCommodity, setTppSurfaceByCommodity] = useState<Record<string, SurfacePoint[]>>({});
+  const [loadingRealTimeVol, setLoadingRealTimeVol] = useState(false);
+
   const [commodityMarketData, setCommodityMarketData] = useState<{ [commodity: string]: CommodityMarketData }>(() => {
     // Charger les données de marché depuis localStorage
     try {
@@ -501,6 +607,82 @@ const HedgingInstruments = () => {
     }
   }, [useRealMarketPrices, instruments.length]);
 
+  // Fetch Bank Rate (USD) when real market prices are enabled – same source as Pricers
+  useEffect(() => {
+    if (!useRealMarketPrices) {
+      setRealBankRateUsd(null);
+      return;
+    }
+    let cancelled = false;
+    getRealRiskFreeRate('USD').then((rate) => {
+      if (!cancelled && rate != null) setRealBankRateUsd(rate);
+    });
+    return () => { cancelled = true; };
+  }, [useRealMarketPrices, getRealRiskFreeRate]);
+
+  // Load per-strike IV from Ticker Peek Pro vol surface when "Use real-time data" is on
+  useEffect(() => {
+    if (!useRealMarketPrices || instruments.length === 0) {
+      setRealTimeVolByInstrumentId({});
+      return;
+    }
+    let cancelled = false;
+    setLoadingRealTimeVol(true);
+    const commodities = [...new Set(instruments.map((i) => i.currency).filter(Boolean))];
+    const loadSurfacesAndFillVol = async () => {
+      const nextSurfaces: Record<string, SurfacePoint[]> = {};
+      for (const commodity of commodities) {
+        const tppSym = getTppSymbolForCommodity(commodity);
+        if (!tppSym || cancelled) continue;
+        if (tppSurfaceByCommodity[commodity]?.length) {
+          nextSurfaces[commodity] = tppSurfaceByCommodity[commodity];
+          continue;
+        }
+        try {
+          const strikesRes = await fetchVolSurfaceStrikes(tppSym, tppSym, 50);
+          if (cancelled || !strikesRes.success || !strikesRes.strikes?.length) continue;
+          const surfaceRes = await fetchVolSurface(
+            tppSym,
+            tppSym,
+            50,
+            false,
+            strikesRes.strikes[0],
+            strikesRes.strikes[strikesRes.strikes.length - 1]
+          );
+          if (cancelled || !surfaceRes.success || !surfaceRes.surfacePoints?.length) continue;
+          nextSurfaces[commodity] = surfaceRes.surfacePoints;
+        } catch {
+          // skip this commodity
+        }
+      }
+      if (cancelled) return;
+      setTppSurfaceByCommodity((prev) => ({ ...prev, ...nextSurfaces }));
+      const byId: Record<string, number> = {};
+      for (const inst of instruments) {
+        const surface = nextSurfaces[inst.currency] || tppSurfaceByCommodity[inst.currency];
+        if (!surface?.length || !inst.maturity) continue;
+        const ttmYears = calculateTimeToMaturity(inst.maturity, valuationDate);
+        if (ttmYears <= 0) continue;
+        const dteDays = Math.round(ttmYears * 365);
+        const spot = getRealMarketPrice(inst.currency) ?? commodityMarketData[inst.currency]?.spot ?? 75;
+        const strike = inst.strike ?? spot;
+        const type = inst.type.toLowerCase().includes("put") ? "put" : "call";
+        const ivPct = interpolateIVFromSurface(surface, strike, dteDays, type);
+        if (ivPct != null) byId[inst.id] = ivPct;
+      }
+      if (!cancelled) setRealTimeVolByInstrumentId(byId);
+      setLoadingRealTimeVol(false);
+    };
+    loadSurfacesAndFillVol();
+    return () => { cancelled = true; };
+  }, [
+    useRealMarketPrices,
+    instruments,
+    valuationDate,
+    commodityMarketData,
+    getRealMarketPrice,
+    interpolateIVFromSurface,
+  ]);
 
   // ✅ Utiliser exactement la même logique de pricing que Strategy Builder
 
@@ -664,37 +846,41 @@ const HedgingInstruments = () => {
       spotRate = instrument.impliedSpotPrice || (useCurrentParams ? marketData.spot : baseSpotRate);
     }
     
-    const r_d = useCurrentParams ? marketData.riskFreeRate / 100 : baseRiskFreeRate / 100;
+    // When real market data is on, use Bank Rate (Rate Explorer) and Pricers volatility when available
+    const realRate = useRealMarketPrices && realBankRateUsd != null ? realBankRateUsd / 100 : (useCurrentParams ? marketData.riskFreeRate / 100 : baseRiskFreeRate / 100);
+    const r_d = realRate;
     
-    console.log(`[DEBUG] ${instrument.id}: Using ${useCurrentParams ? 'CURRENT' : 'EXPORT'} parameters - spot=${spotRate}, r_d=${(r_d*100).toFixed(3)}%, t=${calculationTimeToMaturity.toFixed(6)} (valuationDate=${valuationDate})`);
+    console.log(`[DEBUG] ${instrument.id}: Using ${useRealMarketPrices && realBankRateUsd != null ? 'REAL RATE' : useCurrentParams ? 'CURRENT' : 'EXPORT'} parameters - spot=${spotRate}, r_d=${(r_d*100).toFixed(3)}%, t=${calculationTimeToMaturity.toFixed(6)} (valuationDate=${valuationDate})`);
     console.log(`[DEBUG] ${instrument.id}: Export vs Current - Export spot: ${exportSpotPrice}, Current: ${marketData.spot}, Diff: ${Math.abs(marketData.spot - exportSpotPrice).toFixed(6)}`);
     console.log(`[DEBUG] ${instrument.id}: Export vs Current - Export risk-free: ${exportRiskFreeRate}, Current: ${marketData.riskFreeRate}, Diff: ${Math.abs(marketData.riskFreeRate - exportRiskFreeRate).toFixed(3)}`);
     console.log(`[DEBUG] ${instrument.id}: Export vs Current - Export volatility: ${exportVolatility}, Current: ${marketData.volatility}, Diff: ${Math.abs(marketData.volatility - exportVolatility).toFixed(1)}`);
     console.log(`[DEBUG] ${instrument.id}: PARAMETER CONSISTENCY CHECK - isExportedStrategy: ${isExportedStrategy}, useCurrentParams: ${useCurrentParams}, baseSpotRate: ${baseSpotRate}, baseRiskFreeRate: ${baseRiskFreeRate}`);
     
-    // 3. VOLATILITÉ : Utiliser la volatilité d'export comme base pour les stratégies exportées
-    let sigma;
-    if (instrument.impliedVolatility) {
-      // 1. Priorité : Volatilité implicite spécifique (éditable par l'utilisateur)
-      sigma = instrument.impliedVolatility / 100;
-    } else if (instrument.volatility) {
-      // 2. Priorité : Volatilité spécifique de l'instrument (éditable par l'utilisateur)
-      sigma = instrument.volatility / 100;
-    } else if (isExportedStrategy && instrument.exportVolatility && !useCurrentParams) {
-      // 3. Priorité : Volatilité d'export pour les stratégies exportées (cohérence avec Strategy Builder)
-      sigma = instrument.exportVolatility / 100;
-    } else if (useCurrentParams && marketData.volatility) {
-      // 4. Priorité : Volatilité globale actuelle (si les paramètres ont été modifiés)
-      sigma = marketData.volatility / 100;
-         } else if (marketData.volatility) {
-      // 4. Priorité : Volatilité globale de la devise (éditable par l'utilisateur)
-       sigma = marketData.volatility / 100;
+    // 3. VOLATILITÉ : Per-strike real-time from TPP surface, then global Pricers vol, then instrument/market data
+    let sigma: number;
+    const perStrikeVol = useRealMarketPrices ? realTimeVolByInstrumentId[instrument.id] : undefined;
+    if (perStrikeVol != null && perStrikeVol > 0) {
+      sigma = perStrikeVol / 100;
     } else {
-      // 5. Fallback : Volatilité des données de marché
-      const marketData = commodityMarketData[instrument.currency] || getMarketDataFromInstruments(instrument.currency) || { spot: 1.0000, volatility: 20, riskFreeRate: 1.0 };
-      sigma = marketData.volatility / 100;
+      const realVol = useRealMarketPrices ? getRealVolatility() : null;
+      if (realVol != null) {
+        sigma = realVol / 100;
+      } else if (instrument.impliedVolatility) {
+        sigma = instrument.impliedVolatility / 100;
+      } else if (instrument.volatility) {
+        sigma = instrument.volatility / 100;
+      } else if (isExportedStrategy && instrument.exportVolatility && !useCurrentParams) {
+        sigma = instrument.exportVolatility / 100;
+      } else if (useCurrentParams && marketData.volatility) {
+        sigma = marketData.volatility / 100;
+      } else if (marketData.volatility) {
+        sigma = marketData.volatility / 100;
+      } else {
+        const fallbackData = commodityMarketData[instrument.currency] || getMarketDataFromInstruments(instrument.currency) || { spot: 1.0000, volatility: 20, riskFreeRate: 1.0 };
+        sigma = fallbackData.volatility / 100;
+      }
     }
-    
+
     // 4. FORWARD CALCULATION : Utiliser les paramètres d'export pour la cohérence, mais permettre les modifications
     // ✅ CORRECTION : Si les prix réels sont activés, TOUJOURS utiliser spotRate (qui contient le prix réel)
     // ✅ Sinon, utiliser la logique normale avec les paramètres d'export
@@ -1425,14 +1611,14 @@ const HedgingInstruments = () => {
               </div>
             </div>
             
-            {/* ✅ Use Real Market Prices Option */}
+            {/* ✅ Use Real Market Data (Spot, Vol, Risk-Free Rate) – same as Pricers */}
             <div className="flex items-center justify-between p-4 border rounded-lg bg-muted/20">
               <div className="space-y-0.5">
                 <Label htmlFor="use-real-prices" className="text-sm font-medium">
-                  Use Real Market Prices from Commodity Market
+                  Use real-time data (Spot, Vol, Risk-free rate)
                 </Label>
                 <p className="text-xs text-muted-foreground">
-                  Use live prices from Commodity Market page instead of manual prices for pricing calculations
+                  Spot from Commodity Market · Volatility from Pricers · Risk-free rate from Rate Explorer (Bank Rate USD). Same sources as Pricers.
                 </p>
               </div>
               <Switch
@@ -1505,14 +1691,35 @@ const HedgingInstruments = () => {
                             {instruments.filter(inst => inst.currency === commodity).length} instrument(s)
                           </span>
                         </div>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => applyDefaultDataForCommodity(commodity)}
-                          className="text-xs"
-                        >
-                          Reset to Default
-                        </Button>
+                        <div className="flex gap-2">
+                          {useRealMarketPrices && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={async () => {
+                                const rate = await getRealRiskFreeRate('USD');
+                                if (rate != null) {
+                                  setRealBankRateUsd(rate);
+                                  toast({ title: "Rate Explorer", description: `Bank Rate (USD) updated to ${rate.toFixed(2)}%` });
+                                } else {
+                                  toast({ title: "Rate Explorer", description: "Could not fetch bank rate.", variant: "destructive" });
+                                }
+                              }}
+                              className="text-xs"
+                            >
+                              <RefreshCw className="w-3 h-3 mr-1" />
+                              Refresh from Rate Explorer
+                            </Button>
+                          )}
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => applyDefaultDataForCommodity(commodity)}
+                            className="text-xs"
+                          >
+                            Reset to Default
+                          </Button>
+                        </div>
                       </div>
                       <div className="grid gap-3 md:grid-cols-3">
                         <div className="space-y-1">
@@ -1545,32 +1752,60 @@ const HedgingInstruments = () => {
                           )}
                         </div>
                         <div className="space-y-1">
-                          <Label htmlFor={`vol-${commodity}`} className="text-xs">Volatility (%)</Label>
+                          <div className="flex items-center justify-between">
+                            <Label htmlFor={`vol-${commodity}`} className="text-xs">Volatility (%)</Label>
+                            {useRealMarketPrices && getRealVolatility() !== null && (
+                              <Badge variant="outline" className="text-xs bg-green-50 dark:bg-green-950/30 text-green-700 dark:text-green-400 border-green-200 dark:border-green-800">
+                                From Pricers
+                              </Badge>
+                            )}
+                          </div>
                           <Input
                             id={`vol-${commodity}`}
                             type="number"
                             step="0.1"
                             min="0"
                             max="100"
-                            value={data.volatility}
-                            onChange={(e) => updateCommodityMarketData(commodity, 'volatility', parseFloat(e.target.value) || data.volatility)}
-                            className="font-mono text-sm"
+                            value={useRealMarketPrices && getRealVolatility() !== null ? getRealVolatility()! : data.volatility}
+                            onChange={(e) => {
+                              if (!useRealMarketPrices || getRealVolatility() === null)
+                                updateCommodityMarketData(commodity, 'volatility', parseFloat(e.target.value) || data.volatility);
+                            }}
+                            disabled={useRealMarketPrices && getRealVolatility() !== null}
+                            className={`font-mono text-sm ${useRealMarketPrices && getRealVolatility() !== null ? 'bg-green-50 dark:bg-green-950/30 border-green-200 dark:border-green-800' : ''}`}
                             placeholder="25"
                           />
+                          {useRealMarketPrices && getRealVolatility() !== null && (
+                            <p className="text-xs text-green-600 dark:text-green-400">Using volatility from Pricers (calculatorState)</p>
+                          )}
                         </div>
                         <div className="space-y-1">
-                          <Label htmlFor={`risk-${commodity}`} className="text-xs">Risk-Free Rate (%)</Label>
+                          <div className="flex items-center justify-between">
+                            <Label htmlFor={`risk-${commodity}`} className="text-xs">Risk-Free Rate (%)</Label>
+                            {useRealMarketPrices && realBankRateUsd !== null && (
+                              <Badge variant="outline" className="text-xs bg-green-50 dark:bg-green-950/30 text-green-700 dark:text-green-400 border-green-200 dark:border-green-800">
+                                From Rate Explorer
+                              </Badge>
+                            )}
+                          </div>
                           <Input
                             id={`risk-${commodity}`}
                             type="number"
                             step="0.01"
                             min="0"
                             max="20"
-                            value={data.riskFreeRate}
-                            onChange={(e) => updateCommodityMarketData(commodity, 'riskFreeRate', parseFloat(e.target.value) || data.riskFreeRate)}
-                            className="font-mono text-sm"
+                            value={useRealMarketPrices && realBankRateUsd !== null ? realBankRateUsd : data.riskFreeRate}
+                            onChange={(e) => {
+                              if (!useRealMarketPrices || realBankRateUsd === null)
+                                updateCommodityMarketData(commodity, 'riskFreeRate', parseFloat(e.target.value) || data.riskFreeRate);
+                            }}
+                            disabled={useRealMarketPrices && realBankRateUsd !== null}
+                            className={`font-mono text-sm ${useRealMarketPrices && realBankRateUsd !== null ? 'bg-green-50 dark:bg-green-950/30 border-green-200 dark:border-green-800' : ''}`}
                             placeholder="5.0"
                           />
+                          {useRealMarketPrices && realBankRateUsd !== null && (
+                            <p className="text-xs text-green-600 dark:text-green-400">Using Bank Rate (USD) from Rate Explorer</p>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -2371,41 +2606,54 @@ const HedgingInstruments = () => {
                           </TableCell>
                            )}
                           
-                          {/* Volatility - Current */}
+                          {/* Volatility - Current (per-strike from TPP surface when Use real-time data is on) */}
                            <TableCell className="text-center bg-green-50/80 dark:bg-green-950/30 border-r border-border">
                             <div className="space-y-1">
-                              <div className="flex items-center gap-1">
-                                <Input
-                                  type="number"
-                                  value={instrument.impliedVolatility || ''}
-                                  onChange={(e) => {
-                                    const value = parseFloat(e.target.value);
-                                    if (!isNaN(value) && value >= 0 && value <= 100) {
-                                      updateInstrumentVolatility(instrument.id, value);
-                                    }
-                                  }}
-                                  placeholder={volatility.toFixed(1)}
-                                  className="w-16 h-6 text-xs text-center bg-background border-green-200 dark:border-green-800 focus:border-green-400 dark:focus:border-green-600 focus:ring-green-400/20"
-                                  step="0.1"
-                                  min="0"
-                                  max="100"
-                                />
-                                <span className="text-xs">%</span>
-                                {instrument.impliedVolatility && (
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className="h-4 w-4 p-0 text-gray-400 hover:text-red-500"
-                                    onClick={() => resetInstrumentVolatility(instrument.id)}
-                                    title="Reset to global volatility"
-                                  >
-                                    ×
-                                  </Button>
-                                )}
-                              </div>
-                                                              <div className="text-xs text-green-600 dark:text-green-400 bg-green-100/50 dark:bg-green-950/30 px-2 py-1 rounded-md">
-                                Using: {instrument.impliedVolatility || volatility}%
-                              </div>
+                              {useRealMarketPrices && realTimeVolByInstrumentId[instrument.id] != null ? (
+                                <>
+                                  <div className="font-mono text-sm font-semibold text-green-700 dark:text-green-400">
+                                    {realTimeVolByInstrumentId[instrument.id].toFixed(2)}%
+                                  </div>
+                                  <div className="text-xs text-green-600 dark:text-green-400 bg-green-100/50 dark:bg-green-950/30 px-2 py-1 rounded-md">
+                                    Real-time (strike)
+                                  </div>
+                                </>
+                              ) : (
+                                <>
+                                  <div className="flex items-center gap-1">
+                                    <Input
+                                      type="number"
+                                      value={instrument.impliedVolatility ?? ''}
+                                      onChange={(e) => {
+                                        const value = parseFloat(e.target.value);
+                                        if (!isNaN(value) && value >= 0 && value <= 100) {
+                                          updateInstrumentVolatility(instrument.id, value);
+                                        }
+                                      }}
+                                      placeholder={volatility.toFixed(1)}
+                                      className="w-16 h-6 text-xs text-center bg-background border-green-200 dark:border-green-800 focus:border-green-400 dark:focus:border-green-600 focus:ring-green-400/20"
+                                      step="0.1"
+                                      min="0"
+                                      max="100"
+                                    />
+                                    <span className="text-xs">%</span>
+                                    {instrument.impliedVolatility != null && (
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-4 w-4 p-0 text-gray-400 hover:text-red-500"
+                                        onClick={() => resetInstrumentVolatility(instrument.id)}
+                                        title="Reset to global volatility"
+                                      >
+                                        ×
+                                      </Button>
+                                    )}
+                                  </div>
+                                  <div className="text-xs text-green-600 dark:text-green-400 bg-green-100/50 dark:bg-green-950/30 px-2 py-1 rounded-md">
+                                    Using: {instrument.impliedVolatility ?? volatility}%
+                                  </div>
+                                </>
+                              )}
                             </div>
                           </TableCell>
                           

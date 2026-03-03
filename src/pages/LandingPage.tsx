@@ -1,13 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import LandingNav from "@/components/LandingNav";
-import Safe3DScene from "@/components/3D/Safe3DScene";
 import { 
   ArrowRight, 
-  CheckCircle, 
   TrendingUp, 
   Shield, 
   Zap, 
@@ -22,15 +19,24 @@ import {
   Target,
   Activity,
   DollarSign,
-  Lock,
   Clock,
   Award,
   Factory,
   Zap as EnergyIcon,
   Wheat,
-  Ship
+  Ship,
+  Newspaper,
+  FlaskConical
 } from "lucide-react";
 import "@/styles/landing-page-3d.css";
+
+const LANDING_IMAGES = {
+  pricers: "/landing-page/{643F46F8-1E4F-42EC-80D5-6F11AFC3C863}.png",
+  exposures: "/landing-page/{907F8717-005A-4D82-A8EB-1297751D649D}.png",
+  strategyBuilder: "/landing-page/{D85B4F5E-E1E0-46D1-859F-6225E4FEEC9B}.png",
+  marketNews: "/landing-page/{DCD200B8-AD66-4EFE-A2F4-99B0B822210E}.png",
+  stressTest: "/landing-page/{E5FFC7FA-3620-4616-9061-260F9BECE65D}.png",
+} as const;
 
 const LandingPage = () => {
   const navigate = useNavigate();
@@ -68,55 +74,74 @@ const LandingPage = () => {
     return () => document.removeEventListener('click', handleAnchorClick);
   }, []);
 
-  const features = [
+  // Main platform screens – each image matches one app module
+  const platformFeatures = [
     {
       title: "Advanced Pricing Engine",
-      description: "Sophisticated pricing engine utilizing Black-76 model for commodity options, forwards and swaps. Monte Carlo simulations with 1000+ scenarios, real-time Greeks calculations.",
-      image: "/landing-page/{643F46F8-1E4F-42EC-80D5-6F11AFC3C863}.png",
+      description: "Price exotic options with closed-form and Monte Carlo models. Real commodity market data, Greeks, and transaction summary in one view.",
+      image: LANDING_IMAGES.pricers,
       icon: <Calculator className="w-6 h-6" />,
-      highlights: ["Black-76 Model", "Monte Carlo 1000+", "Greeks Calculation", "15+ Instruments"],
-      path: "/pricers"
+      tags: ["Black-76", "Barrier options", "Greeks", "Real data"],
+      path: "/pricers",
+      size: "large" as const,
     },
     {
-      title: "Commodity Market Data",
-      description: "Market data center with professional widgets, real-time screeners, and 26+ commodities across Energy, Metals, Agriculture and Livestock.",
-      image: "/landing-page/{907F8717-005A-4D82-A8EB-1297751D649D}.png",
-      icon: <Globe className="w-6 h-6" />,
-      highlights: ["26+ Commodities", "Custom Tracking", "Real-time Screeners", "Multi-Source APIs"],
-      path: "/commodity-market"
-    },
-    {
-      title: "Strategy Builder",
-      description: "Sophisticated strategy constructor enabling creation of complex structures: barriers, digitals, and zero-cost strategies with historical backtesting.",
-      image: "/landing-page/{D85B4F5E-E1E0-46D1-859F-6225E4FEEC9B}.png",
-      icon: <BarChart3 className="w-6 h-6" />,
-      highlights: ["Barrier Options", "Zero-Cost Strategies", "Risk Matrix Analysis", "Historical Backtesting"],
-      path: "/strategy-builder"
-    },
-    {
-      title: "Risk Dashboard",
-      description: "Executive dashboard with advanced risk metrics: multi-commodity VaR, hedge ratios, unhedged exposures with automatic alerts.",
-      image: "/landing-page/{DCD200B8-AD66-4EFE-A2F4-99B0B822210E}.png",
+      title: "Exposure & Hedging",
+      description: "Manage and monitor commodity exposures. Track hedge ratios, hedged volume, and position status across subsidiaries.",
+      image: LANDING_IMAGES.exposures,
       icon: <FileText className="w-6 h-6" />,
-      highlights: ["Multi-Commodity VaR", "Hedge Ratio Tracking", "Real-time Alerts", "Major Commodities Monitor"],
-      path: "/dashboard"
+      tags: ["Exposures table", "Hedge ratio", "Long/Short", "Export"],
+      path: "/dashboard",
+      size: "large" as const,
+    },
+    {
+      title: "Strategy Parameters",
+      description: "Configure commodity options strategies: real data toggle, hedging dates, risk-free rate, Monte Carlo and barrier pricing.",
+      image: LANDING_IMAGES.strategyBuilder,
+      icon: <BarChart3 className="w-6 h-6" />,
+      tags: ["Strategy builder", "Monte Carlo", "Black-Scholes", "Custom periods"],
+      path: "/strategy-builder",
+      size: "medium" as const,
+    },
+    {
+      title: "Market News & Insights",
+      description: "Top stories and market-moving headlines across commodities, indices, and FX. Stay ahead with curated news.",
+      image: LANDING_IMAGES.marketNews,
+      icon: <Newspaper className="w-6 h-6" />,
+      tags: ["Top stories", "Real-time", "Multi-asset"],
+      path: "/commodity-market",
+      size: "medium" as const,
+    },
+    {
+      title: "Stress Test Scenarios",
+      description: "Test strategies under different market conditions. Predefined and custom scenarios: volatility, drift, price shock, basis.",
+      image: LANDING_IMAGES.stressTest,
+      icon: <FlaskConical className="w-6 h-6" />,
+      tags: ["Base case", "Market crash", "Contango", "Custom"],
+      path: "/strategy-builder",
+      size: "medium" as const,
+    },
+  ];
+
+  const moreTools = [
+    {
+      title: "Commodity Market",
+      description: "26+ commodities, screeners, real-time data.",
+      icon: <Globe className="w-5 h-5" />,
+      path: "/commodity-market",
     },
     {
       title: "Rate Explorer",
-      description: "Comprehensive interest rate management with yield curve bootstrapping, government bonds analysis, and interest rate futures tracking.",
-      image: "/landing-page/{E5FFC7FA-3620-4616-9061-260F9BECE65D}.png",
-      icon: <TrendingUp className="w-6 h-6" />,
-      highlights: ["Yield Curve Bootstrapping", "Government Bonds", "Interest Rate Futures", "Multiple Interpolation Methods"],
-      path: "/rate-explorer"
+      description: "Yield curves, government bonds, rate futures.",
+      icon: <TrendingUp className="w-5 h-5" />,
+      path: "/rate-explorer",
     },
     {
       title: "Hedge Assistant",
-      description: "Assistant hedging FX et matières premières : stratégies, pricing forwards/options, données de l'app, analyse de risque.",
-      image: "/landing-page/{E5FFC7FA-3620-4616-9061-260F9BECE65D}.png",
-      icon: <Target className="w-6 h-6" />,
-      highlights: ["FX & Commodities", "Stratégies", "Données app", "Pricing"],
-      path: "/hedge-helper"
-    }
+      description: "AI assistant for FX & commodity hedging.",
+      icon: <Target className="w-5 h-5" />,
+      path: "/hedge-helper",
+    },
   ];
 
   const stats = [
@@ -131,28 +156,24 @@ const LandingPage = () => {
       title: "Freight & Shipping",
       description: "Manage container shipping rates, freight futures, and maritime logistics risk",
       icon: <Ship className="w-8 h-8" />,
-      scene: <Safe3DScene sceneName="Hero" />,
       color: "from-blue-500/20 to-cyan-500/20"
     },
     {
       title: "Mining & Metals",
       description: "Hedge precious and base metals exposure with precision pricing models",
       icon: <Factory className="w-8 h-8" />,
-      scene: <Safe3DScene sceneName="Mining" />,
       color: "from-amber-500/20 to-yellow-500/20"
     },
     {
       title: "Oil & Energy",
       description: "Advanced risk management for crude oil, natural gas, and refined products",
       icon: <EnergyIcon className="w-8 h-8" />,
-      scene: <Safe3DScene sceneName="Oil" />,
       color: "from-green-500/20 to-emerald-500/20"
     },
     {
       title: "Agriculture",
       description: "Protect grain, softs, and livestock positions with sophisticated hedging",
       icon: <Wheat className="w-8 h-8" />,
-      scene: <Safe3DScene sceneName="Agriculture" />,
       color: "from-orange-500/20 to-amber-500/20"
     }
   ];
@@ -229,89 +250,82 @@ const LandingPage = () => {
       {/* Navigation */}
       <LandingNav />
       
-      {/* Hero Section with 3D Scene */}
-      <section 
+      {/* Hero Section */}
+      <section
         ref={heroRef}
-        className="relative min-h-screen flex items-center justify-center overflow-hidden"
-        style={{
-          transform: `translateY(${scrollY * 0.3}px)`,
-        }}
+        className="relative min-h-screen flex flex-col md:flex-row items-center justify-center overflow-hidden gap-8 md:gap-12 lg:gap-16 px-6 py-20 md:py-28"
+        style={{ transform: `translateY(${scrollY * 0.15}px)` }}
       >
-        {/* 3D Background */}
-        <div className="absolute inset-0 w-full h-full z-0">
-          <Safe3DScene sceneName="Hero" />
-        </div>
+        <div className="absolute inset-0 z-0 bg-gradient-to-br from-gray-950 via-black to-gray-950" />
+        <div className="absolute inset-0 z-[1] bg-[radial-gradient(ellipse_80%_50%_at_50%_-20%,rgba(196,216,46,0.08),transparent)]" />
         
-        {/* Gradient Overlay */}
-        <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-black/40 to-black/80 z-10"></div>
-        
-        {/* Hero Content */}
-        <div className="relative z-20 text-center max-w-7xl mx-auto px-6 py-32">
-          <div className="glass-card mb-8 inline-block">
-            <Badge className="bg-[#C4D82E]/20 text-[#C4D82E] border-[#C4D82E]/50 px-6 py-2 text-sm font-semibold backdrop-blur-sm">
-            Next-Generation Commodity Risk Management
+        <div className="relative z-10 flex-1 max-w-2xl text-center md:text-left">
+          <Badge className="mb-6 bg-[#C4D82E]/15 text-[#C4D82E] border-[#C4D82E]/40 px-4 py-1.5 text-xs font-semibold uppercase tracking-widest">
+            Commodity Risk Platform
           </Badge>
-          </div>
-          
-          <h1 className="text-6xl md:text-8xl lg:text-9xl font-black mb-8 leading-tight tracking-tight">
-            <span className="block text-white">Hedging</span>
-            <span className="block text-transparent bg-clip-text bg-gradient-to-r from-[#C4D82E] via-[#B4C82E] to-[#C4D82E] animate-shimmer">
-              Commodities.
-            </span>
-            <span className="block text-white">Securing the</span>
-            <span className="block text-transparent bg-clip-text bg-gradient-to-r from-[#C4D82E] via-[#B4C82E] to-[#C4D82E] animate-shimmer">
-              Future.
+          <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-black leading-[1.1] tracking-tight text-white mb-6">
+            Price. Hedge.
+            <span className="block text-transparent bg-clip-text bg-gradient-to-r from-[#C4D82E] to-[#B4C82E] mt-2">
+              Protect.
             </span>
           </h1>
-          
-          <p className="text-xl md:text-2xl text-gray-300 mb-12 leading-relaxed max-w-4xl mx-auto font-light">
-            Intelligent risk management platform that protects your business from commodity price volatility 
-            with automated hedging strategies, real-time analytics, and enterprise-grade security.
+          <p className="text-lg md:text-xl text-gray-400 max-w-xl mx-auto md:mx-0 mb-8 font-light leading-relaxed">
+            One platform for commodity options pricing, exposure management, stress testing, and market insights. Built for treasuries and risk teams.
           </p>
-          
-          <div className="flex flex-col sm:flex-row gap-6 justify-center items-center mb-20">
-            <Button 
-              size="lg" 
-              className="glass-button-primary px-10 py-7 rounded-xl text-lg font-bold shadow-2xl hover:shadow-[#C4D82E]/50 transition-all duration-300 transform hover:scale-105"
+          <div className="flex flex-col sm:flex-row gap-4 justify-center md:justify-start mb-12">
+            <Button
+              size="lg"
+              className="glass-button-primary px-8 py-6 rounded-xl text-base font-bold"
               onClick={() => navigate('/login?mode=signup')}
             >
-              Start Hedging Now
-              <ArrowRight className="ml-3 w-5 h-5" />
+              Get started
+              <ArrowRight className="ml-2 w-4 h-4" />
             </Button>
-            
-            <Button 
-              variant="outline" 
+            <Button
+              variant="outline"
               size="lg"
-              className="glass-button-outline border-2 border-white/30 text-white hover:bg-white/10 px-10 py-7 rounded-xl text-lg font-bold backdrop-blur-sm transition-all duration-300"
+              className="glass-button-outline border-white/30 text-white hover:bg-white/10 px-8 py-6 rounded-xl"
               onClick={() => navigate('/login?mode=login')}
             >
-              Watch Demo
+              Sign in
             </Button>
           </div>
-          
-          {/* Stats */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-6 pt-16">
-            {stats.map((stat, index) => (
-              <div key={index} className="glass-card p-6 group hover:scale-105 transition-transform duration-300">
-                <div className="flex items-center justify-center mb-4 text-[#C4D82E] group-hover:scale-110 transition-transform duration-300">
-                  {stat.icon}
-                </div>
-                <div className="text-3xl md:text-4xl font-black text-white mb-2 group-hover:text-[#C4D82E] transition-colors duration-300">
-                  {stat.value}
-                </div>
-                <div className="text-gray-400 text-sm uppercase tracking-wider font-medium">{stat.label}</div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {stats.map((stat, i) => (
+              <div key={i} className="glass-card px-4 py-3 text-center md:text-left">
+                <div className="text-2xl md:text-3xl font-black text-white">{stat.value}</div>
+                <div className="text-gray-500 text-xs uppercase tracking-wider">{stat.label}</div>
               </div>
             ))}
           </div>
         </div>
 
-        {/* Scroll indicator */}
-        <div className="absolute bottom-12 left-1/2 transform -translate-x-1/2 z-20 animate-bounce">
-          <ChevronDown className="w-8 h-8 text-[#C4D82E]" />
+        {/* Hero product shot – Pricers screenshot */}
+        <div className="relative z-10 flex-1 max-w-2xl w-full flex justify-center md:justify-end">
+          <div className="w-full max-w-xl rounded-2xl border border-white/10 bg-black/60 shadow-2xl shadow-black/50 overflow-hidden ring-1 ring-white/5">
+            <div className="flex items-center gap-2 px-4 py-2.5 bg-white/5 border-b border-white/10">
+              <span className="w-3 h-3 rounded-full bg-red-500/80" />
+              <span className="w-3 h-3 rounded-full bg-amber-500/80" />
+              <span className="w-3 h-3 rounded-full bg-emerald-500/80" />
+              <span className="ml-2 text-xs text-gray-500 font-mono">Pricers</span>
+            </div>
+            <div className="aspect-[16/10] bg-gray-950 relative">
+              <img
+                src={LANDING_IMAGES.pricers}
+                alt="Pricing Engine – configuration and results"
+                className="w-full h-full object-cover object-top"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent pointer-events-none" />
+            </div>
+          </div>
+        </div>
+
+        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-10 animate-bounce">
+          <ChevronDown className="w-6 h-6 text-[#C4D82E]" />
         </div>
       </section>
 
-      {/* Sectors Section with 3D Scenes */}
+      {/* Sectors Section */}
       <section id="sectors" className="py-32 bg-gradient-to-b from-black via-gray-950 to-black relative">
         <div className="max-w-7xl mx-auto px-6">
           <div className="text-center mb-20">
@@ -333,13 +347,8 @@ const LandingPage = () => {
             {sectors.map((sector, index) => (
               <div key={index} className="group">
                 <div className="glass-card-3d h-[500px] relative overflow-hidden rounded-2xl border border-white/10 hover:border-[#C4D82E]/50 transition-all duration-500 hover:scale-[1.02]">
-                  {/* 3D Scene */}
-                  <div className="absolute inset-0 opacity-70 group-hover:opacity-90 transition-opacity duration-500 z-0">
-                    {sector.scene}
-                  </div>
-                  
-                  {/* Gradient Overlay */}
-                  <div className={`absolute inset-0 bg-gradient-to-t ${sector.color} opacity-80 group-hover:opacity-100 transition-opacity duration-500`}></div>
+                  {/* Gradient background */}
+                  <div className={`absolute inset-0 bg-gradient-to-t ${sector.color} opacity-80 group-hover:opacity-100 transition-opacity duration-500`} />
                   
                   {/* Content */}
                   <div className="absolute bottom-0 left-0 right-0 p-8 z-10">
@@ -361,80 +370,116 @@ const LandingPage = () => {
         </div>
       </section>
 
-      {/* Features Section */}
-      <section id="features" className="py-32 bg-black relative">
+      {/* Platform – Bento grid with real app screens */}
+      <section id="features" className="py-24 md:py-32 bg-black relative">
         <div className="max-w-7xl mx-auto px-6">
-            <div className="text-center mb-20">
-            <Badge className="glass-card mb-6 bg-[#C4D82E]/10 text-[#C4D82E] border-[#C4D82E]/30 px-6 py-2">
-                Platform Features
-              </Badge>
-            <h2 className="text-5xl md:text-7xl font-black mb-6 text-white">
-                Complete Platform for
-              <span className="block text-transparent bg-clip-text bg-gradient-to-r from-[#C4D82E] to-[#B4C82E]">
-                Risk Management
+          <div className="text-center mb-16">
+            <Badge className="glass-card mb-4 bg-[#C4D82E]/10 text-[#C4D82E] border-[#C4D82E]/30 px-4 py-1.5 text-xs font-semibold uppercase tracking-widest">
+              The platform
+            </Badge>
+            <h2 className="text-3xl sm:text-4xl md:text-5xl font-black text-white mb-4">
+              One workspace.
+              <span className="block text-transparent bg-clip-text bg-gradient-to-r from-[#C4D82E] to-[#B4C82E] mt-1">
+                Every tool.
               </span>
-              </h2>
-            </div>
-          
-          <div className="space-y-24">
-            {features.map((feature, index) => (
-              <div key={index} className={`flex flex-col ${index % 2 === 0 ? 'lg:flex-row' : 'lg:flex-row-reverse'} items-center gap-12`}>
-                  {/* Image Section */}
-                  <div className="flex-1 w-full">
-                  <div className="glass-card-3d overflow-hidden rounded-2xl border border-white/10 hover:border-[#C4D82E]/50 transition-all duration-500 group">
-                    <div className="aspect-video overflow-hidden bg-gray-900 relative">
-                        <img 
-                          src={feature.image} 
-                          alt={feature.title}
-                          className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
-                        loading="lazy"
-                        />
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
-                      </div>
-                  </div>
-                  </div>
-                  
-                  {/* Content Section */}
-                  <div className="flex-1 w-full">
-                    <div className="lg:px-8">
-                      <div className="flex items-center mb-6">
-                      <div className="glass-card p-4 rounded-xl text-[#C4D82E] mr-4 shadow-lg shadow-[#C4D82E]/20">
-                          {feature.icon}
-                        </div>
-                      <div className="text-sm font-bold text-[#C4D82E] uppercase tracking-wider">
-                          Feature {index + 1}
-                        </div>
-                      </div>
-                      
-                    <h3 className="text-4xl lg:text-5xl font-black text-white mb-6 leading-tight">
-                        {feature.title}
-                      </h3>
-                      
-                    <p className="text-lg text-gray-300 leading-relaxed mb-8 font-light">
-                        {feature.description}
-                      </p>
-                      
-                      <div className="grid grid-cols-2 gap-4 mb-8">
-                      {feature.highlights.map((item, idx) => (
-                        <div key={idx} className="flex items-center space-x-3 glass-card p-3 rounded-lg">
-                          <CheckCircle className="w-5 h-5 text-[#C4D82E] flex-shrink-0" />
-                          <span className="text-sm font-medium text-gray-200">{item}</span>
-                          </div>
-                        ))}
-                      </div>
-                      
-                      <Button 
-                        variant="outline" 
-                      className="glass-button-outline border-2 border-white/30 text-white hover:bg-white/10 px-8 py-4 rounded-xl font-bold transition-all duration-300"
-                      onClick={() => navigate(feature.path)}
-                      >
-                      Explore {feature.title.split(' ')[0]}
-                        <ArrowRight className="ml-2 w-4 h-4" />
-                      </Button>
+            </h2>
+            <p className="text-gray-400 max-w-2xl mx-auto font-light">
+              Each screenshot is from the app. Pricing, exposures, strategies, news, and stress tests in one place.
+            </p>
+          </div>
+
+          {/* Bento grid: 2 large + 3 medium */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-16">
+            {platformFeatures.filter((f) => f.size === "large").map((feature, i) => (
+              <div
+                key={feature.title}
+                className="group rounded-2xl border border-white/10 bg-white/[0.02] overflow-hidden hover:border-[#C4D82E]/40 transition-all duration-300"
+              >
+                <div className="aspect-[2/1] relative overflow-hidden">
+                  <img
+                    src={feature.image}
+                    alt={feature.title}
+                    className="w-full h-full object-cover object-top transition-transform duration-500 group-hover:scale-[1.02]"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent" />
+                  <div className="absolute bottom-0 left-0 right-0 p-6 flex flex-wrap items-end justify-between gap-4">
+                    <div>
+                      <h3 className="text-xl md:text-2xl font-bold text-white mb-1">{feature.title}</h3>
+                      <p className="text-sm text-gray-400 max-w-md">{feature.description}</p>
                     </div>
+                    <Button
+                      size="sm"
+                      className="glass-button-primary shrink-0"
+                      onClick={() => navigate(feature.path)}
+                    >
+                      Open
+                      <ArrowRight className="ml-1 w-3 h-3" />
+                    </Button>
                   </div>
                 </div>
+                <div className="px-6 py-3 flex flex-wrap gap-2 border-t border-white/5">
+                  {feature.tags.map((tag) => (
+                    <span key={tag} className="text-xs text-gray-500 font-medium">
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+              </div>
             ))}
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-16">
+            {platformFeatures.filter((f) => f.size === "medium").map((feature) => (
+              <div
+                key={feature.title}
+                className="group rounded-2xl border border-white/10 bg-white/[0.02] overflow-hidden hover:border-[#C4D82E]/40 transition-all duration-300"
+              >
+                <div className="aspect-video relative overflow-hidden">
+                  <img
+                    src={feature.image}
+                    alt={feature.title}
+                    className="w-full h-full object-cover object-top transition-transform duration-500 group-hover:scale-[1.03]"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black via-black/30 to-transparent" />
+                  <div className="absolute bottom-0 left-0 right-0 p-4">
+                    <h3 className="text-lg font-bold text-white mb-1">{feature.title}</h3>
+                    <p className="text-xs text-gray-400 line-clamp-2 mb-3">{feature.description}</p>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="text-[#C4D82E] hover:bg-[#C4D82E]/10 h-8 text-xs"
+                      onClick={() => navigate(feature.path)}
+                    >
+                      Open
+                      <ArrowRight className="ml-1 w-3 h-3" />
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* More tools – compact row */}
+          <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-6 md:p-8">
+            <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-4">More tools</h3>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              {moreTools.map((tool) => (
+                <button
+                  key={tool.title}
+                  onClick={() => navigate(tool.path)}
+                  className="flex items-center gap-4 p-4 rounded-xl border border-white/5 hover:border-[#C4D82E]/30 hover:bg-white/[0.03] transition-all text-left group"
+                >
+                  <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-[#C4D82E]/10 flex items-center justify-center text-[#C4D82E] group-hover:bg-[#C4D82E]/20">
+                    {tool.icon}
+                  </div>
+                  <div className="min-w-0">
+                    <div className="font-semibold text-white">{tool.title}</div>
+                    <div className="text-sm text-gray-500 truncate">{tool.description}</div>
+                  </div>
+                  <ArrowRight className="w-4 h-4 text-gray-600 group-hover:text-[#C4D82E] flex-shrink-0 ml-auto" />
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       </section>

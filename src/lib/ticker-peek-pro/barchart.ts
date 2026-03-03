@@ -78,18 +78,16 @@ export interface OptionsTypeOption {
   value: string;
 }
 
-export type CommodityCategory = 'currencies' | 'energies' | 'grains' | 'indices' | 'livestock' | 'metals';
+export type CommodityCategory = 'energies' | 'grains' | 'livestock' | 'metals';
 
 export const COMMODITY_CATEGORIES: { label: string; value: CommodityCategory }[] = [
-  { label: 'Currencies', value: 'currencies' },
   { label: 'Energies', value: 'energies' },
   { label: 'Grains', value: 'grains' },
-  { label: 'Indices', value: 'indices' },
   { label: 'Livestock', value: 'livestock' },
   { label: 'Metals', value: 'metals' },
 ];
 
-export async function fetchCurrencies(category: CommodityCategory = 'currencies', forceRefresh = false): Promise<{ success: boolean; data?: CurrencyData[]; raw?: string; error?: string }> {
+export async function fetchCurrencies(category: CommodityCategory = 'energies', forceRefresh = false): Promise<{ success: boolean; data?: CurrencyData[]; raw?: string; error?: string }> {
   const cacheKey = `commodities:${category}`;
   if (!forceRefresh) {
     const cached = getCached<{ success: boolean; data?: CurrencyData[]; raw?: string }>(cacheKey);

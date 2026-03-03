@@ -40,8 +40,10 @@ import {
   type CurrencyData as TppCurrencyData,
   type SurfacePoint as TppSurfacePoint,
   type CommodityCategory as TppCommodityCategory,
+  type FuturesContract as TppFuturesContract,
 } from '@/lib/ticker-peek-pro/barchart';
 import { interpolateSurface } from '@/lib/ticker-peek-pro/volSurfaceInterpolation';
+import { getOrBuildCurve, interpolatePrice } from '@/lib/ticker-peek-pro/futuresCurve';
 
 // Interface pour les commodities (adaptée du Strategy Builder)
 interface CurrencyPair { // Renamed to Commodity in a previous step, but still named CurrencyPair here for compatibility
@@ -150,6 +152,7 @@ const Pricers = () => {
   const [tppLoadingFutures, setTppLoadingFutures] = useState(false);
   const [tppLoadingSurface, setTppLoadingSurface] = useState(false);
   const [tppSurfacePoints, setTppSurfacePoints] = useState<TppSurfacePoint[]>([]);
+  const [tppFutures, setTppFutures] = useState<TppFuturesContract[]>([]);
   const [tppSearchQuery, setTppSearchQuery] = useState('');
 
   // ✅ Helper function to map CURRENCY_PAIRS category to CommodityCategory
@@ -252,7 +255,7 @@ const Pricers = () => {
   // ── Ticker Peek Pro: Load all commodities from all categories ──
   const loadAllTppCurrencies = async () => {
     setTppLoadingCurrencies(true);
-    const categories: TppCommodityCategory[] = ['energies', 'metals', 'grains', 'livestock', 'currencies', 'indices'];
+    const categories: TppCommodityCategory[] = ['energies', 'metals', 'grains', 'livestock'];
     const categorized: Record<string, TppCurrencyData[]> = {};
     const results = await Promise.allSettled(
       categories.map(cat => fetchTppCurrencies(cat))
@@ -272,20 +275,38 @@ const Pricers = () => {
     setTppLoadingCurrencies(false);
   };
 
-  // ── Ticker Peek Pro: Load Cash price from Futures + IV surface ──
+  // ── Ticker Peek Pro: Load futures (for curve), then spot = interpolated price at maturity; IV surface ──
   const loadTppData = async (symbol: string) => {
-    // 1. Load futures to get Cash price
     setTppLoadingFutures(true);
+    setTppFutures([]);
     try {
       const futuresResult = await fetchTppFutures(symbol);
       if (futuresResult.success && futuresResult.data && futuresResult.data.length > 0) {
-        const cashContract = futuresResult.data.find(f =>
-          f.month.toLowerCase().includes('cash') || f.contract.toLowerCase().includes('cash')
-        ) || futuresResult.data[0];
-        const cashPrice = parseFloat(cashContract.last.replace(/,/g, ''));
-        if (!isNaN(cashPrice) && cashPrice > 0) {
-          setPricingInputs(prev => ({ ...prev, spotPrice: cashPrice }));
-          toast({ title: "Ticker Peek Pro — Cash Price", description: `${symbol}: ${cashPrice.toFixed(2)}` });
+        setTppFutures(futuresResult.data);
+        const refDate = new Date();
+        const curvePoints = getOrBuildCurve(symbol, futuresResult.data, refDate);
+        if (curvePoints.length >= 2) {
+          setPricingInputs(prev => {
+            const dte = Math.max(0, Math.round((prev.timeToMaturity ?? 1) * 365));
+            const interpolated = interpolatePrice(curvePoints, dte);
+            const spot = interpolated != null ? interpolated : parseFloat(
+              (futuresResult.data!.find(f => f.month.toLowerCase().includes('cash')) || futuresResult.data![0]).last.replace(/,/g, '')
+            );
+            return { ...prev, spotPrice: spot };
+          });
+          toast({
+            title: "Ticker Peek Pro",
+            description: `Spot = interpolated futures price at maturity (${futuresResult.data.length} contracts)`,
+          });
+        } else {
+          const cashContract = futuresResult.data.find(f =>
+            f.month.toLowerCase().includes('cash') || f.contract.toLowerCase().includes('cash')
+          ) || futuresResult.data[0];
+          const cashPrice = parseFloat(cashContract.last.replace(/,/g, ''));
+          if (!isNaN(cashPrice) && cashPrice > 0) {
+            setPricingInputs(prev => ({ ...prev, spotPrice: cashPrice }));
+            toast({ title: "Ticker Peek Pro — Cash Price", description: `${symbol}: ${cashPrice.toFixed(2)}` });
+          }
         }
       }
     } catch (error) {
@@ -329,10 +350,19 @@ const Pricers = () => {
     const dtes = [...new Set(filtered.map(p => p.dte))].sort((a, b) => a - b);
     if (strikes.length < 2 || dtes.length < 2) return null;
 
+    // TPP surface can return IV as percentage (e.g. 25) or decimal (0.25); normalize to decimal for pricing
+    const parseIv = (v: unknown): number | null => {
+      if (v == null) return null;
+      const n = typeof v === 'string' ? parseFloat(String(v).replace(',', '.')) : Number(v);
+      return Number.isNaN(n) || n <= 0 ? null : n;
+    };
+    const toDecimalIv = (raw: number) => (raw > 1 ? raw / 100 : raw);
     let z: (number | null)[][] = dtes.map(d =>
       strikes.map(s => {
         const point = filtered.find(p => p.dte === d && p.strike === s);
-        return point?.iv != null && point.iv > 0 ? point.iv : null;
+        const raw = parseIv(point?.iv);
+        if (raw == null) return null;
+        return toDecimalIv(raw);
       })
     );
     z = interpolateSurface(z, strikes, dtes);
@@ -375,7 +405,7 @@ const Pricers = () => {
     }
   }, [useTickerPeekPro]);
 
-  // Load TPP futures (Cash price) and IV surface when commodity changes
+  // Load TPP futures and IV surface when commodity changes
   useEffect(() => {
     if (useTickerPeekPro && selectedCurrencyPair) {
       loadTppData(selectedCurrencyPair);
@@ -402,13 +432,26 @@ const Pricers = () => {
     spotPrice: 75.50, // WTI default price
       interestRate: initialRate, // 🎯 Risk-free rate depuis Settings (en pourcentage)
     timeToMaturity: 1.0,
-    volatility: 25.0, // Commodity volatility (en pourcentage)
+    volatility: 20.0, // Commodity volatility (en pourcentage)
     numSimulations: 1000, // ✅ 1000 comme Strategy Builder
     storageCost: 0.0, // Storage cost (en pourcentage)
     convenienceYield: 0.0 // Convenience yield (en pourcentage)
     };
   });
-  
+
+  // When TPP is on and maturity changes: set spot = interpolated futures price at that maturity
+  useEffect(() => {
+    if (!useTickerPeekPro || tppFutures.length < 2 || !selectedCurrencyPair) return;
+    const refDate = new Date();
+    const curvePoints = getOrBuildCurve(selectedCurrencyPair, tppFutures, refDate);
+    if (curvePoints.length < 2) return;
+    const dte = Math.max(0, Math.round((pricingInputs.timeToMaturity ?? 1) * 365));
+    const interpolated = interpolatePrice(curvePoints, dte);
+    if (interpolated != null) {
+      setPricingInputs(prev => (prev.spotPrice !== interpolated ? { ...prev, spotPrice: interpolated } : prev));
+    }
+  }, [useTickerPeekPro, selectedCurrencyPair, tppFutures, pricingInputs.timeToMaturity]);
+
   // 🎯 Fonction pour obtenir la devise de la commodity sélectionnée
   // Si on utilise des données réelles, essayer de récupérer la devise depuis la commodity
   const getSelectedCurrency = useMemo(() => {
@@ -645,8 +688,8 @@ const Pricers = () => {
   // Composant stratégie (comme dans Strategy Builder)
   const [strategyComponent, setStrategyComponent] = useState<StrategyComponent>({
     type: 'call',
-    strike: 110.0, // En pourcentage par défaut
-    strikeType: 'percent',
+    strike: 75.5, // Default absolute strike (e.g. WTI)
+    strikeType: 'absolute',
     volatility: 15.0, // En pourcentage
     quantity: 100,
     barrier: undefined,
@@ -1524,7 +1567,7 @@ const Pricers = () => {
                   {useTickerPeekPro && (
                     <div className="mt-2 space-y-1">
                       <p className="text-xs text-muted-foreground">
-                        Spot = Cash Futures price, Vol = interpolated from IV Matrix.
+                        Spot = interpolated futures price at maturity, Vol = interpolated from IV Matrix.
                       </p>
                       {tppLoadingFutures && (
                         <p className="text-xs text-orange-600 dark:text-orange-400 flex items-center gap-1">
@@ -1586,8 +1629,6 @@ const Pricers = () => {
                               { key: 'metals', label: 'Metals', icon: '🔩' },
                               { key: 'grains', label: 'Grains', icon: '🌾' },
                               { key: 'livestock', label: 'Livestock', icon: '🐄' },
-                              { key: 'currencies', label: 'Currencies', icon: '💱' },
-                              { key: 'indices', label: 'Indices', icon: '📊' },
                             ];
                             const groups = categoryConfig.map(cat => {
                               const items = tppCurrenciesByCategory[cat.key] || [];

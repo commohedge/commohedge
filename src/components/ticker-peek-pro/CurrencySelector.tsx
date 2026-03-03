@@ -15,7 +15,7 @@ export function CurrencySelector({ selectedCurrency, onSelect, onLoadFutures, on
   const [currencies, setCurrencies] = useState<CurrencyData[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [activeCategory, setActiveCategory] = useState<CommodityCategory>("currencies");
+  const [activeCategory, setActiveCategory] = useState<CommodityCategory>("energies");
 
   const loadData = async (category: CommodityCategory, force = false) => {
     setLoading(true);

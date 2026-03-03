@@ -540,6 +540,19 @@ class CommodityDataService {
     this.instruments = [];
   }
 
+  /** Clear only exposures (e.g. before reloading from storage to avoid duplication). */
+  clearExposures(): void {
+    this.exposures = [];
+  }
+
+  /** Replace all exposures (e.g. when loading from storage, preserves ids). */
+  setExposures(exposures: CommodityExposureData[]): void {
+    this.exposures = exposures.map(exp => ({
+      ...exp,
+      maturity: exp.maturity instanceof Date ? exp.maturity : new Date(exp.maturity)
+    }));
+  }
+
   private getVolatility(commodity: string): number {
     return this.marketData.volatilities[commodity] || 0.3;
   }

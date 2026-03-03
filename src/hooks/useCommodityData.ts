@@ -80,15 +80,17 @@ export const useCommodityData = (): UseCommodityDataReturn => {
   useEffect(() => {
     const loadDataFromStorage = () => {
       try {
-        // Load exposures from localStorage
+        // Replace exposures from localStorage (clear first to avoid any duplication on re-run)
         const savedExposures = localStorage.getItem('commodityExposures');
         if (savedExposures) {
           const exposuresData = JSON.parse(savedExposures);
-          exposuresData.forEach((exposure: any) => {
-            // Convert date strings back to Date objects
-            exposure.maturity = new Date(exposure.maturity);
-            serviceRef.current.addExposure(exposure);
-          });
+          const withDates = exposuresData.map((exposure: any) => ({
+            ...exposure,
+            maturity: exposure.maturity instanceof Date ? exposure.maturity : new Date(exposure.maturity)
+          }));
+          serviceRef.current.setExposures(withDates);
+        } else {
+          serviceRef.current.clearExposures();
         }
 
         // Sync with hedging instruments from StrategyImportService

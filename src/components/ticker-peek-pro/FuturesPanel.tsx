@@ -1,6 +1,11 @@
-import { useEffect, useState } from "react";
-import { RefreshCw, ArrowRight } from "lucide-react";
+import { useEffect, useState, useMemo } from "react";
+import { RefreshCw, ArrowRight, Calendar, Hash } from "lucide-react";
 import { fetchFutures, type CurrencyData, type FuturesContract } from "@/lib/ticker-peek-pro/barchart";
+import {
+  getOrBuildCurve,
+  interpolatePrice,
+  type FuturesCurvePoint,
+} from "@/lib/ticker-peek-pro/futuresCurve";
 import { DataCard } from "./DataCard";
 import { LoadingState, ErrorState, EmptyState } from "./DataStates";
 import { PriceChange } from "./PriceChange";
@@ -10,11 +15,42 @@ interface FuturesPanelProps {
   onSelect: (future: FuturesContract) => void;
 }
 
+const todayIso = () => new Date().toISOString().slice(0, 10);
+const addDays = (date: Date, days: number) => {
+  const d = new Date(date);
+  d.setDate(d.getDate() + days);
+  return d.toISOString().slice(0, 10);
+};
+const daysBetween = (from: Date, toIso: string) => {
+  const to = new Date(toIso);
+  const a = new Date(from.getFullYear(), from.getMonth(), from.getDate());
+  const b = new Date(to.getFullYear(), to.getMonth(), to.getDate());
+  return Math.round((b.getTime() - a.getTime()) / (24 * 60 * 60 * 1000));
+};
+
 export function FuturesPanel({ currency, onSelect }: FuturesPanelProps) {
   const [futures, setFutures] = useState<FuturesContract[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [rawPreview, setRawPreview] = useState<string>("");
+  const [searchDte, setSearchDte] = useState<string>("");
+  const [searchDate, setSearchDate] = useState<string>("");
+
+  const refDate = useMemo(() => new Date(), []);
+  const curvePoints = useMemo<FuturesCurvePoint[]>(() => {
+    return getOrBuildCurve(currency.symbol, futures, refDate);
+  }, [currency.symbol, futures, refDate]);
+
+  const effectiveDte = useMemo(() => {
+    if (searchDte !== "" && /^\d+$/.test(searchDte)) return parseInt(searchDte, 10);
+    if (searchDate) return daysBetween(refDate, searchDate);
+    return null;
+  }, [searchDte, searchDate, refDate]);
+
+  const interpolatedPrice = useMemo(() => {
+    if (effectiveDte == null || curvePoints.length < 2) return null;
+    return interpolatePrice(curvePoints, effectiveDte);
+  }, [effectiveDte, curvePoints]);
 
   const loadData = async (forceRefresh = false) => {
     setLoading(true);
@@ -90,7 +126,67 @@ export function FuturesPanel({ currency, onSelect }: FuturesPanelProps) {
             )}
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <div className="space-y-4">
+            {/* Search by maturity: DTE or calendar + interpolated price */}
+            {curvePoints.length >= 2 && (
+              <div className="p-3 rounded-lg bg-muted/40 border border-border space-y-3">
+                <h3 className="text-sm font-semibold text-foreground">Search by maturity</h3>
+                <p className="text-xs text-muted-foreground">
+                  Linear interpolation of the futures curve. Enter DTE (days) or a date.
+                </p>
+                <div className="flex flex-wrap items-end gap-4">
+                  <div className="space-y-1">
+                    <label className="text-xs text-muted-foreground flex items-center gap-1">
+                      <Hash className="w-3 h-3" />
+                      DTE (days)
+                    </label>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      placeholder="ex: 353"
+                      value={searchDte}
+                      onChange={(e) => {
+                        const v = e.target.value.replace(/\D/g, "").slice(0, 5);
+                        setSearchDte(v);
+                        if (v !== "") {
+                          const dte = parseInt(v, 10);
+                          if (!Number.isNaN(dte)) setSearchDate(addDays(refDate, dte));
+                        } else setSearchDate("");
+                      }}
+                      className="h-9 w-28 rounded-md border border-input bg-background px-2 text-sm font-mono"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs text-muted-foreground flex items-center gap-1">
+                      <Calendar className="w-3 h-3" />
+                      Date
+                    </label>
+                    <input
+                      type="date"
+                      value={searchDate}
+                      min={todayIso()}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        setSearchDate(v);
+                        if (v) setSearchDte(String(daysBetween(refDate, v)));
+                        else setSearchDte("");
+                      }}
+                      className="h-9 rounded-md border border-input bg-background px-2 text-sm"
+                    />
+                  </div>
+                  {interpolatedPrice != null && effectiveDte != null && (
+                    <div className="flex items-center gap-2 px-3 py-2 rounded-md bg-primary/10 text-primary font-mono text-sm font-medium">
+                      <span className="text-muted-foreground font-normal">
+                        Interpolated price {searchDate ? `(${searchDate})` : `(${effectiveDte} d)`}:
+                      </span>
+                      {interpolatedPrice.toFixed(2)}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
                 <tr className="bg-table-header border-b border-table">
@@ -135,6 +231,7 @@ export function FuturesPanel({ currency, onSelect }: FuturesPanelProps) {
                 ))}
               </tbody>
             </table>
+            </div>
           </div>
         )}
       </DataCard>

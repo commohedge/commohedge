@@ -283,14 +283,6 @@ body {
   background: linear-gradient(180deg, #B4C82E, #C4D82E);
 }
 
-/* 3D Scene Container */
-.three-scene-container {
-  position: relative;
-  width: 100%;
-  height: 100%;
-  overflow: hidden;
-}
-
 /* Responsive Design */
 @media (max-width: 768px) {
   .glass-card-3d {
@@ -343,8 +335,7 @@ body {
 /* Print Styles */
 @media print {
   .glass-card,
-  .glass-card-3d,
-  .three-scene-container {
+  .glass-card-3d {
     display: none;
   }
 }

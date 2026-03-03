@@ -1,37 +1,39 @@
 /**
- * Cache solide pour Ticker Peek Pro : réduit le scraping et rend l'app plus fluide.
- * - TTL différenciés par type de données (liste instruments court, surface IV longue).
- * - Limite de taille + éviction LRU (entrées les plus anciennes supprimées).
- * - Persistance sessionStorage (survit au refresh, TTL réduit pour les entrées rechargées).
+ * Solid cache for Ticker Peek Pro: reduces scraping and keeps the app responsive.
+ * - TTL varies by data type (short for instrument lists, longer for IV surface).
+ * - Size limit + LRU eviction (oldest entries removed).
+ * - sessionStorage persistence (survives refresh; shorter TTL for reloaded entries).
  */
 
 const MS = 1000;
 const MIN = 60 * MS;
 
-/** TTL par type de données (en ms). Données lourdes (surface IV) cachées plus longtemps. */
+/** TTL by data type (ms). Heavy data (IV surface) cached longer. */
 export const CACHE_TTL = {
-  /** Listes instruments par catégorie — 10 min */
+  /** Instrument lists by category — 10 min */
   CURRENCIES: 10 * MIN,
-  /** Contrats futures par symbole — 15 min */
+  /** Futures contracts by symbol — 15 min */
   FUTURES: 15 * MIN,
-  /** Options par symbole/maturité — 12 min */
+  /** Futures curve (DTE/price points) derived from contracts — 15 min */
+  FUTURES_CURVE: 15 * MIN,
+  /** Options by symbol/maturity — 12 min */
   OPTIONS: 12 * MIN,
   /** Vol & Greeks — 15 min */
   VOLATILITY: 15 * MIN,
-  /** Liste des strikes pour la surface — 20 min */
+  /** Strike list for surface — 20 min */
   VOL_SURFACE_STRIKES: 20 * MIN,
-  /** Surface IV complète (scraping lourd) — 45 min */
+  /** Full IV surface (heavy scraping) — 45 min */
   VOL_SURFACE: 45 * MIN,
-  /** Matrice IV (même source que vol surface) — 45 min */
+  /** IV matrix (same source as vol surface) — 45 min */
   IVMATRIX: 45 * MIN,
-  /** Défaut si préfixe inconnu — 10 min */
+  /** Default for unknown prefix — 10 min */
   DEFAULT: 10 * MIN,
 } as const;
 
-/** TTL pour les entrées rechargées depuis sessionStorage après un refresh (plus court). */
+/** TTL for entries reloaded from sessionStorage after refresh (shorter). */
 const PERSISTED_TTL = 5 * MIN;
 
-/** Nombre max d'entrées en mémoire ; au-delà, éviction LRU. */
+/** Max in-memory entries; beyond that, LRU eviction. */
 const MAX_CACHE_SIZE = 180;
 
 const SESSION_PREFIX = "tickerpeek_";
@@ -43,10 +45,11 @@ type CacheEntry<T = unknown> = {
 
 const cache = new Map<string, CacheEntry>();
 
-/** Retourne le TTL recommandé (ms) selon le préfixe de la clé. */
+/** Returns recommended TTL (ms) from key prefix. */
 export function getTTLForKey(key: string): number {
   if (key.startsWith("commodities:")) return CACHE_TTL.CURRENCIES;
   if (key.startsWith("futures:")) return CACHE_TTL.FUTURES;
+  if (key.startsWith("futures_curve:")) return CACHE_TTL.FUTURES_CURVE;
   if (key.startsWith("options:")) return CACHE_TTL.OPTIONS;
   if (key.startsWith("volatility:")) return CACHE_TTL.VOLATILITY;
   if (key.startsWith("volsurface-strikes:")) return CACHE_TTL.VOL_SURFACE_STRIKES;
@@ -95,9 +98,9 @@ function writeToSession(key: string, entry: CacheEntry): void {
 }
 
 /**
- * Récupère une entrée en cache.
- * @param key Clé (ex: commodities:currencies, futures:GC)
- * @param ttl Optionnel. Si absent, TTL déduit du préfixe de la clé.
+ * Get a cached entry.
+ * @param key Key (e.g. commodities:energies, futures:GC)
+ * @param ttl Optional. If omitted, TTL inferred from key prefix.
  */
 export function getCached<T>(key: string, ttl?: number): T | null {
   const effectiveTtl = ttl ?? getTTLForKey(key);
@@ -123,8 +126,8 @@ export function getCached<T>(key: string, ttl?: number): T | null {
 }
 
 /**
- * Met une entrée en cache (mémoire + sessionStorage si possible).
- * Déclenche une éviction LRU si la taille dépasse MAX_CACHE_SIZE.
+ * Store an entry in cache (memory + sessionStorage when possible).
+ * Triggers LRU eviction if size exceeds MAX_CACHE_SIZE.
  */
 export function setCache<T>(key: string, data: T): void {
   evictOldest();
@@ -134,8 +137,8 @@ export function setCache<T>(key: string, data: T): void {
 }
 
 /**
- * Vide le cache (mémoire et sessionStorage pour les clés Ticker Peek Pro).
- * @param keyPrefix Si fourni, ne supprime que les clés commençant par ce préfixe.
+ * Clear cache (memory and sessionStorage for Ticker Peek Pro keys).
+ * @param keyPrefix If provided, only removes keys starting with this prefix.
  */
 export function clearCache(keyPrefix?: string): void {
   if (!keyPrefix) {
@@ -164,12 +167,12 @@ export function clearCache(keyPrefix?: string): void {
   }
 }
 
-/** Nombre d'entrées en mémoire (debug). */
+/** Number of in-memory entries (debug). */
 export function getCacheSize(): number {
   return cache.size;
 }
 
-/** Liste des préfixes de clés actuellement en cache (debug). */
+/** List of key prefixes currently in cache (debug). */
 export function getCacheKeyPrefixes(): string[] {
   const prefixes = new Set<string>();
   for (const key of cache.keys()) {
