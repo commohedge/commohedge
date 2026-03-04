@@ -708,11 +708,35 @@ const Pricers = () => {
     const dte = Math.max(1, Math.round(pricingInputs.timeToMaturity * 365));
     const type: 'call' | 'put' = selectedInstrument.includes('put') ? 'put' : 'call';
     const iv = interpolateTppIV(absoluteStrike, dte, type);
+    // interpolateTppIV returns decimal (0.30); volatility field expects percentage (30)
     if (iv !== null && iv > 0) {
-      setStrategyComponent(prev => ({ ...prev, volatility: parseFloat(iv.toFixed(2)) }));
+      const ivPct = iv * 100;
+      setStrategyComponent(prev => ({ ...prev, volatility: parseFloat(ivPct.toFixed(2)) }));
     }
   }, [useTickerPeekPro, tppSurfacePoints, strategyComponent.strike, strategyComponent.strikeType,
       pricingInputs.spotPrice, pricingInputs.timeToMaturity, selectedInstrument, interpolateTppIV]);
+
+  // Manual refresh IV from TPP surface
+  const handleRefreshTppIV = useCallback(() => {
+    if (!useTickerPeekPro || tppSurfacePoints.length === 0) {
+      toast({ title: "IV Refresh", description: "No TPP surface data available.", variant: "destructive" });
+      return;
+    }
+    const absoluteStrike = strategyComponent.strikeType === 'percent'
+      ? pricingInputs.spotPrice * (strategyComponent.strike / 100)
+      : strategyComponent.strike;
+    const dte = Math.max(1, Math.round(pricingInputs.timeToMaturity * 365));
+    const type: 'call' | 'put' = selectedInstrument.includes('put') ? 'put' : 'call';
+    const iv = interpolateTppIV(absoluteStrike, dte, type);
+    if (iv !== null && iv > 0) {
+      const ivPct = iv * 100;
+      setStrategyComponent(prev => ({ ...prev, volatility: parseFloat(ivPct.toFixed(2)) }));
+      toast({ title: "IV Updated", description: `Volatility set to ${ivPct.toFixed(2)}% from TPP surface (Strike: ${absoluteStrike.toFixed(2)}, DTE: ${dte})` });
+    } else {
+      toast({ title: "IV Refresh", description: "Could not interpolate IV for current strike/maturity.", variant: "destructive" });
+    }
+  }, [useTickerPeekPro, tppSurfacePoints, strategyComponent.strike, strategyComponent.strikeType,
+      pricingInputs.spotPrice, pricingInputs.timeToMaturity, selectedInstrument, interpolateTppIV, toast]);
 
   // Résultats
   const [pricingResults, setPricingResults] = useState<PricingResult[]>([]);
@@ -1979,12 +2003,27 @@ const Pricers = () => {
                 {/* Volatilité */}
                 <div className="space-y-2">
                   <Label>Volatility (%)</Label>
-                  <Input
-                    type="number"
-                    step="0.1"
-                    value={strategyComponent.volatility}
-                    onChange={(e) => updateStrategyComponent('volatility', parseFloat(e.target.value))}
-                  />
+                  <div className="flex gap-2">
+                    <Input
+                      type="number"
+                      step="0.1"
+                      value={strategyComponent.volatility}
+                      onChange={(e) => updateStrategyComponent('volatility', parseFloat(e.target.value))}
+                      className="flex-1"
+                    />
+                    {useTickerPeekPro && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        onClick={handleRefreshTppIV}
+                        disabled={tppLoadingSurface || tppSurfacePoints.length === 0}
+                        title="Refresh IV from TPP surface"
+                      >
+                        <RefreshCw className={`h-4 w-4 ${tppLoadingSurface ? 'animate-spin' : ''}`} />
+                      </Button>
+                    )}
+                  </div>
                 </div>
 
                 {/* Risk-free Rate - avec indicateur de mode */}

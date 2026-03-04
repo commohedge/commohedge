@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import { Layout } from "@/components/Layout";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -14,7 +14,7 @@ import {
   Settings2, Download, Plus, X, Layers, Database,
   ArrowUpIcon, ArrowDownIcon, MinusIcon, Edit2, Save,
   Table as TableIcon, LineChart as LineChartIcon,
-  Globe, Landmark, LayoutGrid, FileText, ArrowLeft, Info
+  Globe, Landmark, LayoutGrid, FileText, ArrowLeft, Info, Loader2
 } from "lucide-react";
 import { 
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, 
@@ -987,6 +987,13 @@ function BondsCurveContent({
   const countries = countriesData?.data || [];
   const yields = yieldsData?.data || [];
   
+  // State for custom date interpolation
+  const [customDate, setCustomDate] = useState<string>(() => {
+    const d = new Date();
+    d.setMonth(d.getMonth() + 6);
+    return d.toISOString().split('T')[0];
+  });
+  
   const currencies = useMemo(() => {
     const currList = [...new Set(countries.map((c: CountryBondData) => c.currency))].sort() as string[];
     return currList.sort((a, b) => {
@@ -1024,6 +1031,94 @@ function BondsCurveContent({
     if (bondPoints.length < 2) return [];
     return selectedMethods.map(method => bootstrapBonds(bondPoints, method, currency));
   }, [bondPoints, selectedMethods, currency]);
+
+  // ✅ Auto-save bonds curve to cache for Pricers (for non-major currencies)
+  useEffect(() => {
+    if (results.length === 0 || !currency) return;
+    const CURVE_DATA_CACHE_KEY = 'interest_rate_curves_cache';
+    const bestResult = results[0]; // Use first method's result
+    
+    if (bestResult && bestResult.curvePoints && bestResult.curvePoints.length > 0) {
+      try {
+        const existing = localStorage.getItem(CURVE_DATA_CACHE_KEY);
+        const curveCache: Record<string, { tenor: number; rate: number }[]> = existing ? JSON.parse(existing) : {};
+        
+        curveCache[currency] = bestResult.curvePoints.map(p => ({
+          tenor: p.tenor,
+          rate: p.rate,
+        }));
+        
+        localStorage.setItem(CURVE_DATA_CACHE_KEY, JSON.stringify(curveCache));
+        console.log(`[RateExplorer/Bonds] Cached ${currency} curve (${bestResult.curvePoints.length} points)`);
+      } catch (error) {
+        console.error('[RateExplorer/Bonds] Error caching curve data:', error);
+      }
+    }
+  }, [results, currency]);
+
+  // Compute interpolated values using useMemo to avoid infinite loops
+  const interpolatedValues = useMemo(() => {
+    if (results.length === 0 || !results[0]?.discountFactors || results[0].discountFactors.length < 2) {
+      return null;
+    }
+    
+    const targetDate = new Date(customDate);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    targetDate.setHours(0, 0, 0, 0);
+    
+    const diffMs = targetDate.getTime() - today.getTime();
+    const days = Math.round(diffMs / (1000 * 60 * 60 * 24));
+    const fraction = days / 365;
+    
+    if (days <= 0) {
+      return { days: 0, fraction: 0, df: 1, zeroRate: 0, forwardRate: 0 };
+    }
+    
+    const dfs = results[0].discountFactors;
+    const sortedDfs = [...dfs].sort((a, b) => a.tenor - b.tenor);
+    
+    let lower = sortedDfs[0];
+    let upper = sortedDfs[sortedDfs.length - 1];
+    
+    for (let i = 0; i < sortedDfs.length - 1; i++) {
+      if (sortedDfs[i].tenor <= fraction && sortedDfs[i + 1].tenor >= fraction) {
+        lower = sortedDfs[i];
+        upper = sortedDfs[i + 1];
+        break;
+      }
+    }
+    
+    let df: number;
+    let zeroRate: number;
+    
+    if (fraction <= sortedDfs[0].tenor) {
+      zeroRate = sortedDfs[0].zeroRate;
+      df = Math.exp(-zeroRate * fraction);
+    } else if (fraction >= sortedDfs[sortedDfs.length - 1].tenor) {
+      zeroRate = sortedDfs[sortedDfs.length - 1].zeroRate;
+      df = Math.exp(-zeroRate * fraction);
+    } else {
+      const ratio = (fraction - lower.tenor) / (upper.tenor - lower.tenor);
+      const logDfLower = Math.log(lower.df);
+      const logDfUpper = Math.log(upper.df);
+      const logDf = logDfLower + (logDfUpper - logDfLower) * ratio;
+      df = Math.exp(logDf);
+      zeroRate = -Math.log(df) / fraction;
+    }
+    
+    const forwardRate = lower.forwardRate !== undefined 
+      ? lower.forwardRate + ((upper.forwardRate || lower.forwardRate) - lower.forwardRate) * ((fraction - lower.tenor) / (upper.tenor - lower.tenor))
+      : zeroRate;
+    
+    return {
+      days,
+      fraction,
+      df,
+      zeroRate,
+      forwardRate: forwardRate || zeroRate,
+    };
+  }, [customDate, results]);
 
   const toggleMethod = (method: BootstrapMethod) => {
     setSelectedMethods(
@@ -1239,6 +1334,43 @@ function BondsCurveContent({
           </TabsList>
           
           <TabsContent value="chart">
+            {/* Rates at custom date - Interpolation Tool */}
+            {results.length > 0 && (
+              <Card className="mb-4 border-primary/30 bg-primary/5">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <Calculator className="w-4 h-4" />
+                    Rates at custom date
+                  </CardTitle>
+                  <CardDescription>
+                    Choose a date to get the discount factor, zero rate and forward rate. Values are derived from the <strong>bootstrapped curve</strong> (method: <strong>{selectedMethods[0]?.replace(/_/g, ' ')}</strong>) by <strong>interpolation</strong> at the corresponding tenor (curve reference: today).
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex flex-wrap items-center gap-4">
+                    <div className="flex items-center gap-2">
+                      <Label className="text-sm font-medium">Date</Label>
+                      <Input
+                        type="date"
+                        value={customDate}
+                        onChange={(e) => setCustomDate(e.target.value)}
+                        className="w-40"
+                      />
+                    </div>
+                    {interpolatedValues && (
+                      <div className="flex flex-wrap items-center gap-4 text-sm font-mono">
+                        <span>Days: <strong>{interpolatedValues.days}</strong></span>
+                        <span>Fraction (Y): <strong>{interpolatedValues.fraction.toFixed(6)}</strong></span>
+                        <span>Discount Factor: <strong>{interpolatedValues.df.toFixed(8)}</strong></span>
+                        <span>Zero Rate: <strong className="text-primary">{(interpolatedValues.zeroRate * 100).toFixed(4)}%</strong></span>
+                        <span>Forward Rate: <strong className="text-primary">{(interpolatedValues.forwardRate * 100).toFixed(4)}%</strong></span>
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+            
             <Card>
               <CardHeader><CardTitle>Yield Curve - {selectedCountryData?.country} ({currency})</CardTitle></CardHeader>
               <CardContent>
@@ -1246,29 +1378,37 @@ function BondsCurveContent({
                   <ResponsiveContainer width="100%" height="100%">
                     <LineChart margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
                       <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                      <XAxis dataKey="tenor" tick={{ fontSize: 11 }} tickFormatter={(v) => `${v}Y`} />
-                      <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `${v.toFixed(2)}%`} />
-                      <Tooltip formatter={(value: number) => [`${value.toFixed(4)}%`, 'Rate']} />
+                      <XAxis dataKey="tenor" tick={{ fontSize: 11 }} tickFormatter={(v) => `${v}Y`} domain={[0, 'auto']} />
+                      <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `${v.toFixed(2)}%`} domain={['dataMin - 0.5', 'dataMax + 0.5']} />
+                      <Tooltip formatter={(value: number) => [`${value.toFixed(4)}%`, 'Rate']} labelFormatter={(v) => `Tenor: ${v}Y`} />
                       <Legend />
-                      {results.map((result, idx) => (
-                        <Line
-                          key={result.method}
-                          data={result.curvePoints.map(p => ({ tenor: p.tenor, [result.method]: p.rate * 100 }))}
-                          type="monotone"
-                          dataKey={result.method}
-                          name={result.method.replace(/_/g, ' ')}
-                          stroke={`hsl(${idx * 50}, 70%, 50%)`}
-                          strokeWidth={2}
-                          dot={false}
-                        />
-                      ))}
+                      {results.map((result, idx) => {
+                        const points = result.curvePoints.map(p => ({ tenor: p.tenor, [result.method]: p.rate * 100 }));
+                        const sortedPoints = [...points].sort((a, b) => a.tenor - b.tenor);
+                        const firstRate = sortedPoints.length > 0 ? sortedPoints[0][result.method] : 0;
+                        const dataWithOrigin = sortedPoints[0]?.tenor > 0 
+                          ? [{ tenor: 0, [result.method]: firstRate }, ...sortedPoints]
+                          : sortedPoints;
+                        return (
+                          <Line
+                            key={result.method}
+                            data={dataWithOrigin}
+                            type="monotone"
+                            dataKey={result.method}
+                            name={result.method.replace(/_/g, ' ')}
+                            stroke={`hsl(${idx * 50}, 70%, 50%)`}
+                            strokeWidth={2}
+                            dot={false}
+                          />
+                        );
+                      })}
                     </LineChart>
                   </ResponsiveContainer>
                 </div>
               </CardContent>
             </Card>
           </TabsContent>
-          
+
           <TabsContent value="discount_factors">
             <div className="space-y-6">
               {results.map((result) => (
@@ -1291,6 +1431,20 @@ function BondsCurveContent({
                           </TableRow>
                         </TableHeader>
                         <TableBody>
+                          {/* Add zero point at the beginning with extrapolated rate */}
+                          {(() => {
+                            const sortedDfs = [...result.discountFactors].sort((a, b) => a.tenor - b.tenor);
+                            const firstDf = sortedDfs[0];
+                            const extrapolatedRate = firstDf ? firstDf.zeroRate : 0;
+                            return (
+                              <TableRow className="bg-muted/30">
+                                <TableCell className="font-mono">0.00</TableCell>
+                                <TableCell className="text-right font-mono">1.00000000</TableCell>
+                                <TableCell className="text-right font-mono">{(extrapolatedRate * 100).toFixed(4)}%</TableCell>
+                                <TableCell className="text-right font-mono">—</TableCell>
+                              </TableRow>
+                            );
+                          })()}
                           {result.discountFactors.map((df, idx) => (
                             <TableRow key={idx}>
                               <TableCell className="font-mono">{df.tenor.toFixed(2)}</TableCell>
@@ -1358,6 +1512,23 @@ function AllCurvesContent({
   setSelectedCurrency,
 }: AllCurvesContentProps) {
   const countries = countriesData?.data || [];
+  
+  // Find country slug for selected bonds currency
+  const selectedBondsCountrySlug = useMemo(() => {
+    if (!selectedCurrency || MAJOR_CURRENCIES.includes(selectedCurrency)) return '';
+    const country = countries.find((c: CountryBondData) => c.currency === selectedCurrency);
+    return country?.countrySlug || '';
+  }, [selectedCurrency, countries]);
+  
+  // Fetch yields for selected bonds currency
+  const { data: bondsYieldsData, isLoading: isLoadingBondsYields } = useCountryYields(selectedBondsCountrySlug);
+  
+  // State for custom date interpolation
+  const [customDate, setCustomDate] = useState<string>(() => {
+    const d = new Date();
+    d.setMonth(d.getMonth() + 6); // Default: 6 months from now
+    return d.toISOString().split('T')[0];
+  });
   
   // Fetch data for each major currency
   const usdFutures = useRateData(CURRENCY_TO_FUTURES_INDEX["USD"]);
@@ -1450,6 +1621,24 @@ function AllCurvesContent({
   
   const allCurrencies = [...MAJOR_CURRENCIES, ...bondCurrencies];
   
+  // Build bonds curve for selected non-major currency
+  const bondsCurveResult = useMemo(() => {
+    if (!selectedCurrency || MAJOR_CURRENCIES.includes(selectedCurrency)) return null;
+    if (!bondsYieldsData?.data || bondsYieldsData.data.length < 2) return null;
+    
+    const bondPoints: BootstrapPoint[] = bondsYieldsData.data
+      .filter((y: BondYieldData) => y.yield !== null && y.maturityYears > 0)
+      .map((y: BondYieldData) => ({
+        tenor: y.maturityYears,
+        rate: (y.yield as number) / 100,
+        source: 'bond' as const,
+        priority: 1,
+      }));
+    
+    if (bondPoints.length < 2) return null;
+    return bootstrapBonds(bondPoints, selectedMethod, selectedCurrency);
+  }, [selectedCurrency, bondsYieldsData, selectedMethod]);
+  
   // Build curve data
   const curvesData = useMemo(() => {
     const data: { currency: string; source: string; result: BootstrapResult | null; inputPoints: number }[] = [];
@@ -1465,10 +1654,108 @@ function AllCurvesContent({
       });
     });
     
+    // Add bonds curve for selected non-major currency
+    if (selectedCurrency && !MAJOR_CURRENCIES.includes(selectedCurrency) && bondsCurveResult) {
+      data.push({
+        currency: selectedCurrency,
+        source: "Bonds",
+        result: bondsCurveResult,
+        inputPoints: bondsCurveResult?.inputPoints?.length || 0,
+      });
+    }
+    
     return data;
-  }, [buildIRSFuturesCurve]);
+  }, [buildIRSFuturesCurve, selectedCurrency, bondsCurveResult]);
+
+  // ✅ Auto-save bootstrapped curves to cache for Pricers to use
+  useEffect(() => {
+    const CURVE_DATA_CACHE_KEY = 'interest_rate_curves_cache';
+    const curveCache: Record<string, { tenor: number; rate: number }[]> = {};
+    
+    curvesData.forEach(curve => {
+      if (curve.result && curve.result.curvePoints && curve.result.curvePoints.length > 0) {
+        curveCache[curve.currency] = curve.result.curvePoints.map(p => ({
+          tenor: p.tenor,
+          rate: p.rate, // Already in decimal form
+        }));
+      }
+    });
+    
+    if (Object.keys(curveCache).length > 0) {
+      try {
+        localStorage.setItem(CURVE_DATA_CACHE_KEY, JSON.stringify(curveCache));
+        console.log('[RateExplorer] Cached bootstrapped curves for Pricers:', Object.keys(curveCache));
+      } catch (error) {
+        console.error('[RateExplorer] Error caching curve data:', error);
+      }
+    }
+  }, [curvesData]);
 
   const selectedCurve = selectedCurrency ? curvesData.find(c => c.currency === selectedCurrency) : null;
+
+  // Compute interpolated values using useMemo to avoid infinite loops
+  const interpolatedValues = useMemo(() => {
+    if (!selectedCurve?.result?.discountFactors || selectedCurve.result.discountFactors.length < 2) {
+      return null;
+    }
+    
+    const targetDate = new Date(customDate);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    targetDate.setHours(0, 0, 0, 0);
+    
+    const diffMs = targetDate.getTime() - today.getTime();
+    const days = Math.round(diffMs / (1000 * 60 * 60 * 24));
+    const fraction = days / 365;
+    
+    if (days <= 0) {
+      return { days: 0, fraction: 0, df: 1, zeroRate: 0, forwardRate: 0 };
+    }
+    
+    const dfs = selectedCurve.result.discountFactors;
+    const sortedDfs = [...dfs].sort((a, b) => a.tenor - b.tenor);
+    
+    let lower = sortedDfs[0];
+    let upper = sortedDfs[sortedDfs.length - 1];
+    
+    for (let i = 0; i < sortedDfs.length - 1; i++) {
+      if (sortedDfs[i].tenor <= fraction && sortedDfs[i + 1].tenor >= fraction) {
+        lower = sortedDfs[i];
+        upper = sortedDfs[i + 1];
+        break;
+      }
+    }
+    
+    let df: number;
+    let zeroRate: number;
+    
+    if (fraction <= sortedDfs[0].tenor) {
+      zeroRate = sortedDfs[0].zeroRate;
+      df = Math.exp(-zeroRate * fraction);
+    } else if (fraction >= sortedDfs[sortedDfs.length - 1].tenor) {
+      zeroRate = sortedDfs[sortedDfs.length - 1].zeroRate;
+      df = Math.exp(-zeroRate * fraction);
+    } else {
+      const ratio = (fraction - lower.tenor) / (upper.tenor - lower.tenor);
+      const logDfLower = Math.log(lower.df);
+      const logDfUpper = Math.log(upper.df);
+      const logDf = logDfLower + (logDfUpper - logDfLower) * ratio;
+      df = Math.exp(logDf);
+      zeroRate = -Math.log(df) / fraction;
+    }
+    
+    const forwardRate = lower.forwardRate !== undefined 
+      ? lower.forwardRate + ((upper.forwardRate || lower.forwardRate) - lower.forwardRate) * ((fraction - lower.tenor) / (upper.tenor - lower.tenor))
+      : zeroRate;
+    
+    return {
+      days,
+      fraction,
+      df,
+      zeroRate,
+      forwardRate: forwardRate || zeroRate,
+    };
+  }, [customDate, selectedCurve]);
 
   // Dashboard View
   if (viewMode === "dashboard") {
@@ -1720,6 +2007,15 @@ function AllCurvesContent({
                 <Badge variant="secondary">{selectedCurve.inputPoints} points</Badge>
               </div>
             </div>
+          ) : selectedCurrency && !MAJOR_CURRENCIES.includes(selectedCurrency) && isLoadingBondsYields ? (
+            <div className="text-center text-muted-foreground py-8 flex items-center justify-center gap-2">
+              <Loader2 className="w-4 h-4 animate-spin" />
+              Loading {selectedCurrency} bonds data...
+            </div>
+          ) : selectedCurrency && !MAJOR_CURRENCIES.includes(selectedCurrency) && !bondsCurveResult ? (
+            <div className="text-center text-muted-foreground py-8">
+              No bonds data available for {selectedCurrency}. Select a country in the "Bonds Curve" tab first.
+            </div>
           ) : (
             <div className="text-center text-muted-foreground py-8">
               Select a currency to view details
@@ -1730,6 +2026,41 @@ function AllCurvesContent({
       
       {selectedCurve?.result && (
         <>
+          {/* Rates at custom date - Interpolation Tool */}
+          <Card className="border-primary/30 bg-primary/5">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Calculator className="w-4 h-4" />
+                Rates at custom date
+              </CardTitle>
+              <CardDescription>
+                Choose a date to get the discount factor, zero rate and forward rate. Values are derived from the <strong>bootstrapped curve</strong> (method: <strong>{selectedMethod.replace(/_/g, ' ')}</strong>) by <strong>interpolation</strong> at the corresponding tenor (curve reference: today).
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex flex-wrap items-center gap-4">
+                <div className="flex items-center gap-2">
+                  <Label className="text-sm font-medium">Date</Label>
+                  <Input
+                    type="date"
+                    value={customDate}
+                    onChange={(e) => setCustomDate(e.target.value)}
+                    className="w-40"
+                  />
+                </div>
+                {interpolatedValues && (
+                  <div className="flex flex-wrap items-center gap-4 text-sm font-mono">
+                    <span>Days: <strong>{interpolatedValues.days}</strong></span>
+                    <span>Fraction (Y): <strong>{interpolatedValues.fraction.toFixed(6)}</strong></span>
+                    <span>Discount Factor: <strong>{interpolatedValues.df.toFixed(8)}</strong></span>
+                    <span>Zero Rate: <strong className="text-primary">{(interpolatedValues.zeroRate * 100).toFixed(4)}%</strong></span>
+                    <span>Forward Rate: <strong className="text-primary">{(interpolatedValues.forwardRate * 100).toFixed(4)}%</strong></span>
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
           <Card>
             <CardHeader>
               <CardTitle>Rate Curve - {selectedCurve.currency}</CardTitle>
@@ -1737,11 +2068,24 @@ function AllCurvesContent({
             <CardContent>
               <div className="h-[400px]">
                 <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={selectedCurve.result.curvePoints.map(p => ({ tenor: p.tenor, rate: p.rate * 100 }))} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
+                  <LineChart 
+                    data={(() => {
+                      const points = selectedCurve.result.curvePoints.map(p => ({ tenor: p.tenor, rate: p.rate * 100 }));
+                      if (points.length > 0) {
+                        const sortedPoints = [...points].sort((a, b) => a.tenor - b.tenor);
+                        const firstPoint = sortedPoints[0];
+                        if (firstPoint.tenor > 0) {
+                          return [{ tenor: 0, rate: firstPoint.rate }, ...sortedPoints];
+                        }
+                      }
+                      return points;
+                    })()} 
+                    margin={{ top: 20, right: 30, left: 20, bottom: 20 }}
+                  >
                     <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                    <XAxis dataKey="tenor" tick={{ fontSize: 11 }} tickFormatter={(v) => `${v}Y`} />
-                    <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `${v.toFixed(2)}%`} />
-                    <Tooltip formatter={(value: number) => [`${value.toFixed(4)}%`, 'Rate']} />
+                    <XAxis dataKey="tenor" tick={{ fontSize: 11 }} tickFormatter={(v) => `${v}Y`} domain={[0, 'auto']} />
+                    <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `${v.toFixed(2)}%`} domain={['dataMin - 0.5', 'dataMax + 0.5']} />
+                    <Tooltip formatter={(value: number) => [`${value.toFixed(4)}%`, 'Rate']} labelFormatter={(v) => `Tenor: ${v}Y`} />
                     <Line type="monotone" dataKey="rate" stroke="hsl(var(--primary))" strokeWidth={2} dot={false} />
                   </LineChart>
                 </ResponsiveContainer>
@@ -1766,6 +2110,23 @@ function AllCurvesContent({
                     </TableRow>
                   </TableHeader>
                   <TableBody>
+                    {/* Add zero point at the beginning with extrapolated rate */}
+                    {(() => {
+                      const sortedDfs = [...selectedCurve.result.discountFactors].sort((a, b) => a.tenor - b.tenor);
+                      const firstDf = sortedDfs[0];
+                      const extrapolatedRate = firstDf ? firstDf.zeroRate : 0;
+                      return (
+                        <TableRow className="bg-muted/30">
+                          <TableCell className="font-mono">0.00</TableCell>
+                          <TableCell className="text-right font-mono">1.00000000</TableCell>
+                          <TableCell className="text-right font-mono">{(extrapolatedRate * 100).toFixed(4)}%</TableCell>
+                          <TableCell className="text-right font-mono">—</TableCell>
+                          <TableCell>
+                            <Badge variant="outline">origin</Badge>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })()}
                     {selectedCurve.result.discountFactors.map((df, idx) => (
                       <TableRow key={idx}>
                         <TableCell className="font-mono">{df.tenor.toFixed(2)}</TableCell>

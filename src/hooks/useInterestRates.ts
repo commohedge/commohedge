@@ -78,6 +78,17 @@ export function useInterestRates(): UseInterestRatesReturn {
       if (e.key === 'fxRiskManagerSettings' || e.key === 'app_settings') {
         setSettings(getInterestRateSettings());
       }
+      // Also listen for curve cache updates from Rate Explorer
+      if (e.key === CURVE_DATA_CACHE_KEY) {
+        try {
+          const cached = localStorage.getItem(CURVE_DATA_CACHE_KEY);
+          if (cached) {
+            setCurveData(JSON.parse(cached));
+          }
+        } catch (error) {
+          console.error('Error loading updated curve data:', error);
+        }
+      }
     };
     
     // Custom event listener for same-window updates
@@ -85,9 +96,25 @@ export function useInterestRates(): UseInterestRatesReturn {
       setSettings(getInterestRateSettings());
     };
     
-    // Also refresh periodically to catch any changes
+    // Also refresh periodically to catch any changes (including curve data)
     const interval = setInterval(() => {
       setSettings(getInterestRateSettings());
+      // Also refresh curve data
+      try {
+        const cached = localStorage.getItem(CURVE_DATA_CACHE_KEY);
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          setCurveData(prev => {
+            // Only update if different
+            if (JSON.stringify(prev) !== JSON.stringify(parsed)) {
+              return parsed;
+            }
+            return prev;
+          });
+        }
+      } catch (error) {
+        // Ignore
+      }
     }, 2000); // Check every 2 seconds for updates
     
     window.addEventListener('storage', handleStorageChange);

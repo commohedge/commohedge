@@ -5,13 +5,14 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectGroup, SelectLabel } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
+import { useTickerPeekPro, type TppCurrencyData } from "@/hooks/useTickerPeekPro";
 import { 
   Plus, 
   Shield, 
@@ -27,7 +28,8 @@ import {
   Download,
   AlertCircle,
   Calculator,
-  RefreshCw
+  RefreshCw,
+  Loader2
 } from "lucide-react";
 import StrategyImportService, { HedgingInstrument } from "@/services/StrategyImportService";
 import { PricingService } from "@/services/PricingService";
@@ -160,6 +162,17 @@ const HedgingInstruments = () => {
   const [selectedTab, setSelectedTab] = useState("all");
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [showExportColumns, setShowExportColumns] = useState(false);
+  
+  // ── Ticker Peek Pro Integration ──
+  const tpp = useTickerPeekPro();
+  const [useTppData, setUseTppData] = useState(() => {
+    try {
+      const saved = localStorage.getItem('hedgingUseTickerPeekPro');
+      return saved ? JSON.parse(saved) : false;
+    } catch { return false; }
+  });
+  const [tppSearchQuery, setTppSearchQuery] = useState('');
+  
   // Add Instrument form state (tous les inputs comme dans Pricers)
   const [addFormType, setAddFormType] = useState("");
   const [addFormCommodity, setAddFormCommodity] = useState("");
@@ -248,13 +261,6 @@ const HedgingInstruments = () => {
     toast({ title: "Counterparty added", description: `"${name}" has been added.` });
   }, [newCounterpartyName, counterparties, saveCounterparties, toast]);
 
-  useEffect(() => {
-    if (addFormCommodity && isAddDialogOpen) {
-      const pair = CURRENCY_PAIRS.find((p) => p.symbol === addFormCommodity);
-      if (pair) setAddFormSpotPrice(String(pair.defaultSpotRate));
-    }
-  }, [addFormCommodity, isAddDialogOpen]);
-
   const addFormTimeToMaturity = useMemo(() => {
     if (!addFormStartDate || !addFormMaturity) return 1;
     const start = new Date(addFormStartDate).getTime();
@@ -262,6 +268,81 @@ const HedgingInstruments = () => {
     if (end <= start) return 1;
     return (end - start) / (365.25 * 24 * 60 * 60 * 1000);
   }, [addFormStartDate, addFormMaturity]);
+
+  // Load TPP currencies when enabled
+  useEffect(() => {
+    if (useTppData) {
+      tpp.loadAllTppCurrencies();
+    }
+  }, [useTppData, tpp.loadAllTppCurrencies]);
+
+  // Load TPP data (futures + IV surface) when commodity changes
+  useEffect(() => {
+    if (useTppData && addFormCommodity && isAddDialogOpen) {
+      const tppSymbol = getTppSymbolForCommodity(addFormCommodity);
+      if (tppSymbol) {
+        tpp.loadTppData(tppSymbol).then(result => {
+          if (result.spotPrice != null) {
+            setAddFormSpotPrice(String(result.spotPrice.toFixed(4)));
+            toast({
+              title: "Ticker Peek Pro",
+              description: `Spot price loaded: ${result.spotPrice.toFixed(2)} (${result.futuresCount} contracts)`,
+            });
+          }
+          if (result.surfacePointsCount > 0) {
+            toast({
+              title: "IV Surface Loaded",
+              description: `${result.surfacePointsCount} data points for vol interpolation`,
+            });
+          }
+        });
+      }
+    }
+  }, [useTppData, addFormCommodity, isAddDialogOpen, tpp.loadTppData, toast]);
+
+  // Auto-interpolate IV from TPP surface when strike/maturity changes
+  useEffect(() => {
+    if (!useTppData || tpp.tppSurfacePoints.length === 0 || !addFormCommodity || !isAddDialogOpen) return;
+    const spotPrice = parseFloat(addFormSpotPrice) || 0;
+    const strikeValue = parseFloat(addFormRate) || 0;
+    const absoluteStrike = addFormStrikeType === 'percent' ? spotPrice * (strikeValue / 100) : strikeValue;
+    const dte = Math.max(1, Math.round(addFormTimeToMaturity * 365));
+    const type: 'call' | 'put' = addFormType.toLowerCase().includes('put') ? 'put' : 'call';
+    const iv = tpp.interpolateTppIV(absoluteStrike, dte, type);
+    // interpolateTppIV returns decimal (0.30); volatility field expects percentage (30)
+    if (iv !== null && iv > 0) {
+      const ivPct = iv * 100;
+      setAddFormVolatility(ivPct.toFixed(2));
+    }
+  }, [useTppData, tpp.tppSurfacePoints, addFormRate, addFormStrikeType, addFormSpotPrice, addFormTimeToMaturity, addFormType, isAddDialogOpen, addFormCommodity, tpp.interpolateTppIV]);
+
+  // Manual refresh IV from TPP surface
+  const handleRefreshTppIV = useCallback(() => {
+    if (!useTppData || tpp.tppSurfacePoints.length === 0) {
+      toast({ title: "IV Refresh", description: "No TPP surface data available.", variant: "destructive" });
+      return;
+    }
+    const spotPrice = parseFloat(addFormSpotPrice) || 0;
+    const strikeValue = parseFloat(addFormRate) || 0;
+    const absoluteStrike = addFormStrikeType === 'percent' ? spotPrice * (strikeValue / 100) : strikeValue;
+    const dte = Math.max(1, Math.round(addFormTimeToMaturity * 365));
+    const type: 'call' | 'put' = addFormType.toLowerCase().includes('put') ? 'put' : 'call';
+    const iv = tpp.interpolateTppIV(absoluteStrike, dte, type);
+    if (iv !== null && iv > 0) {
+      const ivPct = iv * 100;
+      setAddFormVolatility(ivPct.toFixed(2));
+      toast({ title: "IV Updated", description: `Volatility set to ${ivPct.toFixed(2)}% from TPP surface (Strike: ${absoluteStrike.toFixed(2)}, DTE: ${dte})` });
+    } else {
+      toast({ title: "IV Refresh", description: "Could not interpolate IV for current strike/maturity.", variant: "destructive" });
+    }
+  }, [useTppData, tpp.tppSurfacePoints, addFormRate, addFormStrikeType, addFormSpotPrice, addFormTimeToMaturity, addFormType, tpp.interpolateTppIV, toast]);
+
+  useEffect(() => {
+    if (addFormCommodity && isAddDialogOpen && !useTppData) {
+      const pair = CURRENCY_PAIRS.find((p) => p.symbol === addFormCommodity);
+      if (pair) setAddFormSpotPrice(String(pair.defaultSpotRate));
+    }
+  }, [addFormCommodity, isAddDialogOpen, useTppData]);
 
   const [instruments, setInstruments] = useState<HedgingInstrument[]>(() => {
     try {
@@ -1959,6 +2040,55 @@ const HedgingInstruments = () => {
                 </DialogHeader>
                 <form onSubmit={handleAddInstrument} className="flex flex-col min-h-0">
                   <div className="grid gap-4 py-4 overflow-y-auto pr-1 space-y-4">
+                    {/* Ticker Peek Pro Toggle */}
+                    <div className={`p-2.5 rounded-lg border ${useTppData ? 'bg-orange-50 dark:bg-orange-950/30 border-orange-200 dark:border-orange-800' : 'bg-muted/30 border-border'}`}>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <Switch
+                            checked={useTppData}
+                            onCheckedChange={(checked) => {
+                              setUseTppData(checked);
+                              localStorage.setItem('hedgingUseTickerPeekPro', JSON.stringify(checked));
+                            }}
+                          />
+                          <label className="text-sm font-medium text-foreground cursor-pointer" onClick={() => {
+                            const next = !useTppData;
+                            setUseTppData(next);
+                            localStorage.setItem('hedgingUseTickerPeekPro', JSON.stringify(next));
+                          }}>
+                            Use Data from Ticker Peek Pro
+                          </label>
+                        </div>
+                        {useTppData && (
+                          <span className="text-xs text-muted-foreground">
+                            {tpp.tppLoadingCurrencies ? 'Loading...' : `${tpp.tppCurrencies.length} instruments`}
+                          </span>
+                        )}
+                      </div>
+                      {useTppData && (
+                        <div className="mt-2 space-y-1">
+                          <p className="text-xs text-muted-foreground">
+                            Spot = interpolated futures price at maturity, Vol = interpolated from IV Matrix.
+                          </p>
+                          {tpp.tppLoadingFutures && (
+                            <p className="text-xs text-orange-600 dark:text-orange-400 flex items-center gap-1">
+                              <RefreshCw className="w-3 h-3 animate-spin" /> Loading Cash price...
+                            </p>
+                          )}
+                          {tpp.tppLoadingSurface && (
+                            <p className="text-xs text-orange-600 dark:text-orange-400 flex items-center gap-1">
+                              <RefreshCw className="w-3 h-3 animate-spin" /> Building IV surface...
+                            </p>
+                          )}
+                          {!tpp.tppLoadingSurface && tpp.tppSurfacePoints.length > 0 && (
+                            <p className="text-xs text-green-600 dark:text-green-400">
+                              IV Surface ready ({tpp.tppSurfacePoints.length} pts)
+                            </p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+
                     <div className="grid grid-cols-4 items-center gap-4">
                       <Label className="text-right">Type</Label>
                       <Select value={addFormType} onValueChange={setAddFormType}>
@@ -1974,14 +2104,62 @@ const HedgingInstruments = () => {
                     </div>
                     <div className="grid grid-cols-4 items-center gap-4">
                       <Label className="text-right">Commodity</Label>
-                      <Select value={addFormCommodity} onValueChange={setAddFormCommodity}>
+                      <Select 
+                        value={addFormCommodity} 
+                        onValueChange={setAddFormCommodity}
+                        disabled={useTppData && tpp.tppLoadingCurrencies}
+                      >
                         <SelectTrigger className="col-span-3">
-                          <SelectValue placeholder="Select commodity" />
+                          <SelectValue placeholder={
+                            useTppData && tpp.tppLoadingCurrencies ? "Loading TPP instruments..." : "Select commodity"
+                          } />
                         </SelectTrigger>
                         <SelectContent>
-                          {CURRENCY_PAIRS.map((pair) => (
-                            <SelectItem key={pair.symbol} value={pair.symbol}>{pair.name}</SelectItem>
-                          ))}
+                          {useTppData ? (
+                            <>
+                              <div className="p-2 border-b sticky top-0 bg-background z-10">
+                                <Input
+                                  placeholder="Search commodities..."
+                                  value={tppSearchQuery}
+                                  onChange={(e) => setTppSearchQuery(e.target.value)}
+                                  className="h-8"
+                                />
+                              </div>
+                              {(() => {
+                                const searchLower = tppSearchQuery.toLowerCase().trim();
+                                const categoryConfig = [
+                                  { key: 'energies', label: 'Energies' },
+                                  { key: 'metals', label: 'Metals' },
+                                  { key: 'grains', label: 'Grains' },
+                                  { key: 'livestock', label: 'Livestock' },
+                                ];
+                                const groups = categoryConfig.map(cat => {
+                                  const items = tpp.tppCurrenciesByCategory[cat.key] || [];
+                                  const filtered = searchLower
+                                    ? items.filter(c =>
+                                        c.symbol.toLowerCase().includes(searchLower) ||
+                                        c.name.toLowerCase().includes(searchLower)
+                                      )
+                                    : items;
+                                  return { ...cat, items: filtered };
+                                }).filter(g => g.items.length > 0);
+                                return groups.map(group => (
+                                  <SelectGroup key={group.key}>
+                                    <SelectLabel className="text-xs text-muted-foreground">{group.label}</SelectLabel>
+                                    {group.items.map(c => (
+                                      <SelectItem key={c.symbol} value={c.symbol}>
+                                        {c.symbol} — {c.name}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectGroup>
+                                ));
+                              })()}
+                            </>
+                          ) : (
+                            CURRENCY_PAIRS.map((pair) => (
+                              <SelectItem key={pair.symbol} value={pair.symbol}>{pair.name}</SelectItem>
+                            ))
+                          )}
                         </SelectContent>
                       </Select>
                     </div>
@@ -2034,7 +2212,27 @@ const HedgingInstruments = () => {
                         </div>
                         <div className="grid grid-cols-4 items-center gap-4">
                           <Label className="text-right">Volatility (%)</Label>
-                          <Input type="number" step="0.1" className="col-span-3" value={addFormVolatility} onChange={(e) => setAddFormVolatility(e.target.value)} />
+                          <div className="col-span-3 flex gap-2">
+                            <Input 
+                              type="number" 
+                              step="0.1" 
+                              className="flex-1" 
+                              value={addFormVolatility} 
+                              onChange={(e) => setAddFormVolatility(e.target.value)} 
+                            />
+                            {useTppData && (
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="icon"
+                                onClick={handleRefreshTppIV}
+                                disabled={tpp.tppLoadingSurface || tpp.tppSurfacePoints.length === 0}
+                                title="Refresh IV from TPP surface"
+                              >
+                                <RefreshCw className={`h-4 w-4 ${tpp.tppLoadingSurface ? 'animate-spin' : ''}`} />
+                              </Button>
+                            )}
+                          </div>
                         </div>
                         <div className="grid grid-cols-4 items-center gap-4">
                           <Label className="text-right">Risk-free Rate (%)</Label>
