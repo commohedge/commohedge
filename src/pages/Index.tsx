@@ -750,18 +750,30 @@ export const calculateSwapPrice = (forwards: number[], times: number[], r: numbe
   return sum / forwards.length;
 };
 
-// Time to maturity calculation utility
+/**
+ * Canonical time-to-maturity (in years, ACT/365.25).
+ * Both dates are parsed as LOCAL dates (no timezone shift).
+ * The maturity day is fully included (end-of-day convention).
+ */
 export const calculateTimeToMaturity = (maturityDate: string, valuationDate: string): number => {
-  const maturity = new Date(maturityDate + 'T24:00:00Z');
-  const valuation = new Date(valuationDate + 'T00:00:00Z');
-  
-  // Si la valuation date est après la maturity date, l'option est expirée
-  if (valuation >= maturity) {
-    return 0;
-  }
-  
-  const diffTime = maturity.getTime() - valuation.getTime();
-  return diffTime / (365.25 * 24 * 60 * 60 * 1000);
+  const [my, mm, md] = maturityDate.split('-').map(Number);
+  const [vy, vm, vd] = valuationDate.split('-').map(Number);
+  const maturity = new Date(my, (mm || 1) - 1, (md || 1) + 1); // end-of-day → midnight of next day
+  const valuation = new Date(vy, (vm || 1) - 1, vd || 1);       // start-of-day
+
+  if (valuation >= maturity) return 0;
+
+  const diffMs = maturity.getTime() - valuation.getTime();
+  return diffMs / (365.25 * 24 * 60 * 60 * 1000);
+};
+
+/**
+ * Canonical DTE (days to expiry): integer days derived from TTM.
+ * Consistent everywhere: Strategy Builder, Hedging Instruments, Pricers.
+ */
+export const getDte = (maturityDate: string, valuationDate: string): number => {
+  const ttmYears = calculateTimeToMaturity(maturityDate, valuationDate);
+  return Math.max(0, Math.round(ttmYears * 365.25));
 };
 
 // Strategy payoff calculation utility
@@ -1196,6 +1208,39 @@ const calculateCostOfCarryLegacy = (params: FXStrategyParams): number => {
   }
   // Fallback to commodity params
   return calculateCostOfCarry(params);
+};
+
+/** Format date as local YYYY-MM-DD (avoids UTC shift when displaying maturity) */
+export const formatDateLocal = (d: Date): string =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+/** Get maturity convention from Settings (Pricing): last-month-day | third-friday */
+const getMaturityConvention = (): 'last-month-day' | 'third-friday' => {
+  try {
+    const s = localStorage.getItem('fxRiskManagerSettings');
+    if (!s) return 'last-month-day';
+    const parsed = JSON.parse(s);
+    return parsed?.pricing?.maturityConvention === 'third-friday' ? 'third-friday' : 'last-month-day';
+  } catch {
+    return 'last-month-day';
+  }
+};
+
+/** Third Friday of the given month (year, month 0-indexed). Returns Date at noon to avoid timezone shift. */
+const getThirdFriday = (year: number, month: number): Date => {
+  const first = new Date(year, month, 1);
+  const dayOfWeek = first.getDay(); // 0 Sun .. 5 Fri .. 6 Sat
+  const daysUntilFriday = (5 - dayOfWeek + 7) % 7;
+  const firstFriday = 1 + daysUntilFriday;
+  const thirdFriday = firstFriday + 14;
+  return new Date(year, month, thirdFriday, 12, 0, 0);
+};
+
+/** Maturity date for a given month: last day or third Friday per Settings. Month 0-indexed. */
+const getMaturityDateForMonth = (year: number, month: number, convention: 'last-month-day' | 'third-friday'): Date => {
+  if (convention === 'third-friday') return getThirdFriday(year, month);
+  // Last day of month at noon to avoid timezone shift
+  return new Date(year, month + 1, 0, 12, 0, 0);
 };
 
 interface RiskMatrixResult {
@@ -2188,6 +2233,16 @@ const Index = () => {
     }
   });
 
+  const [useRealInterestRate, setUseRealInterestRate] = useState(() => {
+    try {
+      const savedState = localStorage.getItem('calculatorState');
+      return savedState ? JSON.parse(savedState).useRealInterestRate ?? false : false;
+    } catch (error) {
+      console.warn('Error parsing useRealInterestRate from localStorage:', error);
+      return false;
+    }
+  });
+
   // État pour les prix d'options personnalisés - Initialize from localStorage
   const [useCustomOptionPrices, setUseCustomOptionPrices] = useState(() => {
     try {
@@ -2810,10 +2865,9 @@ const Index = () => {
   // Generate price paths for the entire period using Monte Carlo
   const generatePricePathsForPeriod = (months, startDate, numSimulations = 1000) => {
     const paths = [];
+    const valuationStr = formatDateLocal(startDate);
     const timeToMaturities = months.map(date => {
-      const maturityDateStr = date.toISOString().split('T')[0]; // Format YYYY-MM-DD
-      const valuationDateStr = startDate.toISOString().split('T')[0]; // Format YYYY-MM-DD
-      return calculateTimeToMaturity(maturityDateStr, valuationDateStr);
+      return calculateTimeToMaturity(formatDateLocal(date), valuationStr);
     });
     
     const maxMaturity = Math.max(...timeToMaturities);
@@ -3279,6 +3333,9 @@ const Index = () => {
     return allResults;
   };
 
+  // Canonical rounding for option/forward prices (6 decimals) - align with export and Hedging Instruments
+  const roundOptionPrice = (p: number) => Math.round(p * 1e6) / 1e6;
+
   // Calculate detailed results
   const calculateResults = () => {
     // Use strategy start date for financial calculations (accurate time-to-maturity and forward prices)
@@ -3305,17 +3362,19 @@ const Index = () => {
       monthlyVolumes = sortedPeriods.map(period => period.volume);
     } else {
       // Generate exactly the number of months specified by the user
-      // Start from the HEDGING START DATE and add exactly monthsToHedge months
+      // Maturity = last day of month or third Friday (Settings → Pricing → Maturity date for pricing)
+      const maturityConvention = getMaturityConvention();
       let currentDate = new Date(hedgingStartDate);
       
-      // Generate exactly params.monthsToHedge months
       for (let i = 0; i < params.monthsToHedge; i++) {
-        const monthEnd = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
-        months.push(monthEnd);
+        const year = currentDate.getFullYear();
+        const month = currentDate.getMonth();
+        const maturityDate = getMaturityDateForMonth(year, month, maturityConvention);
+        months.push(maturityDate);
         currentDate.setMonth(currentDate.getMonth() + 1);
       }
       
-      console.log(`[CALCULATION] Generated exactly ${months.length} periods starting from HEDGING START DATE ${hedgingStartDate.toISOString().split('T')[0]}`);
+      console.log(`[CALCULATION] Generated exactly ${months.length} periods (${maturityConvention}) starting from HEDGING START DATE ${formatDateLocal(new Date(hedgingStartDate))}`);
       
       // Use equal volumes for each month
       const monthlyVolume = params.totalVolume / months.length;
@@ -3429,12 +3488,10 @@ const Index = () => {
         : 'Current Strategy',
     });
 
-    // Continue with the rest of calculateResults
-    // Calculate time to maturity using the same function as HedgingInstruments for consistency
+    // Calculate time to maturity using the canonical function (local date strings, same as HedgingInstruments)
+    const calculationStartStr = formatDateLocal(calculationStartDate);
     const timeToMaturities = months.map(date => {
-      const maturityDateStr = date.toISOString().split('T')[0]; // Format YYYY-MM-DD
-      const valuationDateStr = calculationStartDate.toISOString().split('T')[0]; // Format YYYY-MM-DD
-      return calculateTimeToMaturity(maturityDateStr, valuationDateStr);
+      return calculateTimeToMaturity(formatDateLocal(date), calculationStartStr);
     });
 
     // Ticker Peek Pro: build futures curve for forward interpolation
@@ -3572,17 +3629,31 @@ const Index = () => {
       }
     });
 
+    // Per-maturity rate: interpolated from Rate Explorer when "Use real interest rate" is on
+    const getRateForMaturity = (ttmYears: number): number =>
+      useRealInterestRate && getSelectedCurrency ? getRate(getSelectedCurrency, ttmYears) : getRiskFreeRate(params);
+    const swapR = timeToMaturities.length > 0
+      ? timeToMaturities.reduce((acc, tt) => acc + getRateForMaturity(tt), 0) / timeToMaturities.length
+      : getRiskFreeRate(params);
+    const swapForwards = months.map((_, idx) => {
+      const mKey = `${months[idx].getFullYear()}-${months[idx].getMonth() + 1}`;
+      const rate = getRateForMaturity(timeToMaturities[idx]);
+      return manualForwards[mKey] || calculateCommodityForwardPrice(initialSpotPrice, rate, 0, 0, timeToMaturities[idx]);
+    });
+    const swapPriceComputed = calculateSwapPrice(swapForwards, timeToMaturities, swapR);
+
     // Generate detailed results for each period with the corresponding monthly volume
     const detailedResults = months.map((date, i) => {
       // Use the monthly volume from our array instead of dividing total volume
       const monthlyVolume = monthlyVolumes[i];
       
-      const t = timeToMaturities[i];
       const maturityIndex = monthlyIndices[i]; // Add the maturityIndex definition
-      
+      const t = timeToMaturities[i]; // raw ACT/365.25 TTM for pricing & rate
+      const dte = Math.max(0, Math.round(t * 365.25)); // integer days for IV/forward curve lookups only
+      const r = getRateForMaturity(t);
+
       // Get forward price: TPP interpolated by maturity, else manual or cost-of-carry
         const monthKey = `${date.getFullYear()}-${date.getMonth() + 1}`;
-      const dte = Math.round(t * 365);
       const forward = (() => {
         if (useTickerPeekPro && curvePoints.length >= 2) {
           const interpolated = interpolateFuturesPrice(curvePoints, dte);
@@ -3591,7 +3662,7 @@ const Index = () => {
         return manualForwards[monthKey] || 
           calculateCommodityForwardPrice(
             initialSpotPrice, 
-            params.interestRate / 100, 
+            r, 
             0, // storage cost = 0
             0, // convenience yield = 0
             t
@@ -3604,22 +3675,8 @@ const Index = () => {
       // Prix réel avec PDD (uniquement pour les coûts, pas pour les payoffs)
       const realPriceWithPDD = realPrice + (params.priceDifferential || 0);
 
-      // Calculer le prix du swap une fois pour tous les swaps
-        const swapPrice = calculateSwapPrice(
-            months.map((_, idx) => {
-                const monthKey = `${_.getFullYear()}-${_.getMonth() + 1}`;
-                return manualForwards[monthKey] || 
-            calculateCommodityForwardPrice(
-              initialSpotPrice, 
-              params.interestRate / 100, 
-              0, // storage cost = 0
-              0, // convenience yield = 0
-              timeToMaturities[idx]
-            );
-            }),
-            timeToMaturities,
-        getRiskFreeRate(params)
-        );
+      // Prix du swap (calculé une fois avec taux par maturité / moyenne)
+      const swapPrice = swapPriceComputed;
 
       // Séparer les swaps, forwards et options
         const swaps = strategy.filter(s => s.type === 'swap');
@@ -3652,12 +3709,7 @@ const Index = () => {
                 const balanceWithType = balanceWithOption.type.includes('put') ? 'put' : 'call';
                 const currentType = option.type.includes('put') ? 'put' : 'call';
                 
-                // Get the risk-free rate for commodities
-                const r_d = getRiskFreeRate(params);
-                
-                // Calculate the premium of the balancing option for this specific time to maturity
-                // This is important - we use the specific time to maturity for this period
-                const r = getRiskFreeRate(params);
+                // Risk-free rate for this maturity (row-level r)
                 const b = calculateCostOfCarry(params);
                 
                 // Use the selected pricing model for the balancing option
@@ -3844,7 +3896,7 @@ const Index = () => {
           // Le prix représente la valeur théorique de l'option, indépendamment de son état knocked out
           if (option.type === 'forward') {
             // For forwards, the value is simply the difference between forward rate and strike
-            price = (forward - strike) * Math.exp(-getRiskFreeRate(params) * t);
+            price = (forward - strike) * Math.exp(-r * t);
           } else if (option.type === 'call' || option.type === 'put') {
             // TPP: IV from surface by strike & DTE; else implied or option vol
             const tppIv = useTickerPeekPro && tppSurfacePoints.length > 0
@@ -3857,7 +3909,6 @@ const Index = () => {
           const underlyingPrice = forward; // Use forward price for commodity options
           if (optionPricingModel === 'monte-carlo') {
             // Use Monte Carlo for vanilla options with cost of carry
-            const r = getRiskFreeRate(params);
             const b = calculateCostOfCarry(params);
             price = calculateVanillaOptionMonteCarlo(
               option.type,
@@ -3871,7 +3922,6 @@ const Index = () => {
             );
           } else {
             // Black-76 (default for commodities - uses forward price)
-            const r = getRiskFreeRate(params);
             const d1 = (Math.log(underlyingPrice/strike) + (r + effectiveSigma**2/2)*t) / (effectiveSigma*Math.sqrt(t));
             const d2 = d1 - effectiveSigma*Math.sqrt(t);
             
@@ -3911,7 +3961,7 @@ const Index = () => {
               option.type,
               forward, // ✅ Forward price (comme Strategy Builder - Black-76 model for commodities)
               strike,
-              getRiskFreeRate(params),
+              r,
               t,
               effectiveSigma,
               barrier,
@@ -3951,7 +4001,7 @@ const Index = () => {
                 option.type,
                 forward,
                     strike,
-                getRiskFreeRate(params),
+                r,
               numSteps,
               localPaths,
             barrier,
@@ -3979,7 +4029,7 @@ const Index = () => {
           // Calculer le prix digital
           const underlyingResult = PricingService.calculateUnderlyingPrice(
             params.spotPrice,
-            getRiskFreeRate(params),
+            r,
             params.foreignRate/100,
             t
           );
@@ -3987,7 +4037,7 @@ const Index = () => {
             option.type,
             underlyingResult.price,
             strike,
-            params.domesticRate / 100,
+            r,
             t,
             option.volatility / 100,
             barrier,
@@ -4000,7 +4050,7 @@ const Index = () => {
             
         return {
           type: option.type,
-          price: price,
+          price: roundOptionPrice(price),
               quantity: option.quantity/100,
               strike: strike,
               label: optionLabel,
@@ -4019,7 +4069,7 @@ const Index = () => {
           label: `Swap Price ${swapIndex + 1}`
         })),
         ...forwards.map((forwardItem, forwardIndex) => {
-          const forwardValue = (forward - forwardItem.strike) * Math.exp(-getRiskFreeRate(params) * t);
+          const forwardValue = (forward - forwardItem.strike) * Math.exp(-r * t);
           return {
             type: 'forward',
             price: forwardValue,
@@ -4204,10 +4254,11 @@ const Index = () => {
       const deltaPnL = hedgedCost - unhedgedCost;
 
         return {
-        date: date.toISOString().split('T')[0],
+        date: formatDateLocal(date),
         timeToMaturity: t,
         forward: forward,
         realPrice: realPrice,
+        interestRate: r * 100, // Rate used for this maturity (%): interpolated if "Use real interest rate", else params
         optionPrices: allOptionPrices,
         strategyPrice: strategyPrice,
         totalPayoff: totalPayoff,
@@ -4227,7 +4278,7 @@ const Index = () => {
       if (curvePoints.length >= 2) {
         months.forEach((date, idx) => {
           const monthKey = `${date.getFullYear()}-${date.getMonth() + 1}`;
-          const dteFwd = Math.round(timeToMaturities[idx] * 365);
+          const dteFwd = Math.max(0, Math.round(timeToMaturities[idx] * 365.25));
           const fwd = interpolateFuturesPrice(curvePoints, dteFwd);
           if (fwd != null) tppForwards[monthKey] = fwd;
         });
@@ -4239,7 +4290,7 @@ const Index = () => {
         months.forEach((date, i) => {
           const monthKey = `${date.getFullYear()}-${date.getMonth() + 1}`;
           const t = timeToMaturities[i];
-          const dte = Math.round(t * 365);
+          const dte = Math.max(0, Math.round(t * 365.25));
           optionsList.forEach((option, optIndex) => {
             const strike = option.strikeType === 'percent' ? params.spotPrice * (option.strike / 100) : option.strike;
             const optionKey = `${option.type}-${optIndex}`;
@@ -4582,10 +4633,10 @@ const Index = () => {
         // Enrichir chaque résultat avec des informations supplémentaires
         const enrichedResult = {
           ...result,
-          // Informations de marché du moment
+          // Informations de marché du moment (domesticRate = taux utilisé pour cette maturité si "Use real interest rate")
           marketData: {
             spotPrice: params.spotPrice,
-            domesticRate: params.interestRate, // ✅ CORRECTION : Utiliser interestRate comme Risk-Free Rate
+            domesticRate: (result as { interestRate?: number }).interestRate ?? params.interestRate,
             foreignRate: params.foreignRate,
             monthKey: monthKey,
             periodIndex: periodIndex
@@ -4739,7 +4790,8 @@ const Index = () => {
       customScenario,
       stressTestScenarios,
       useImpliedVol,
-      impliedVolatilities
+      impliedVolatilities,
+      useRealInterestRate
     };
     localStorage.setItem('calculatorState', JSON.stringify(state));
   }, [
@@ -4756,7 +4808,8 @@ const Index = () => {
     customScenario,
     stressTestScenarios,
     useImpliedVol,
-    impliedVolatilities
+    impliedVolatilities,
+    useRealInterestRate
   ]);
 
   const resetScenario = (key: string) => {
@@ -4969,7 +5022,8 @@ const Index = () => {
       },
       stressTestScenarios: DEFAULT_SCENARIOS,
       useImpliedVol: false,
-      impliedVolatilities: {}
+      impliedVolatilities: {},
+      useRealInterestRate: false
     };
     localStorage.setItem('calculatorState', JSON.stringify(state));
     
@@ -6286,19 +6340,20 @@ const Index = () => {
       // Use the maturity dates from custom periods
       months = sortedPeriods.map(period => new Date(period.maturityDate));
     } else {
-      // Use the standard month generation logic
-    let currentDate = new Date(startDate);
+      // Use the same maturity convention as calculateResults (last day or third Friday)
+      const maturityConvention = getMaturityConvention();
+      let currentDate = new Date(startDate);
 
-    const lastDayOfStartMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
-    const remainingDaysInMonth = lastDayOfStartMonth.getDate() - currentDate.getDate() + 1;
+      const lastDayOfStartMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
+      const remainingDaysInMonth = lastDayOfStartMonth.getDate() - currentDate.getDate() + 1;
 
-    if (remainingDaysInMonth > 0) {
-      months.push(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0));
-    }
+      if (remainingDaysInMonth > 0) {
+        months.push(getMaturityDateForMonth(currentDate.getFullYear(), currentDate.getMonth(), maturityConvention));
+      }
 
-    for (let i = 0; i < params.monthsToHedge - (remainingDaysInMonth > 0 ? 1 : 0); i++) {
-      currentDate.setMonth(currentDate.getMonth() + 1);
-      months.push(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0));
+      for (let i = 0; i < params.monthsToHedge - (remainingDaysInMonth > 0 ? 1 : 0); i++) {
+        currentDate.setMonth(currentDate.getMonth() + 1);
+        months.push(getMaturityDateForMonth(currentDate.getFullYear(), currentDate.getMonth(), maturityConvention));
       }
     }
 
@@ -7147,6 +7202,17 @@ const pricingFunctions = {
         recalculateResults();
       } else {
         // Sinon, recalculer complètement
+        calculateResults();
+      }
+    }, 100);
+  };
+
+  const handleUseRealInterestRateToggle = (checked: boolean) => {
+    setUseRealInterestRate(checked);
+    setTimeout(() => {
+      if (useCustomOptionPrices) {
+        recalculateResults();
+      } else {
         calculateResults();
       }
     }, 100);
@@ -9203,6 +9269,17 @@ const pricingFunctions = {
                         </span>
                       )}
                     </div>
+                    <div className="ml-4 flex items-center">
+                      <Switch
+                        id="useRealInterestRateUI"
+                        checked={useRealInterestRate}
+                        onCheckedChange={handleUseRealInterestRateToggle}
+                        className="mr-2"
+                      />
+                      <label htmlFor="useRealInterestRateUI" className="text-sm font-medium cursor-pointer">
+                        Use real interest rate
+                      </label>
+                    </div>
                     {useTickerPeekPro && params.currencyPair?.symbol && (
                       <Button
                         type="button"
@@ -9235,6 +9312,10 @@ const pricingFunctions = {
                           <th className="px-3 py-3 text-left font-medium text-foreground/70 border-b bg-primary/5">
                             Real Price
                             <div className="text-xs font-normal text-muted-foreground mt-1">Monthly realized price</div>
+                          </th>
+                          <th className="px-3 py-3 text-left font-medium text-foreground/70 border-b bg-purple-500/5">
+                            Real rate (%)
+                            <div className="text-xs font-normal text-muted-foreground mt-1">Rate used for this maturity</div>
                           </th>
                           
                           {/* Ajouter des colonnes pour les strikes dynamiques si présents */}
@@ -9331,6 +9412,11 @@ const pricingFunctions = {
                             disabled={realPriceParams.useSimulation}
                           />
                         </td>
+                              <td className="px-3 py-2 text-sm border-b border-border/30 bg-purple-500/5 font-mono text-right">
+                                {(row as { interestRate?: number }).interestRate != null
+                                  ? `${(row as { interestRate: number }).interestRate.toFixed(3)}%`
+                                  : params.interestRate.toFixed(3) + '%'}
+                          </td>
                           {/* Ajouter des cellules pour les strikes dynamiques si présents */}
                           {strategy.some(opt => opt.dynamicStrike) && 
                             strategy.map((opt, idx) => {

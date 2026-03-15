@@ -562,13 +562,17 @@ export function calculateDigitalOptionPrice(
 // ===== UTILITY FUNCTIONS =====
 
 /**
- * Calcule le temps jusqu'à maturité en années
+ * Canonical time-to-maturity (in years, ACT/365.25).
+ * Both dates parsed as LOCAL dates; maturity day fully included.
+ * Must stay in sync with calculateTimeToMaturity in Index.tsx.
  */
 export function calculateTimeToMaturity(maturityDate: string, valuationDate: string): number {
-  const maturity = new Date(maturityDate);
-  const valuation = new Date(valuationDate);
-  const diffTime = maturity.getTime() - valuation.getTime();
-  const diffDays = diffTime / (1000 * 3600 * 24);
-  return diffDays / 365.25;
+  const [my, mm, md] = maturityDate.split('-').map(Number);
+  const [vy, vm, vd] = valuationDate.split('-').map(Number);
+  const maturity = new Date(my, (mm || 1) - 1, (md || 1) + 1);
+  const valuation = new Date(vy, (vm || 1) - 1, vd || 1);
+  if (valuation >= maturity) return 0;
+  const diffMs = maturity.getTime() - valuation.getTime();
+  return diffMs / (365.25 * 24 * 60 * 60 * 1000);
 }
 

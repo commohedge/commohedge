@@ -1069,7 +1069,7 @@ function BondsCurveContent({
     
     const diffMs = targetDate.getTime() - today.getTime();
     const days = Math.round(diffMs / (1000 * 60 * 60 * 24));
-    const fraction = days / 365;
+    const fraction = days / 365.25;
     
     if (days <= 0) {
       return { days: 0, fraction: 0, df: 1, zeroRate: 0, forwardRate: 0 };
@@ -1706,7 +1706,7 @@ function AllCurvesContent({
     
     const diffMs = targetDate.getTime() - today.getTime();
     const days = Math.round(diffMs / (1000 * 60 * 60 * 24));
-    const fraction = days / 365;
+    const fraction = days / 365.25;
     
     if (days <= 0) {
       return { days: 0, fraction: 0, df: 1, zeroRate: 0, forwardRate: 0 };

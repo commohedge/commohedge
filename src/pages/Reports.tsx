@@ -267,7 +267,7 @@ const Reports = () => {
         'today': 24 * 60 * 60 * 1000,
         'week': 7 * 24 * 60 * 60 * 1000,
         'month': 30 * 24 * 60 * 60 * 1000,
-        'year': 365 * 24 * 60 * 60 * 1000
+        'year': 365.25 * 24 * 60 * 60 * 1000
       };
       
       if (ranges[dateRange as keyof typeof ranges]) {

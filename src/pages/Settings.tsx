@@ -82,6 +82,8 @@ interface AppSettings {
     pricingFrequency: string;
     underlyingPriceType: 'spot' | 'forward';
     backtestExerciseType: 'monthly-average' | 'third-friday';
+    /** Maturity date convention for Strategy Builder: last day of month or third Friday */
+    maturityConvention: 'last-month-day' | 'third-friday';
     // Interest rate configuration for simulations
     interestRateMode: 'fixed' | 'curve';
     fixedRates: {
@@ -199,6 +201,7 @@ const Settings = () => {
       pricingFrequency: "real-time",
       underlyingPriceType: "spot",
       backtestExerciseType: "monthly-average",
+      maturityConvention: "last-month-day",
       // Interest rate mode: 'fixed' uses Bank Rate, 'curve' uses bootstrapped yield curve
       interestRateMode: "fixed",
       // Default fixed rates (Bank Rates as of current date - can be updated)
@@ -411,7 +414,7 @@ const Settings = () => {
         
         // Use retry response
         const bondData = retryResponse.data;
-        const newRates: Record<string, number> = { ...settings.pricing.fixedRates };
+        const newRates: Record<string, number> = { ...(settings.pricing?.fixedRates ?? {}) };
         let updatedCount = 0;
         
         Object.entries(CURRENCY_TO_COUNTRY).forEach(([currency, countrySlug]) => {
@@ -438,7 +441,7 @@ const Settings = () => {
       }
       
       const bondData = response.data;
-      const newRates: Record<string, number> = { ...settings.pricing.fixedRates };
+      const newRates: Record<string, number> = { ...(settings.pricing?.fixedRates ?? {}) };
       let updatedCount = 0;
       let missingRates: string[] = [];
       
@@ -545,19 +548,18 @@ const Settings = () => {
   // 🌐 Auto-sync bank rates on mount and when in fixed mode
   useEffect(() => {
     // Only auto-sync if in fixed rate mode
-    if (settings.pricing.interestRateMode === 'fixed') {
-      // Check if data is fresh, if not, sync automatically
+    if (settings.pricing?.interestRateMode === 'fixed') {
       const lastUpdate = localStorage.getItem('bondDataLastUpdate');
       const isFresh = lastUpdate ? (Date.now() - new Date(lastUpdate).getTime()) < 3600000 : false;
       
       if (!isFresh) {
         console.log('🔄 Synchronisation automatique des taux bancaires...');
-        fetchBankRatesFromBonds(false); // false = don't force refresh if data exists
+        fetchBankRatesFromBonds(false);
       } else {
         console.log('✅ Données des taux bancaires à jour');
       }
     }
-  }, [settings.pricing.interestRateMode]); // Sync when mode changes
+  }, [settings.pricing?.interestRateMode]); // Sync when mode changes
 
   // Fonction pour mettre à jour les paramètres
   const updateSettings = (section: keyof AppSettings, updates: Record<string, unknown>) => {
@@ -631,7 +633,7 @@ const Settings = () => {
         localStorage.setItem('preferred-language', newSettings.ui.language);
       }
       if (newSettings.ui?.dashboardRefresh) {
-        localStorage.setItem('dashboard-refresh-interval', newSettings.ui.dashboardRefresh.toString());
+        localStorage.setItem('dashboard-refresh-interval', String(newSettings.ui?.dashboardRefresh ?? 30));
       }
       
       // Finaliser
@@ -1083,7 +1085,7 @@ const Settings = () => {
                 <div className="space-y-2">
                   <Label htmlFor="base-currency">Base Currency</Label>
                   <Select
-                    value={settings.company.currency}
+                    value={settings.company?.currency ?? 'USD'}
                     onValueChange={(value) => updateSettings('company', { currency: value })}
                   >
                     <SelectTrigger>
@@ -1104,7 +1106,7 @@ const Settings = () => {
                 <div className="space-y-2">
                   <Label htmlFor="timezone">Timezone</Label>
                   <Select
-                    value={settings.company.timezone}
+                    value={settings.company?.timezone ?? 'Europe/Paris'}
                     onValueChange={(value) => updateSettings('company', { timezone: value })}
                   >
                     <SelectTrigger>
@@ -1123,7 +1125,7 @@ const Settings = () => {
                   <Label htmlFor="fiscal-year">Début d'Année Fiscale</Label>
                   <Input
                     id="fiscal-year"
-                    value={settings.company.fiscalYearStart}
+                    value={settings.company?.fiscalYearStart ?? '01-01'}
                     onChange={(e) => updateSettings('company', { fiscalYearStart: e.target.value })}
                     placeholder="MM-DD"
                   />
@@ -1173,7 +1175,7 @@ const Settings = () => {
                 <div className="space-y-2">
                   <Label htmlFor="confidence-level">Default Confidence Level (%)</Label>
                   <Select
-                    value={settings.risk.defaultConfidenceLevel.toString()}
+                    value={String(settings.risk?.defaultConfidenceLevel ?? 95)}
                     onValueChange={(value) => updateSettings('risk', { defaultConfidenceLevel: parseInt(value) })}
                   >
                     <SelectTrigger>
@@ -1192,7 +1194,7 @@ const Settings = () => {
                   <Input
                     id="var-horizon"
                     type="number"
-                    value={settings.risk.varHorizon}
+                    value={settings.risk?.varHorizon ?? 1}
                     onChange={(e) => updateSettings('risk', { varHorizon: parseInt(e.target.value) })}
                     min="1"
                     max="30"
@@ -1201,7 +1203,7 @@ const Settings = () => {
                 <div className="space-y-2">
                   <Label htmlFor="monte-carlo">Monte Carlo Simulations</Label>
                   <Select
-                    value={settings.risk.monteCarloSimulations.toString()}
+                    value={String(settings.risk?.monteCarloSimulations ?? 10000)}
                     onValueChange={(value) => updateSettings('risk', { monteCarloSimulations: parseInt(value) })}
                   >
                     <SelectTrigger>
@@ -1219,7 +1221,7 @@ const Settings = () => {
                 <div className="flex items-center space-x-2">
                   <Switch
                     id="stress-test"
-                    checked={settings.risk.stressTestEnabled}
+                    checked={settings.risk?.stressTestEnabled ?? true}
                     onCheckedChange={(checked) => updateSettings('risk', { stressTestEnabled: checked })}
                   />
                   <Label htmlFor="stress-test">Stress Testing Enabled</Label>
@@ -1236,9 +1238,9 @@ const Settings = () => {
                     <Input
                       id="max-var"
                       type="number"
-                      value={settings.risk.riskLimits.maxVaR}
+                      value={settings.risk?.riskLimits?.maxVaR ?? 5000000}
                       onChange={(e) => updateSettings('risk', { 
-                        riskLimits: { ...settings.risk.riskLimits, maxVaR: parseInt(e.target.value) }
+                        riskLimits: { ...(settings.risk?.riskLimits ?? {}), maxVaR: parseInt(e.target.value) }
                       })}
                     />
                   </div>
@@ -1247,9 +1249,9 @@ const Settings = () => {
                     <Input
                       id="max-unhedged"
                       type="number"
-                      value={settings.risk.riskLimits.maxUnhedgedRisk}
+                      value={settings.risk?.riskLimits?.maxUnhedgedRisk ?? 10000000}
                       onChange={(e) => updateSettings('risk', { 
-                        riskLimits: { ...settings.risk.riskLimits, maxUnhedgedRisk: parseInt(e.target.value) }
+                        riskLimits: { ...(settings.risk?.riskLimits ?? {}), maxUnhedgedRisk: parseInt(e.target.value) }
                       })}
                     />
                   </div>
@@ -1258,9 +1260,9 @@ const Settings = () => {
                     <Input
                       id="min-hedge"
                       type="number"
-                      value={settings.risk.riskLimits.minHedgeRatio}
+                      value={settings.risk?.riskLimits?.minHedgeRatio ?? 70}
                       onChange={(e) => updateSettings('risk', { 
-                        riskLimits: { ...settings.risk.riskLimits, minHedgeRatio: parseInt(e.target.value) }
+                        riskLimits: { ...(settings.risk?.riskLimits ?? {}), minHedgeRatio: parseInt(e.target.value) }
                       })}
                       min="0"
                       max="100"
@@ -1288,7 +1290,7 @@ const Settings = () => {
                 <div className="space-y-2">
                   <Label htmlFor="pricing-model">Default Pricing Model</Label>
                   <Select
-                    value={settings.pricing.defaultModel}
+                    value={settings.pricing?.defaultModel ?? 'black-scholes'}
                     onValueChange={(value) => updateSettings('pricing', { defaultModel: value })}
                   >
                     <SelectTrigger>
@@ -1305,7 +1307,7 @@ const Settings = () => {
                 <div className="space-y-2">
                   <Label htmlFor="volatility-model">Volatility Model</Label>
                   <Select
-                    value={settings.pricing.volatilityModel}
+                    value={settings.pricing?.volatilityModel ?? 'implied'}
                     onValueChange={(value) => updateSettings('pricing', { volatilityModel: value })}
                   >
                     <SelectTrigger>
@@ -1322,7 +1324,7 @@ const Settings = () => {
                 <div className="space-y-2">
                   <Label htmlFor="interest-source">Interest Rate Source</Label>
                   <Select
-                    value={settings.pricing.interestRateSource}
+                    value={settings.pricing?.interestRateSource ?? 'central-bank'}
                     onValueChange={(value) => updateSettings('pricing', { interestRateSource: value })}
                   >
                     <SelectTrigger>
@@ -1347,7 +1349,7 @@ const Settings = () => {
                   <div className="space-y-2">
                     <Label htmlFor="interest-rate-mode">Interest Rate Mode</Label>
                     <Select
-                      value={settings.pricing.interestRateMode}
+                      value={settings.pricing?.interestRateMode ?? 'fixed'}
                       onValueChange={(value) => updateSettings('pricing', { interestRateMode: value as 'fixed' | 'curve' })}
                     >
                       <SelectTrigger>
@@ -1369,20 +1371,20 @@ const Settings = () => {
                       </SelectContent>
                     </Select>
                     <p className="text-xs text-muted-foreground">
-                      {settings.pricing.interestRateMode === 'fixed' 
+                      {settings.pricing?.interestRateMode === 'fixed' 
                         ? "Uses a single fixed rate (Bank Rate) for each currency regardless of maturity."
                         : "Uses the bootstrapped yield curve from Rate Explorer for precise rates at each maturity."}
                     </p>
                   </div>
                   
-                  {settings.pricing.interestRateMode === 'fixed' && (
+                  {settings.pricing?.interestRateMode === 'fixed' && (
                     <div className="space-y-3 pt-2">
                       <div className="flex items-center justify-between">
                         <Label className="text-sm font-medium">Fixed Rates by Currency (Bank Rates %)</Label>
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={fetchBankRatesFromBonds}
+                          onClick={() => fetchBankRatesFromBonds()}
                           disabled={isLoadingBankRates}
                           className="h-8"
                         >
@@ -1408,7 +1410,7 @@ const Settings = () => {
                       )}
                       
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                        {Object.entries(settings.pricing.fixedRates).map(([currency, rate]) => (
+                        {Object.entries(settings.pricing?.fixedRates ?? {}).map(([currency, rate]) => (
                           <div key={currency} className="space-y-1">
                             <Label htmlFor={`rate-${currency}`} className="text-xs flex items-center gap-1">
                               <span className="font-mono font-bold">{currency}</span>
@@ -1422,7 +1424,7 @@ const Settings = () => {
                                 max="100"
                                 value={rate}
                                 onChange={(e) => {
-                                  const newRates = { ...settings.pricing.fixedRates };
+                                  const newRates = { ...(settings.pricing?.fixedRates ?? {}) };
                                   newRates[currency as keyof typeof newRates] = parseFloat(e.target.value) || 0;
                                   updateSettings('pricing', { fixedRates: newRates });
                                 }}
@@ -1446,7 +1448,7 @@ const Settings = () => {
                     </div>
                   )}
                   
-                  {settings.pricing.interestRateMode === 'curve' && (
+                  {settings.pricing?.interestRateMode === 'curve' && (
                     <Alert className="bg-primary/5 border-primary/20">
                       <TrendingUp className="h-4 w-4" />
                       <AlertDescription>
@@ -1461,7 +1463,7 @@ const Settings = () => {
                 <div className="space-y-2">
                   <Label htmlFor="pricing-frequency">Pricing Frequency</Label>
                   <Select
-                    value={settings.pricing.pricingFrequency}
+                    value={settings.pricing?.pricingFrequency ?? 'daily'}
                     onValueChange={(value) => updateSettings('pricing', { pricingFrequency: value })}
                   >
                     <SelectTrigger>
@@ -1479,7 +1481,7 @@ const Settings = () => {
                 <div className="space-y-2">
                   <Label htmlFor="underlying-price-type">Underlying Price for Options</Label>
                   <Select
-                    value={settings.pricing.underlyingPriceType}
+                    value={settings.pricing?.underlyingPriceType ?? 'forward'}
                     onValueChange={(value) => updateSettings('pricing', { underlyingPriceType: value as 'spot' | 'forward' })}
                   >
                     <SelectTrigger>
@@ -1497,7 +1499,7 @@ const Settings = () => {
                 <div className="space-y-2">
                   <Label htmlFor="backtest-exercise-type">Backtest Exercise Type</Label>
                   <Select
-                    value={settings.pricing.backtestExerciseType}
+                    value={settings.pricing?.backtestExerciseType ?? 'monthly-average'}
                     onValueChange={(value) => updateSettings('pricing', { backtestExerciseType: value as 'monthly-average' | 'third-friday' })}
                   >
                     <SelectTrigger>
@@ -1512,12 +1514,30 @@ const Settings = () => {
                     Choose how to calculate exercise prices for backtesting: use monthly average price or the price on the third Friday of each month (typical option expiry date).
                   </p>
                 </div>
+                <div className="space-y-2">
+                  <Label htmlFor="maturity-convention">Maturity date for pricing (Strategy Builder)</Label>
+                  <Select
+                    value={settings.pricing?.maturityConvention ?? 'last-month-day'}
+                    onValueChange={(value) => updateSettings('pricing', { maturityConvention: value as 'last-month-day' | 'third-friday' })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="last-month-day">Last day of month</SelectItem>
+                      <SelectItem value="third-friday">Third Friday of month</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    Choose the maturity date used for each period in Strategy Builder: last calendar day of the month or the third Friday (typical option expiry).
+                  </p>
+                </div>
               </div>
 
               <div className="flex items-center space-x-2">
                 <Switch
                   id="real-time-data"
-                  checked={settings.pricing.useRealTimeData}
+                  checked={settings.pricing?.useRealTimeData ?? false}
                   onCheckedChange={(checked) => updateSettings('pricing', { useRealTimeData: checked })}
                 />
                 <Label htmlFor="real-time-data">Use Real-time Data</Label>
@@ -1570,7 +1590,7 @@ const Settings = () => {
                 <div className="space-y-2">
                   <Label htmlFor="theme">Theme</Label>
                   <Select
-                    value={settings.ui.theme}
+                    value={settings.ui?.theme ?? 'system'}
                     onValueChange={(value) => updateSettings('ui', { theme: value })}
                   >
                     <SelectTrigger>
@@ -1587,7 +1607,7 @@ const Settings = () => {
                 <div className="space-y-2">
                   <Label htmlFor="language">Language</Label>
                   <Select
-                    value={settings.ui.language}
+                    value={settings.ui?.language ?? 'en'}
                     onValueChange={(value) => updateSettings('ui', { language: value })}
                   >
                     <SelectTrigger>
@@ -1604,7 +1624,7 @@ const Settings = () => {
                 <div className="space-y-2">
                   <Label htmlFor="date-format">Date Format</Label>
                   <Select
-                    value={settings.ui.dateFormat}
+                    value={settings.ui?.dateFormat ?? 'DD/MM/YYYY'}
                     onValueChange={(value) => updateSettings('ui', { dateFormat: value })}
                   >
                     <SelectTrigger>
@@ -1621,7 +1641,7 @@ const Settings = () => {
                 <div className="space-y-2">
                   <Label htmlFor="number-format">Number Format</Label>
                   <Select
-                    value={settings.ui.numberFormat}
+                    value={settings.ui?.numberFormat ?? 'en-US'}
                     onValueChange={(value) => updateSettings('ui', { numberFormat: value })}
                   >
                     <SelectTrigger>
@@ -1637,7 +1657,7 @@ const Settings = () => {
                 <div className="space-y-2">
                   <Label htmlFor="dashboard-refresh">Dashboard Refresh (sec)</Label>
                   <Select
-                    value={settings.ui.dashboardRefresh.toString()}
+                    value={String(settings.ui?.dashboardRefresh ?? 30)}
                     onValueChange={(value) => updateSettings('ui', { dashboardRefresh: parseInt(value) })}
                   >
                     <SelectTrigger>
@@ -1662,17 +1682,17 @@ const Settings = () => {
                   </div>
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
-                      <Label htmlFor="zoom-level">Zoom Level: {settings.ui.zoomLevel}%</Label>
+                      <Label htmlFor="zoom-level">Zoom Level: {settings.ui?.zoomLevel ?? 100}%</Label>
                       <div className="flex items-center gap-2">
                         <Button
                           variant="outline"
                           size="sm"
                           onClick={() => {
-                            const newZoom = Math.max(50, settings.ui.zoomLevel - 10);
+                            const newZoom = Math.max(50, (settings.ui?.zoomLevel ?? 100) - 10);
                             updateSettings('ui', { zoomLevel: newZoom });
                             applyZoom(newZoom);
                           }}
-                          disabled={settings.ui.zoomLevel <= 50}
+                          disabled={(settings.ui?.zoomLevel ?? 100) <= 50}
                         >
                           <ZoomOut className="h-4 w-4" />
                         </Button>
@@ -1680,11 +1700,11 @@ const Settings = () => {
                           variant="outline"
                           size="sm"
                           onClick={() => {
-                            const newZoom = Math.min(150, settings.ui.zoomLevel + 10);
+                            const newZoom = Math.min(150, (settings.ui?.zoomLevel ?? 100) + 10);
                             updateSettings('ui', { zoomLevel: newZoom });
                             applyZoom(newZoom);
                           }}
-                          disabled={settings.ui.zoomLevel >= 150}
+                          disabled={(settings.ui?.zoomLevel ?? 100) >= 150}
                         >
                           <ZoomIn className="h-4 w-4" />
                         </Button>
@@ -1697,7 +1717,7 @@ const Settings = () => {
                         min="50"
                         max="150"
                         step="10"
-                        value={settings.ui.zoomLevel}
+                        value={settings.ui?.zoomLevel ?? 100}
                         onChange={(e) => {
                           const newZoom = parseInt(e.target.value);
                           updateSettings('ui', { zoomLevel: newZoom });
@@ -1777,7 +1797,7 @@ const Settings = () => {
                 <div className="flex items-center space-x-2">
                   <Switch
                     id="risk-alerts"
-                    checked={settings.notifications.riskAlerts}
+                    checked={settings.notifications?.riskAlerts ?? true}
                     onCheckedChange={(checked) => updateSettings('notifications', { riskAlerts: checked })}
                   />
                   <Label htmlFor="risk-alerts">Risk Alerts</Label>
@@ -1785,7 +1805,7 @@ const Settings = () => {
                 <div className="flex items-center space-x-2">
                   <Switch
                     id="price-alerts"
-                    checked={settings.notifications.priceAlerts}
+                    checked={settings.notifications?.priceAlerts ?? true}
                     onCheckedChange={(checked) => updateSettings('notifications', { priceAlerts: checked })}
                   />
                   <Label htmlFor="price-alerts">Price Alerts</Label>
@@ -1793,7 +1813,7 @@ const Settings = () => {
                 <div className="flex items-center space-x-2">
                   <Switch
                     id="maturity-alerts"
-                    checked={settings.notifications.maturityAlerts}
+                    checked={settings.notifications?.maturityAlerts ?? true}
                     onCheckedChange={(checked) => updateSettings('notifications', { maturityAlerts: checked })}
                   />
                   <Label htmlFor="maturity-alerts">Alertes d'Échéance</Label>
@@ -1801,7 +1821,7 @@ const Settings = () => {
                 <div className="flex items-center space-x-2">
                   <Switch
                     id="email-notifications"
-                    checked={settings.notifications.emailNotifications}
+                    checked={settings.notifications?.emailNotifications ?? false}
                     onCheckedChange={(checked) => updateSettings('notifications', { emailNotifications: checked })}
                   />
                   <Label htmlFor="email-notifications">Notifications Email</Label>
@@ -1818,10 +1838,10 @@ const Settings = () => {
                     <Input
                       id="var-threshold"
                       type="number"
-                      value={settings.notifications.alertThresholds.varExceeded}
+                      value={settings.notifications?.alertThresholds?.varExceeded ?? 120}
                       onChange={(e) => updateSettings('notifications', { 
                         alertThresholds: { 
-                          ...settings.notifications.alertThresholds, 
+                          ...(settings.notifications?.alertThresholds ?? {}), 
                           varExceeded: parseInt(e.target.value) 
                         }
                       })}
@@ -1834,10 +1854,10 @@ const Settings = () => {
                     <Input
                       id="hedge-threshold"
                       type="number"
-                      value={settings.notifications.alertThresholds.hedgeRatioBelow}
+                      value={settings.notifications?.alertThresholds?.hedgeRatioBelow ?? 50}
                       onChange={(e) => updateSettings('notifications', { 
                         alertThresholds: { 
-                          ...settings.notifications.alertThresholds, 
+                          ...(settings.notifications?.alertThresholds ?? {}), 
                           hedgeRatioBelow: parseInt(e.target.value) 
                         }
                       })}
@@ -1850,10 +1870,10 @@ const Settings = () => {
                     <Input
                       id="maturity-threshold"
                       type="number"
-                      value={settings.notifications.alertThresholds.maturityWithin}
+                      value={settings.notifications?.alertThresholds?.maturityWithin ?? 30}
                       onChange={(e) => updateSettings('notifications', { 
                         alertThresholds: { 
-                          ...settings.notifications.alertThresholds, 
+                          ...(settings.notifications?.alertThresholds ?? {}), 
                           maturityWithin: parseInt(e.target.value) 
                         }
                       })}
@@ -1883,7 +1903,7 @@ const Settings = () => {
                 <div className="flex items-center space-x-2">
                   <Switch
                     id="auto-save"
-                    checked={settings.data.autoSave}
+                    checked={settings.data?.autoSave ?? true}
                     onCheckedChange={(checked) => updateSettings('data', { autoSave: checked })}
                   />
                   <Label htmlFor="auto-save">Auto Save</Label>
@@ -1891,7 +1911,7 @@ const Settings = () => {
                 <div className="space-y-2">
                   <Label htmlFor="backup-frequency">Backup Frequency</Label>
                   <Select
-                    value={settings.data.backupFrequency}
+                    value={settings.data?.backupFrequency ?? 'daily'}
                     onValueChange={(value) => updateSettings('data', { backupFrequency: value })}
                   >
                     <SelectTrigger>
@@ -1910,7 +1930,7 @@ const Settings = () => {
                   <Input
                     id="data-retention"
                     type="number"
-                    value={settings.data.dataRetention}
+                    value={settings.data?.dataRetention ?? 365}
                     onChange={(e) => updateSettings('data', { dataRetention: parseInt(e.target.value) })}
                     min="30"
                     max="3650"
@@ -1919,7 +1939,7 @@ const Settings = () => {
                 <div className="space-y-2">
                   <Label htmlFor="export-format">Default Export Format</Label>
                   <Select
-                    value={settings.data.exportFormat}
+                    value={settings.data?.exportFormat ?? 'xlsx'}
                     onValueChange={(value) => updateSettings('data', { exportFormat: value })}
                   >
                     <SelectTrigger>
@@ -1952,14 +1972,15 @@ const Settings = () => {
                         freight: 'Freight',
                         bunker: 'Bunker'
                       };
-                      const isSelected = settings.domains.selectedDomains.includes(domain);
+                      const selectedDomains = settings.domains?.selectedDomains ?? ['forex'] as string[];
+                      const isSelected = selectedDomains.includes(domain);
                       return (
                         <div key={domain} className="flex items-center space-x-2">
                           <Checkbox
                             id={`domain-${domain}`}
                             checked={isSelected}
                             onCheckedChange={(checked) => {
-                              const currentDomains = settings.domains.selectedDomains;
+                              const currentDomains = settings.domains?.selectedDomains ?? ['forex'] as string[];
                               if (checked) {
                                 // Add domain if not already present
                                 if (!currentDomains.includes(domain)) {
@@ -1994,7 +2015,7 @@ const Settings = () => {
                     })}
                   </div>
                   <p className="text-xs text-muted-foreground mt-3">
-                    Selected: {settings.domains.selectedDomains.length} of 5 domains
+                    Selected: {(settings.domains?.selectedDomains ?? []).length} of 5 domains
                   </p>
                 </div>
               </div>
@@ -2172,7 +2193,7 @@ const Settings = () => {
                 <div className="flex items-center space-x-2">
                   <Switch
                     id="auto-detection"
-                    checked={settings.commodityExposures.autoDetection}
+                    checked={settings.commodityExposures?.autoDetection ?? true}
                     onCheckedChange={(checked) => updateSettings('commodityExposures', { autoDetection: checked })}
                   />
                   <Label htmlFor="auto-detection">Auto-detect Commodity Exposures</Label>
@@ -2180,7 +2201,7 @@ const Settings = () => {
                 <div className="space-y-2">
                   <Label htmlFor="default-maturity">Default Maturity</Label>
                   <Select
-                    value={settings.commodityExposures.defaultMaturity}
+                    value={settings.commodityExposures?.defaultMaturity ?? '3M'}
                     onValueChange={(value) => updateSettings('commodityExposures', { defaultMaturity: value })}
                   >
                     <SelectTrigger>
@@ -2198,7 +2219,7 @@ const Settings = () => {
                 <div className="space-y-2">
                   <Label htmlFor="risk-classification">Risk Classification</Label>
                   <Select
-                    value={settings.commodityExposures.riskClassification}
+                    value={settings.commodityExposures?.riskClassification ?? 'commodity-type'}
                     onValueChange={(value) => updateSettings('commodityExposures', { riskClassification: value })}
                   >
                     <SelectTrigger>
@@ -2215,7 +2236,7 @@ const Settings = () => {
                 <div className="space-y-2">
                   <Label htmlFor="consolidation-level">Consolidation Level</Label>
                   <Select
-                    value={settings.commodityExposures.consolidationLevel}
+                    value={settings.commodityExposures?.consolidationLevel ?? 'entity'}
                     onValueChange={(value) => updateSettings('commodityExposures', { consolidationLevel: value })}
                   >
                     <SelectTrigger>
@@ -2234,7 +2255,7 @@ const Settings = () => {
                   <Input
                     id="exposure-threshold"
                     type="number"
-                    value={settings.commodityExposures.exposureThreshold}
+                    value={settings.commodityExposures?.exposureThreshold ?? 10000}
                     onChange={(e) => updateSettings('commodityExposures', { exposureThreshold: parseInt(e.target.value) })}
                     min="1000"
                     step="1000"
@@ -2243,7 +2264,7 @@ const Settings = () => {
                 <div className="space-y-2">
                   <Label htmlFor="reporting-currency">Reporting Currency</Label>
                   <Select
-                    value={settings.commodityExposures.reportingCurrency}
+                    value={settings.commodityExposures?.reportingCurrency ?? 'USD'}
                     onValueChange={(value) => updateSettings('commodityExposures', { reportingCurrency: value })}
                   >
                     <SelectTrigger>
@@ -2265,7 +2286,7 @@ const Settings = () => {
                 <div className="flex items-center space-x-2">
                   <Switch
                     id="include-pending"
-                    checked={settings.commodityExposures.includePendingTransactions}
+                    checked={settings.commodityExposures?.includePendingTransactions ?? false}
                     onCheckedChange={(checked) => updateSettings('commodityExposures', { includePendingTransactions: checked })}
                   />
                   <Label htmlFor="include-pending">Include Pending Transactions</Label>
@@ -2277,7 +2298,7 @@ const Settings = () => {
               <div className="space-y-4">
                 <h4 className="text-lg font-medium">Maturity Buckets</h4>
                 <div className="grid gap-2 md:grid-cols-3">
-                  {settings.commodityExposures.maturityBuckets.map((bucket, index) => (
+                  {(settings.commodityExposures?.maturityBuckets ?? ['0-3M', '3-6M', '6-12M', '12M+']).map((bucket, index) => (
                     <div key={index} className="p-3 border rounded-lg">
                       <Badge variant="secondary">{bucket}</Badge>
                     </div>
@@ -2495,7 +2516,7 @@ const Settings = () => {
                 <div className="space-y-2">
                   <Label htmlFor="default-instrument">Default Instrument Type</Label>
                   <Select
-                    value={settings.hedgingInstruments.defaultInstrumentType}
+                    value={settings.hedgingInstruments?.defaultInstrumentType ?? 'forward'}
                     onValueChange={(value) => updateSettings('hedgingInstruments', { defaultInstrumentType: value })}
                   >
                     <SelectTrigger>
@@ -2517,7 +2538,7 @@ const Settings = () => {
                   <Input
                     id="auto-hedge-ratio"
                     type="number"
-                    value={settings.hedgingInstruments.autoHedgeRatio}
+                    value={settings.hedgingInstruments?.autoHedgeRatio ?? 80}
                     onChange={(e) => updateSettings('hedgingInstruments', { autoHedgeRatio: parseInt(e.target.value) })}
                     min="0"
                     max="100"
@@ -2528,7 +2549,7 @@ const Settings = () => {
                   <Input
                     id="max-leverage"
                     type="number"
-                    value={settings.hedgingInstruments.maxLeverage}
+                    value={settings.hedgingInstruments?.maxLeverage ?? 10}
                     onChange={(e) => updateSettings('hedgingInstruments', { maxLeverage: parseInt(e.target.value) })}
                     min="1"
                     max="50"
@@ -2537,7 +2558,7 @@ const Settings = () => {
                 <div className="space-y-2">
                   <Label htmlFor="settlement-preferences">Settlement Preferences</Label>
                   <Select
-                    value={settings.hedgingInstruments.settlementPreferences}
+                    value={settings.hedgingInstruments?.settlementPreferences ?? 'cash'}
                     onValueChange={(value) => updateSettings('hedgingInstruments', { settlementPreferences: value })}
                   >
                     <SelectTrigger>
@@ -2561,7 +2582,7 @@ const Settings = () => {
                   <div className="flex items-center space-x-2">
                     <Switch
                       id="counterparty-limits"
-                      checked={settings.hedgingInstruments.counterpartyLimits}
+                      checked={settings.hedgingInstruments?.counterpartyLimits ?? true}
                       onCheckedChange={(checked) => updateSettings('hedgingInstruments', { counterpartyLimits: checked })}
                     />
                     <Label htmlFor="counterparty-limits">Counterparty Limits</Label>
@@ -2569,7 +2590,7 @@ const Settings = () => {
                   <div className="flex items-center space-x-2">
                     <Switch
                       id="credit-risk-assessment"
-                      checked={settings.hedgingInstruments.creditRiskAssessment}
+                      checked={settings.hedgingInstruments?.creditRiskAssessment ?? true}
                       onCheckedChange={(checked) => updateSettings('hedgingInstruments', { creditRiskAssessment: checked })}
                     />
                     <Label htmlFor="credit-risk-assessment">Credit Risk Assessment</Label>
@@ -2577,7 +2598,7 @@ const Settings = () => {
                   <div className="flex items-center space-x-2">
                     <Switch
                       id="margin-requirements"
-                      checked={settings.hedgingInstruments.marginRequirements}
+                      checked={settings.hedgingInstruments?.marginRequirements ?? true}
                       onCheckedChange={(checked) => updateSettings('hedgingInstruments', { marginRequirements: checked })}
                     />
                     <Label htmlFor="margin-requirements">Margin Requirements</Label>
@@ -2585,7 +2606,7 @@ const Settings = () => {
                   <div className="flex items-center space-x-2">
                     <Switch
                       id="approval-workflow"
-                      checked={settings.hedgingInstruments.approvalWorkflow}
+                      checked={settings.hedgingInstruments?.approvalWorkflow ?? false}
                       onCheckedChange={(checked) => updateSettings('hedgingInstruments', { approvalWorkflow: checked })}
                     />
                     <Label htmlFor="approval-workflow">Approval Workflow</Label>
@@ -2598,7 +2619,7 @@ const Settings = () => {
               <div className="space-y-4">
                 <h4 className="text-lg font-medium">Documentation Requirements</h4>
                 <div className="grid gap-2 md:grid-cols-3">
-                  {settings.hedgingInstruments.documentationRequired.map((doc, index) => (
+                  {(settings.hedgingInstruments?.documentationRequired ?? ['ISDA Master Agreement', 'CSA', 'Trade Confirmation']).map((doc, index) => (
                     <div key={index} className="p-3 border rounded-lg">
                       <Badge variant="outline">{doc}</Badge>
                     </div>

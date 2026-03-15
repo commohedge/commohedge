@@ -1,5 +1,14 @@
 import { StrategyComponent } from '../pages/Index';
 
+/** Canonical rounding: 6 decimals for prices (option, forward, spot). */
+function roundPrice(x: number): number {
+  return Math.round(x * 1e6) / 1e6;
+}
+/** Canonical rounding: 4 decimals for rates in %. */
+function roundRate(x: number): number {
+  return Math.round(x * 1e4) / 1e4;
+}
+
 export interface ImportedStrategy {
   id: string;
   name: string;
@@ -67,6 +76,7 @@ export interface HedgingInstrument {
   exportVolatility?: number;      // Volatility used during export
   exportTimeToMaturity?: number;  // Time to maturity used during export
   exportForwardPrice?: number;    // Forward price used during export
+  exportStrike?: number;         // Strike (absolute) at export / add
   // ✅ Export dates from Strategy Builder
   exportStrategyStartDate?: string;  // Strategy Start Date from export
   exportHedgingStartDate?: string;   // Hedging Start Date from export
@@ -343,8 +353,10 @@ class StrategyImportService {
           // Utiliser les informations enrichies si disponibles
           const absoluteStrike = strategyDetail?.absoluteStrike || this.calculateStrike(component, params.spotPrice);
           const effectiveVolatility = strategyDetail?.effectiveVolatility || component.volatility;
-          const realOptionPrice = strategyDetail?.calculatedPrice || periodResult.optionPrices?.[componentIndex]?.price;
-          
+const rawRealOptionPrice = strategyDetail?.calculatedPrice || periodResult.optionPrices?.[componentIndex]?.price;
+          const realOptionPrice = rawRealOptionPrice != null ? roundPrice(rawRealOptionPrice) : undefined;
+          const exportDomRate = (periodResult as { marketData?: { domesticRate?: number } }).marketData?.domesticRate ?? (params.domesticRate !== undefined ? params.domesticRate : params.interestRate);
+
           const instrument: HedgingInstrument = {
             id: instrumentId,
             type: instrumentType,
@@ -369,16 +381,17 @@ class StrategyImportService {
             periodIndex: periodIndex,
             periodDate: periodResult.date,
             timeToMaturity: periodResult.timeToMaturity,
-            forwardPrice: periodResult.forward,
-            realPrice: strategyDetail?.repricingData?.underlyingPrice || periodResult.realPrice,
-            // INFORMATIONS COMPLÈTES DE PRICING POUR ÉLIMINER LES ÉCARTS
-            exportSpotPrice: params.spotPrice, // Spot utilisé lors de l'export
-            // ✅ CORRECTION : Utiliser interestRate si domesticRate n'est pas défini (pour cohérence avec le calcul du forward)
-            exportDomesticRate: params.domesticRate !== undefined ? params.domesticRate : params.interestRate, // Taux utilisé pour calculer le forward lors de l'export
-            exportForeignRate: params.foreignRate, // Taux étranger utilisé lors de l'export
+            forwardPrice: roundPrice(periodResult.forward),
+            realPrice: strategyDetail?.repricingData?.underlyingPrice != null ? roundPrice(strategyDetail.repricingData.underlyingPrice) : (periodResult.realPrice != null ? roundPrice(periodResult.realPrice) : undefined),
+            // INFORMATIONS COMPLÈTES DE PRICING POUR ÉLIMINER LES ÉCARTS (arrondis canoniques)
+            exportSpotPrice: roundPrice(params.spotPrice), // Spot utilisé lors de l'export
+            // Taux par maturité si "Use real interest rate" (marketData.domesticRate), sinon params
+            exportDomesticRate: roundRate(exportDomRate),
+            exportForeignRate: roundRate(params.foreignRate), // Taux étranger utilisé lors de l'export
             exportVolatility: effectiveVolatility, // Volatilité utilisée lors de l'export
             exportTimeToMaturity: periodResult.timeToMaturity, // Time to maturity exact utilisé lors de l'export
-            exportForwardPrice: periodResult.forward, // Forward exact utilisé lors de l'export
+            exportForwardPrice: roundPrice(periodResult.forward), // Forward exact utilisé lors de l'export
+            exportStrike: absoluteStrike, // Strike (absolu) à l'export
             // ✅ Export dates from Strategy Builder
             exportStrategyStartDate: params.strategyStartDate, // Strategy Start Date from export
             exportHedgingStartDate: params.startDate, // Hedging Start Date from export
@@ -390,30 +403,28 @@ class StrategyImportService {
             // Informations de re-pricing complètes
             repricingData: strategyDetail?.repricingData ? {
               ...strategyDetail.repricingData,
-              // Ajouter les paramètres exacts utilisés lors de l'export
-              exportSpotPrice: params.spotPrice,
-              // ✅ CORRECTION : Utiliser interestRate si domesticRate n'est pas défini (pour cohérence avec le calcul du forward)
-              exportDomesticRate: params.domesticRate !== undefined ? params.domesticRate : params.interestRate,
-              exportForeignRate: params.foreignRate,
+              // Ajouter les paramètres exacts utilisés lors de l'export (arrondis canoniques)
+              exportSpotPrice: roundPrice(params.spotPrice),
+              exportDomesticRate: roundRate(exportDomRate),
+              exportForeignRate: roundRate(params.foreignRate),
               exportVolatility: effectiveVolatility,
               exportTimeToMaturity: periodResult.timeToMaturity,
-              exportForwardPrice: periodResult.forward
+              exportForwardPrice: roundPrice(periodResult.forward)
             } : {
               // Créer un objet repricing même si pas fourni
-              underlyingPrice: params.spotPrice,
+              underlyingPrice: roundPrice(params.spotPrice),
               timeToMaturity: periodResult.timeToMaturity,
-              domesticRate: params.domesticRate,
-              foreignRate: params.foreignRate,
+              domesticRate: params.domesticRate != null ? roundRate(params.domesticRate) : undefined,
+              foreignRate: params.foreignRate != null ? roundRate(params.foreignRate) : undefined,
               volatility: effectiveVolatility,
               dividendYield: 0,
               pricingModel: 'Garman-Kohlhagen',
-              exportSpotPrice: params.spotPrice,
-              // ✅ CORRECTION : Utiliser interestRate si domesticRate n'est pas défini (pour cohérence avec le calcul du forward)
-              exportDomesticRate: params.domesticRate !== undefined ? params.domesticRate : params.interestRate,
-              exportForeignRate: params.foreignRate,
+              exportSpotPrice: roundPrice(params.spotPrice),
+              exportDomesticRate: roundRate(exportDomRate),
+              exportForeignRate: roundRate(params.foreignRate),
               exportVolatility: effectiveVolatility,
               exportTimeToMaturity: periodResult.timeToMaturity,
-              exportForwardPrice: periodResult.forward
+              exportForwardPrice: roundPrice(periodResult.forward)
             }
           };
 

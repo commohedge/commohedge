@@ -37,4 +37,5 @@ export interface CalculatorState {
     stressTestScenarios: Record<string, any>;
     useImpliedVol: boolean;
     impliedVolatilities: OptionImpliedVolatility;
+    useRealInterestRate?: boolean;
   } 

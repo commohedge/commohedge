@@ -287,7 +287,7 @@ const Pricers = () => {
         const curvePoints = getOrBuildCurve(symbol, futuresResult.data, refDate);
         if (curvePoints.length >= 2) {
           setPricingInputs(prev => {
-            const dte = Math.max(0, Math.round((prev.timeToMaturity ?? 1) * 365));
+            const dte = Math.max(0, Math.round((prev.timeToMaturity ?? 1) * 365.25));
             const interpolated = interpolatePrice(curvePoints, dte);
             const spot = interpolated != null ? interpolated : parseFloat(
               (futuresResult.data!.find(f => f.month.toLowerCase().includes('cash')) || futuresResult.data![0]).last.replace(/,/g, '')
@@ -428,7 +428,7 @@ const Pricers = () => {
     const initialRate = (fixedRates?.USD || 4.5);
     return {
     startDate: new Date().toISOString().split('T')[0],
-    maturityDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 1 an par défaut
+    maturityDate: new Date(Date.now() + 365.25 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 1 an par défaut
     spotPrice: 75.50, // WTI default price
       interestRate: initialRate, // 🎯 Risk-free rate depuis Settings (en pourcentage)
     timeToMaturity: 1.0,
@@ -445,7 +445,7 @@ const Pricers = () => {
     const refDate = new Date();
     const curvePoints = getOrBuildCurve(selectedCurrencyPair, tppFutures, refDate);
     if (curvePoints.length < 2) return;
-    const dte = Math.max(0, Math.round((pricingInputs.timeToMaturity ?? 1) * 365));
+    const dte = Math.max(0, Math.round((pricingInputs.timeToMaturity ?? 1) * 365.25));
     const interpolated = interpolatePrice(curvePoints, dte);
     if (interpolated != null) {
       setPricingInputs(prev => (prev.spotPrice !== interpolated ? { ...prev, spotPrice: interpolated } : prev));
@@ -705,7 +705,7 @@ const Pricers = () => {
     const absoluteStrike = strategyComponent.strikeType === 'percent'
       ? pricingInputs.spotPrice * (strategyComponent.strike / 100)
       : strategyComponent.strike;
-    const dte = Math.max(1, Math.round(pricingInputs.timeToMaturity * 365));
+    const dte = Math.max(1, Math.round(pricingInputs.timeToMaturity * 365.25));
     const type: 'call' | 'put' = selectedInstrument.includes('put') ? 'put' : 'call';
     const iv = interpolateTppIV(absoluteStrike, dte, type);
     // interpolateTppIV returns decimal (0.30); volatility field expects percentage (30)
@@ -725,7 +725,7 @@ const Pricers = () => {
     const absoluteStrike = strategyComponent.strikeType === 'percent'
       ? pricingInputs.spotPrice * (strategyComponent.strike / 100)
       : strategyComponent.strike;
-    const dte = Math.max(1, Math.round(pricingInputs.timeToMaturity * 365));
+    const dte = Math.max(1, Math.round(pricingInputs.timeToMaturity * 365.25));
     const type: 'call' | 'put' = selectedInstrument.includes('put') ? 'put' : 'call';
     const iv = interpolateTppIV(absoluteStrike, dte, type);
     if (iv !== null && iv > 0) {
