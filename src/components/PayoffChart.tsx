@@ -17,9 +17,16 @@ import { Label } from "@/components/ui/label";
 import { BloombergChart } from "./BloombergChart";
 import { useThemeContext } from "@/hooks/ThemeProvider";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { cn } from "@/lib/utils";
 
 interface PayoffChartProps {
   data: Array<{ price: number; payoff: number }>;
+  /** Second payoff series at export-time parameters (spot, rates, vol from export). */
+  exportPayoffData?: Array<{ price: number; payoff: number }>;
+  /** Spot used for reference lines when "Export" payoff source is selected. */
+  spotExport?: number;
+  /** Show Valuation date / Export toggle (payoff curve + reference spot). */
+  showPayoffSourceTabs?: boolean;
   strategy: any[];
   spot: number;
   currencyPair: any;
@@ -373,6 +380,9 @@ const CustomTooltip = ({
 
 const PayoffChart: React.FC<PayoffChartProps> = ({ 
   data, 
+  exportPayoffData,
+  spotExport,
+  showPayoffSourceTabs = false,
   strategy, 
   spot, 
   currencyPair,
@@ -385,12 +395,28 @@ const PayoffChart: React.FC<PayoffChartProps> = ({
 }) => {
   const [activeTab, setActiveTab] = useState<"payoff" | "hedging" | "delta" | "gamma" | "theta" | "vega" | "rho">(defaultTab);
   const [showPremium, setShowPremium] = useState(includePremium);
+  const [payoffSource, setPayoffSource] = useState<"valuation" | "export">("valuation");
   const { theme } = useThemeContext();
   const isBloombergTheme = theme === 'bloomberg';
   
   const commodityHedgingData = useMemo(() => {
     return generateCommodityHedgingData(strategy, spot, showPremium, realPremium); // ✅ Pass real premium
   }, [strategy, spot, showPremium, realPremium]); // ✅ Add realPremium to dependencies
+
+  const hasExportPayoff = Boolean(exportPayoffData && exportPayoffData.length > 0);
+  const payoffChartData = useMemo(() => {
+    if (showPayoffSourceTabs && payoffSource === "export" && hasExportPayoff) {
+      return exportPayoffData!;
+    }
+    return data;
+  }, [showPayoffSourceTabs, payoffSource, hasExportPayoff, exportPayoffData, data]);
+
+  const referenceSpot = useMemo(() => {
+    if (showPayoffSourceTabs && payoffSource === "export" && spotExport != null && spotExport > 0) {
+      return spotExport;
+    }
+    return spot;
+  }, [showPayoffSourceTabs, payoffSource, spotExport, spot]);
   
   // Get strategy type for display
   const getStrategyName = () => {
@@ -405,13 +431,12 @@ const PayoffChart: React.FC<PayoffChartProps> = ({
     return "Multi-Leg Hedging Strategy";
   };
 
-  // Configure reference lines based on strategy
-  const getReferenceLines = () => {
+  // Configure reference lines based on strategy (spotRef = valuation or export spot for % strikes / barriers)
+  const getReferenceLines = (spotRef: number) => {
     const lines = [
-      // Current spot line
       <ReferenceLine
         key="spot"
-        x={spot}
+        x={spotRef}
         stroke="#6B7280"
         strokeWidth={2}
         strokeDasharray="3 3"
@@ -424,13 +449,11 @@ const PayoffChart: React.FC<PayoffChartProps> = ({
       />
     ];
 
-    // Add strategy-specific reference lines
     strategy.forEach((option, index) => {
       const strike = option.strikeType === 'percent' 
-        ? spot * (option.strike / 100) 
+        ? spotRef * (option.strike / 100) 
         : option.strike;
 
-      // Strike line
       lines.push(
         <ReferenceLine
           key={`strike-${index}`}
@@ -447,10 +470,9 @@ const PayoffChart: React.FC<PayoffChartProps> = ({
         />
       );
 
-      // Barrier lines for barrier options
       if (option.barrier && (option.type.includes('knockout') || option.type.includes('knockin'))) {
         const barrier = option.barrierType === 'percent' 
-          ? spot * (option.barrier / 100) 
+          ? spotRef * (option.barrier / 100) 
           : option.barrier;
 
         const isKnockout = option.type.includes('knockout');
@@ -477,15 +499,53 @@ const PayoffChart: React.FC<PayoffChartProps> = ({
     return lines;
   };
 
+  const payoffSourceToggle =
+    showPayoffSourceTabs && hasExportPayoff ? (
+      <div className="space-y-1.5">
+        <p className="text-xs text-muted-foreground">
+          Export vs valuation-date payoff, in P&amp;L and commodity hedging formats.
+        </p>
+        <div className="inline-flex rounded-lg border border-border bg-muted/40 p-1 gap-1">
+          <button
+            type="button"
+            onClick={() => setPayoffSource("valuation")}
+            className={cn(
+              "rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
+              payoffSource === "valuation"
+                ? "bg-background text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
+            )}
+          >
+            Valuation date
+          </button>
+          <button
+            type="button"
+            onClick={() => setPayoffSource("export")}
+            className={cn(
+              "rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
+              payoffSource === "export"
+                ? "bg-background text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
+            )}
+          >
+            Export
+          </button>
+        </div>
+      </div>
+    ) : null;
+
   // Si le thème Bloomberg est activé, utiliser le BloombergChart spécialisé
   if (isBloombergTheme) {
     return (
       <Card className={`${className} bloomberg-theme`}>
         <CardHeader className="pb-2 border-b">
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-xl font-semibold text-orange-500">
-              {activeTab === "payoff" ? "PAYOFF CHART" : "COMMODITY HEDGING PROFILE"}
-            </CardTitle>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="space-y-2 min-w-0">
+              <CardTitle className="text-xl font-semibold text-orange-500">
+                {activeTab === "payoff" ? "PAYOFF CHART" : "COMMODITY HEDGING PROFILE"}
+              </CardTitle>
+              {activeTab === "payoff" && payoffSourceToggle}
+            </div>
             <Tabs 
               value={activeTab} 
               onValueChange={(value) => setActiveTab(value as "payoff" | "hedging")}
@@ -504,8 +564,8 @@ const PayoffChart: React.FC<PayoffChartProps> = ({
         <CardContent className="pt-4 px-2">
           {activeTab === "payoff" ? (
             <BloombergChart 
-              data={data}
-              spotPrice={spot}
+              data={payoffChartData}
+              spotPrice={referenceSpot}
               title="Payoff Chart"
               height={400}
             />
@@ -601,11 +661,14 @@ const PayoffChart: React.FC<PayoffChartProps> = ({
   return (
     <Card className={className}>
       <CardHeader className="pb-2 border-b">
-        <div className="flex items-center justify-between">
-          <CardTitle className="text-xl font-semibold">
-            {activeTab === "payoff" ? "Payoff Chart" : "Commodity Hedging Profile"}
-          </CardTitle>
-          <div className="flex items-center gap-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="space-y-2 min-w-0 flex-1">
+            <CardTitle className="text-xl font-semibold">
+              {activeTab === "payoff" ? "Payoff Chart" : "Commodity Hedging Profile"}
+            </CardTitle>
+            {activeTab === "payoff" && payoffSourceToggle}
+          </div>
+          <div className="flex items-center gap-4 shrink-0">
             {showPremiumToggle && (
               <div className="flex items-center space-x-2">
                 <Switch
@@ -641,7 +704,7 @@ const PayoffChart: React.FC<PayoffChartProps> = ({
       <CardContent className="pt-4 px-2">
         {activeTab === "payoff" && (
           <ResponsiveContainer width="100%" height={400}>
-            <LineChart data={data} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+            <LineChart data={payoffChartData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis
                 dataKey="price" 
@@ -657,7 +720,7 @@ const PayoffChart: React.FC<PayoffChartProps> = ({
               />
               <Tooltip content={<CustomTooltip currencyPair={currencyPair} />} />
               <Legend />
-              {getReferenceLines()}
+              {getReferenceLines(referenceSpot)}
               <Line
                 type="monotone"
                 dataKey="payoff"

@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
+import { cn } from "@/lib/utils";
 import { Layout } from "@/components/Layout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -7,10 +9,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectGroup, SelectLabel } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
 import { useTickerPeekPro, type TppCurrencyData } from "@/hooks/useTickerPeekPro";
 import { 
@@ -29,9 +29,15 @@ import {
   AlertCircle,
   Calculator,
   RefreshCw,
-  Loader2
+  Loader2,
+  ChevronDown,
+  ChevronRight,
+  Layers,
 } from "lucide-react";
+import PayoffChart from "@/components/PayoffChart";
 import StrategyImportService, { HedgingInstrument } from "@/services/StrategyImportService";
+import type { StrategyComponent } from "@/pages/Index";
+import type { HedgingInstrumentDetailSnapshot } from "@/pages/HedgingInstrumentDetail";
 import {
   barrierMonteCarloNumSteps,
   calculateBarrierOptionClosedForm,
@@ -56,6 +62,11 @@ import {
   roundPrice4,
   roundPrice6,
   strategyBuilderAnnualPercentToDecimal,
+  calculateStrategyPayoffAtPrice,
+  calculateBlackScholesSpotPrice,
+  calculateGarmanKohlhagenPrice,
+  generateStrategyBuilderPayoffDiagramPaths,
+  discountFactorContinuous,
 } from "@/services/PricingService";
 import { Commodity } from "@/services/commodityApi";
 import { CURRENCY_PAIRS } from "@/pages/Index";
@@ -147,6 +158,233 @@ function parseValuationDateToLocal(valuationDate: string): Date {
   return new Date(y, (m || 1) - 1, d || 1);
 }
 
+/** Human-readable pricing model for detail view / navigation snapshot (matches table logic). */
+function getPricingModelLabel(
+  instrument: HedgingInstrument,
+  optionPricingModel: "black-76" | "black-scholes" | "garman-kohlhagen" | "monte-carlo"
+): string {
+  const optionType = instrument.type.toLowerCase();
+  if (optionType.includes("double")) return "closed-form (double)";
+  if (
+    optionType.includes("knock-out") ||
+    optionType.includes("knock-in") ||
+    optionType.includes("barrier") ||
+    optionType.includes("ko ") ||
+    optionType.includes("ki ") ||
+    optionType.includes("knockout") ||
+    optionType.includes("knockin") ||
+    optionType.includes("reverse")
+  ) {
+    return "closed-form";
+  }
+  if (optionType.includes("touch") || optionType.includes("binary") || optionType.includes("digital")) {
+    return "monte-carlo";
+  }
+  if (optionType === "vanilla call" || optionType === "vanilla put") {
+    return optionPricingModel === "monte-carlo" ? "monte-carlo" : "black-scholes";
+  }
+  if (optionType === "forward") return "commodity-forward";
+  if (optionType === "swap") return "commodity-swap";
+  if (optionType.includes("call") && !optionType.includes("knock")) {
+    return optionPricingModel === "monte-carlo" ? "monte-carlo" : "black-scholes";
+  }
+  if (optionType.includes("put") && !optionType.includes("knock")) {
+    return optionPricingModel === "monte-carlo" ? "monte-carlo" : "black-scholes";
+  }
+  return "unknown";
+}
+
+/** Receivable / payable / long / short for exposure grouping (matches Exposures / Strategy Builder). */
+function formatExposureDirection(v?: HedgingInstrument["volumeType"] | string): string {
+  if (v == null || v === "" || v === "__none__") return "—";
+  const map: Record<string, string> = {
+    receivable: "RECEIVABLE",
+    payable: "PAYABLE",
+    long: "LONG",
+    short: "SHORT",
+  };
+  return map[String(v)] || String(v).toUpperCase();
+}
+
+function formatExposureAmountFr(n: number): string {
+  return n.toLocaleString("fr-FR", { maximumFractionDigits: 3 });
+}
+
+/** Pair label for exposure header (e.g. WTI/USD, EUR/USD). */
+function formatExposurePairLabel(currency: string): string {
+  const c = currency?.trim() || "";
+  if (!c) return "—";
+  const p = CURRENCY_PAIRS.find((x) => x.symbol === c);
+  if (p) return `${p.symbol}/${p.quote}`;
+  return c.includes("/") ? c : c;
+}
+
+function averageFinite(nums: (number | undefined | null)[]): number | null {
+  const v = nums.filter((x): x is number => x != null && Number.isFinite(x));
+  return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null;
+}
+
+/** Map hedging table type labels to Strategy Builder component types (same as imported strategies). */
+function mapHedgingInstrumentLabelToStrategyType(typeLabel: string): StrategyComponent["type"] {
+  const t = typeLabel.trim().toLowerCase();
+  const direct: Partial<Record<string, StrategyComponent["type"]>> = {
+    "vanilla call": "call",
+    "vanilla put": "put",
+    forward: "forward",
+    swap: "swap",
+    "knock-out call": "call-knockout",
+    "reverse knock-out call": "call-reverse-knockout",
+    "double knock-out call": "call-double-knockout",
+    "knock-out put": "put-knockout",
+    "reverse knock-out put": "put-reverse-knockout",
+    "double knock-out put": "put-double-knockout",
+    "knock-in call": "call-knockin",
+    "reverse knock-in call": "call-reverse-knockin",
+    "double knock-in call": "call-double-knockin",
+    "knock-in put": "put-knockin",
+    "reverse knock-in put": "put-reverse-knockin",
+    "double knock-in put": "put-double-knockin",
+    "one-touch (beta)": "one-touch",
+    "double-touch (beta)": "double-touch",
+    "no-touch (beta)": "no-touch",
+    "double-no-touch (beta)": "double-no-touch",
+    "range binary (beta)": "range-binary",
+    "outside binary (beta)": "outside-binary",
+  };
+  if (direct[t]) return direct[t]!;
+  return "call";
+}
+
+function hedgingLegsToStrategyComponents(legs: HedgingInstrument[]): StrategyComponent[] {
+  return legs.map((inst) => {
+    if (inst.originalComponent) {
+      const oc = inst.originalComponent;
+      return {
+        ...oc,
+        barrierType: oc.barrierType ?? "percent",
+      };
+    }
+    const st = mapHedgingInstrumentLabelToStrategyType(inst.type);
+    const vol = inst.volatility ?? inst.exportVolatility ?? inst.impliedVolatility ?? 20;
+    const qty = inst.quantity ?? 100;
+    const strike = inst.strike ?? inst.exportStrike ?? 0;
+    const o: StrategyComponent = {
+      type: st,
+      strike,
+      strikeType: "absolute",
+      volatility: vol,
+      quantity: qty,
+      barrierType: "absolute",
+    };
+    if (inst.barrier != null) o.barrier = inst.barrier;
+    if (inst.secondBarrier != null) o.secondBarrier = inst.secondBarrier;
+    if (inst.rebate != null) o.rebate = inst.rebate;
+    return o;
+  });
+}
+
+/** Same payoff diagram logic as Strategy Builder `calculatePayoff` (Index.tsx). */
+function buildPayoffDiagramDataLikeStrategyBuilder(
+  strategy: StrategyComponent[],
+  ctx: {
+    spotPrice: number;
+    domesticRatePercent: number;
+    foreignRatePercent: number;
+    interestRatePercent: number;
+    sigmaDecimal: number;
+    optionPricingModel: "black-76" | "black-scholes" | "garman-kohlhagen" | "monte-carlo";
+  }
+): Array<{ price: number; payoff: number }> {
+  if (strategy.length === 0) return [];
+  const {
+    spotPrice,
+    domesticRatePercent,
+    foreignRatePercent,
+    interestRatePercent,
+    sigmaDecimal,
+    optionPricingModel,
+  } = ctx;
+  const priceRange = Array.from({ length: 101 }, (_, i) => spotPrice * (0.5 + i * 0.01));
+  const numSteps = 252;
+  const paths = generateStrategyBuilderPayoffDiagramPaths({
+    spotPrice,
+    domesticRatePercent,
+    foreignRatePercent,
+    sigmaDecimal,
+    numSteps,
+    numSimulations: 500,
+  });
+
+  return priceRange.map((price) => {
+    let totalPayoff = 0;
+    strategy.forEach((option) => {
+      const strike =
+        option.strikeType === "percent" ? spotPrice * (option.strike / 100) : option.strike;
+      const quantity = option.quantity / 100;
+      let optionPremium: number;
+
+      if (option.type === "call" || option.type === "put") {
+        if (optionPricingModel === "garman-kohlhagen") {
+          optionPremium = calculateGarmanKohlhagenPrice(
+            option.type,
+            spotPrice,
+            strike,
+            strategyBuilderAnnualPercentToDecimal(interestRatePercent),
+            strategyBuilderAnnualPercentToDecimal(interestRatePercent),
+            1,
+            option.volatility / 100
+          );
+        } else {
+          optionPremium = calculateBlackScholesSpotPrice(
+            option.type,
+            spotPrice,
+            strike,
+            domesticRatePercent / 100,
+            1,
+            option.volatility / 100
+          );
+        }
+      } else if (option.type.includes("knockout") || option.type.includes("knockin")) {
+        const barrier =
+          option.barrierType === "percent"
+            ? spotPrice * ((option.barrier ?? 0) / 100)
+            : option.barrier ?? 0;
+        const secondBarrier = option.type.includes("double")
+          ? option.barrierType === "percent"
+            ? spotPrice * ((option.secondBarrier ?? 0) / 100)
+            : option.secondBarrier
+          : undefined;
+        optionPremium = calculatePricesFromPaths(
+          option.type,
+          spotPrice,
+          strike,
+          strategyBuilderAnnualPercentToDecimal(interestRatePercent),
+          numSteps,
+          paths,
+          barrier,
+          secondBarrier
+        );
+      } else if (option.type === "swap" || option.type === "forward") {
+        optionPremium = 0;
+      } else if (
+        ["one-touch", "no-touch", "double-touch", "double-no-touch", "range-binary", "outside-binary"].includes(
+          option.type
+        )
+      ) {
+        const rebateDecimal = (option.rebate || 5) / 100;
+        optionPremium = 0.5 * rebateDecimal * discountFactorContinuous(domesticRatePercent / 100, 1);
+      } else {
+        optionPremium = 0;
+      }
+
+      const payoff = calculateStrategyPayoffAtPrice([option], price, spotPrice);
+      const netPayoff = payoff - optionPremium;
+      totalPayoff += netPayoff * quantity;
+    });
+    return { price, payoff: totalPayoff };
+  });
+}
+
 // Note: keep all pricing-related helpers centralized in PricingService.
 
 // Interface pour les paramètres de marché par commodity
@@ -180,10 +418,10 @@ interface CommodityMarketData {
  * ✅ OPTIONS VANILLES (call/put) : calculateBlack76Price / calculateVanillaOptionMonteCarlo (PricingService)
  */
 const HedgingInstruments = () => {
+  const navigate = useNavigate();
   const { toast } = useToast();
   const [selectedTab, setSelectedTab] = useState("all");
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
-  const [showExportColumns, setShowExportColumns] = useState(false);
   
   // ── Interest Rates from Rate Explorer ──
   const {
@@ -260,7 +498,25 @@ const HedgingInstruments = () => {
   );
   const [filterByPortfolio, setFilterByPortfolio] = useState<string>("");
   const [filterByCounterparty, setFilterByCounterparty] = useState<string>("");
+  const [filterByStrategy, setFilterByStrategy] = useState<string>("");
+  const [instrumentSearchQuery, setInstrumentSearchQuery] = useState("");
+  /** Primary table layout: flat by instrument, grouped by strategy, or by commodity exposure */
+  const [displayView, setDisplayView] = useState<"instrument" | "strategy" | "exposure">("instrument");
+  /** Secondary row when displayView === "strategy" (All = no extra filter) */
+  const [strategyViewSegment, setStrategyViewSegment] = useState<string>("all");
+  /** Secondary row when displayView === "exposure" */
+  const [exposureViewSegment, setExposureViewSegment] = useState<string>("all");
+  /** Strategy card view: expanded legs table */
+  const [strategyExpandedKey, setStrategyExpandedKey] = useState<string | null>(null);
+  const [strategyPayoffDialogKey, setStrategyPayoffDialogKey] = useState<string | null>(null);
   const [isAddPortfolioOpen, setIsAddPortfolioOpen] = useState(false);
+
+  useEffect(() => {
+    if (displayView !== "strategy") {
+      setStrategyPayoffDialogKey(null);
+      setStrategyExpandedKey(null);
+    }
+  }, [displayView]);
   const [newPortfolioName, setNewPortfolioName] = useState("");
   const [isAddCounterpartyOpen, setIsAddCounterpartyOpen] = useState(false);
   const [newCounterpartyName, setNewCounterpartyName] = useState("");
@@ -602,7 +858,6 @@ const HedgingInstruments = () => {
 
   // Dialog states for view and edit actions
   const [selectedInstrument, setSelectedInstrument] = useState<HedgingInstrument | null>(null);
-  const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
 
   // Pricing model states - récupérer depuis le localStorage pour utiliser les mêmes paramètres que Strategy Builder
@@ -1762,10 +2017,8 @@ const HedgingInstruments = () => {
     });
   };
 
-  // View instrument function
-  const viewInstrument = (instrument: HedgingInstrument) => {
-    setSelectedInstrument(instrument);
-    setIsViewDialogOpen(true);
+  const goToInstrumentDetail = (instrument: HedgingInstrument, snapshot: HedgingInstrumentDetailSnapshot) => {
+    navigate(`/hedging/instrument/${encodeURIComponent(instrument.id)}`, { state: { snapshot } });
   };
 
   // Edit instrument function
@@ -1791,9 +2044,22 @@ const HedgingInstruments = () => {
     });
   };
 
-  // ✅ OPTIMISATION : Memoization des calculs coûteux (tab + portfolio + counterparty)
+  const strategyNameOptions = useMemo(() => {
+    const names = instruments
+      .map((i) => i.strategyName)
+      .filter((s): s is string => typeof s === "string" && s.trim() !== "");
+    return [...new Set(names)].sort((a, b) => a.localeCompare(b));
+  }, [instruments]);
+
+  const commodityExposureOptions = useMemo(
+    () => [...new Set(instruments.map((i) => i.currency).filter(Boolean))].sort() as string[],
+    [instruments]
+  );
+
+  // ✅ OPTIMISATION : Memoization des calculs coûteux (tab + portfolio + counterparty + search + strategy + view mode)
   const filteredInstruments = useMemo(() => {
-    return instruments.filter(instrument => {
+    const q = instrumentSearchQuery.trim().toLowerCase();
+    return instruments.filter((instrument) => {
     const isOption = instrument.type.includes("Call") || 
                     instrument.type.includes("Put") || 
                     instrument.type === "Collar" ||
@@ -1802,18 +2068,335 @@ const HedgingInstruments = () => {
                     instrument.type.includes("Digital") ||
                     instrument.type.includes("Knock");
     
-    const matchesTab = selectedTab === "all" || 
+    const matchesInstrumentTypeTab =
+      displayView !== "instrument" ||
+      (selectedTab === "all" || 
                       (selectedTab === "forwards" && instrument.type === "Forward") ||
                       (selectedTab === "options" && isOption) ||
                       (selectedTab === "swaps" && instrument.type === "Swap") ||
-                      (selectedTab === "hedge-accounting" && instrument.hedge_accounting);
+                      (selectedTab === "hedge-accounting" && instrument.hedge_accounting));
+
+    const matchesStrategyViewSegment =
+      displayView !== "strategy" ||
+      strategyViewSegment === "all" ||
+      (instrument.strategyName || "") === strategyViewSegment;
+
+    const matchesExposureViewSegment =
+      displayView !== "exposure" ||
+      exposureViewSegment === "all" ||
+      (instrument.currency || "") === exposureViewSegment;
     
     const matchesPortfolio = !filterByPortfolio || (instrument.portfolio || "") === filterByPortfolio;
     const matchesCounterparty = !filterByCounterparty || (instrument.counterparty || "") === filterByCounterparty;
+    const matchesStrategy =
+      !filterByStrategy || (instrument.strategyName || "") === filterByStrategy;
+
+    const cpLabel =
+      counterparties.find((c) => c.id === instrument.counterparty)?.name || instrument.counterparty || "";
+    const pfLabel =
+      portfolios.find((p) => p.id === instrument.portfolio)?.name || instrument.portfolio || "";
+    const matchesSearch =
+      !q ||
+      [
+        instrument.id,
+        instrument.type,
+        instrument.currency,
+        instrument.counterparty,
+        cpLabel,
+        instrument.portfolio,
+        pfLabel,
+        instrument.strategyName,
+        instrument.status,
+        instrument.maturity,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase()
+        .includes(q);
     
-    return matchesTab && matchesPortfolio && matchesCounterparty;
+    return (
+      matchesInstrumentTypeTab &&
+      matchesStrategyViewSegment &&
+      matchesExposureViewSegment &&
+      matchesPortfolio &&
+      matchesCounterparty &&
+      matchesStrategy &&
+      matchesSearch
+    );
   });
-  }, [instruments, selectedTab, filterByPortfolio, filterByCounterparty]);
+  }, [
+    instruments,
+    displayView,
+    selectedTab,
+    strategyViewSegment,
+    exposureViewSegment,
+    filterByPortfolio,
+    filterByCounterparty,
+    filterByStrategy,
+    instrumentSearchQuery,
+    counterparties,
+    portfolios,
+  ]);
+
+  const HEDGING_TABLE_COL_COUNT = 21;
+
+  type HedgingTableDisplayItem =
+    | { kind: "group"; key: string; title: string }
+    | { kind: "data"; instrument: HedgingInstrument };
+
+  const hedgingTableDisplayItems = useMemo((): HedgingTableDisplayItem[] => {
+    if (displayView === "instrument") {
+      return filteredInstruments.map((instrument) => ({ kind: "data" as const, instrument }));
+    }
+    return [];
+  }, [displayView, filteredInstruments]);
+
+  type StrategyViewSummary = {
+    key: string;
+    name: string;
+    legs: HedgingInstrument[];
+    legCount: number;
+    notionalSum: number;
+    mtmDollarSum: number;
+    payoffGlobal: number;
+    exposureLabel: string;
+    maturityRange: string;
+    legPayoffPoints: { id: string; label: string; mtmDollar: number }[];
+  };
+
+  const strategyViewSummaries = useMemo((): StrategyViewSummary[] => {
+    if (displayView !== "strategy") return [];
+    const map = new Map<string, HedgingInstrument[]>();
+    for (const i of filteredInstruments) {
+      const label = i.strategyName?.trim() || "(No strategy)";
+      if (!map.has(label)) map.set(label, []);
+      map.get(label)!.push(i);
+    }
+    const keys = [...map.keys()].sort((a, b) => a.localeCompare(b));
+    return keys.map((name) => {
+      const legs = map.get(name)!;
+      let notionalSum = 0;
+      let mtmDollarSum = 0;
+      let minM: string | null = null;
+      let maxM: string | null = null;
+      const comms = new Set<string>();
+      const legPayoffPoints: { id: string; label: string; mtmDollar: number }[] = [];
+      for (const inst of legs) {
+        if (inst.currency) comms.add(inst.currency);
+        const unitPrice = inst.realOptionPrice || inst.premium || 0;
+        const todayPrice = calculateTodayPrice(inst);
+        const isExportedStrategy = inst.exportSpotPrice && inst.exportTimeToMaturity;
+        const initialPrice = isExportedStrategy ? unitPrice : (inst.premium || 0);
+        const quantity = inst.quantity ?? 1;
+        const isShort = quantity < 0;
+        const mtmValue = isShort ? initialPrice - todayPrice : todayPrice - initialPrice;
+        const mtmDollar = mtmValue * Math.abs(inst.notional);
+        mtmDollarSum += mtmDollar;
+        const volumeToHedge = inst.notional;
+        const calculatedNotional = unitPrice * volumeToHedge;
+        const displayedNotional = calculatedNotional > 0 ? calculatedNotional : inst.notional;
+        notionalSum += displayedNotional;
+        const shortLabel =
+          inst.id.length > 14 ? `${inst.id.slice(0, 10)}…` : inst.id;
+        legPayoffPoints.push({ id: inst.id, label: shortLabel, mtmDollar });
+        const m = inst.maturity;
+        if (m) {
+          if (!minM || m < minM) minM = m;
+          if (!maxM || m > maxM) maxM = m;
+        }
+      }
+      const exposureLabel = [...comms].sort().join(", ") || "—";
+      const maturityRange =
+        minM && maxM ? `Maturity ${minM} → ${maxM}` : minM || maxM ? `Maturity ${minM || maxM}` : "Maturity —";
+      return {
+        key: name,
+        name,
+        legs,
+        legCount: legs.length,
+        notionalSum,
+        mtmDollarSum,
+        payoffGlobal: mtmDollarSum,
+        exposureLabel,
+        maturityRange,
+        legPayoffPoints,
+      };
+    });
+  }, [displayView, filteredInstruments, valuationDate, commodityMarketData, instruments, useRealMarketPrices, realTimeVolByInstrumentId]);
+
+  type ExposureViewGroup = {
+    key: string;
+    pairLabel: string;
+    currency: string;
+    maturity: string;
+    directionLabel: string;
+    legs: HedgingInstrument[];
+    amountSum: number;
+    amountUnit: string;
+    hedgeRequests: number;
+    strategyCount: number;
+    legacyNoLink: boolean;
+    notionalSum: number;
+    targetRate: number | null;
+    plRate: number | null;
+  };
+
+  const exposureViewGroups = useMemo((): ExposureViewGroup[] => {
+    if (displayView !== "exposure") return [];
+    const map = new Map<string, HedgingInstrument[]>();
+    for (const i of filteredInstruments) {
+      const cur = i.currency?.trim() || "—";
+      const mat = i.maturity?.trim() || "—";
+      const vt = i.volumeType ?? "__none__";
+      const groupKey = `${cur}::${mat}::${vt}`;
+      if (!map.has(groupKey)) map.set(groupKey, []);
+      map.get(groupKey)!.push(i);
+    }
+    const keys = [...map.keys()].sort((a, b) => a.localeCompare(b));
+    const out: ExposureViewGroup[] = [];
+    for (const groupKey of keys) {
+      const legs = map.get(groupKey)!;
+      const first = legs[0];
+      const cur = first.currency?.trim() || "—";
+      const mat = first.maturity?.trim() || "—";
+      const pairLabel = formatExposurePairLabel(cur);
+      const pairMeta = CURRENCY_PAIRS.find((x) => x.symbol === cur);
+      const amountUnit = pairMeta?.base || cur;
+      const directionLabel = formatExposureDirection(first.volumeType);
+      let amountSum = 0;
+      let notionalSum = 0;
+      const stratNames = new Set<string>();
+      let legacyNoLink = false;
+      for (const inst of legs) {
+        const ev = inst.exposureVolume ?? inst.rawVolume;
+        if (ev != null && Number.isFinite(ev)) amountSum += ev;
+        else if (inst.notional != null && Number.isFinite(inst.notional)) amountSum += inst.notional;
+        if (inst.strategyName?.trim()) stratNames.add(inst.strategyName.trim());
+        if (!inst.periodDate?.trim()) legacyNoLink = true;
+        // Same as main table "Notional" column: volume (not premium × volume).
+        notionalSum += inst.notional ?? 0;
+      }
+      const forwards = averageFinite(
+        legs.map((l) => (l.exportForwardPrice != null && l.exportForwardPrice > 0 ? l.exportForwardPrice : l.forwardPrice))
+      );
+      const spots = averageFinite(legs.map((l) => l.impliedSpotPrice ?? l.exportSpotPrice));
+      const targetRate = forwards;
+      const plRate = spots;
+      out.push({
+        key: groupKey,
+        pairLabel,
+        currency: cur,
+        maturity: mat,
+        directionLabel,
+        legs: [...legs].sort((a, b) => {
+          const s = (a.strategyName || "").localeCompare(b.strategyName || "");
+          if (s !== 0) return s;
+          return a.id.localeCompare(b.id);
+        }),
+        amountSum,
+        amountUnit,
+        hedgeRequests: 0,
+        strategyCount: stratNames.size,
+        legacyNoLink,
+        notionalSum,
+        targetRate,
+        plRate,
+      });
+    }
+    out.sort((a, b) => {
+      const p = a.pairLabel.localeCompare(b.pairLabel);
+      if (p !== 0) return p;
+      const m = a.maturity.localeCompare(b.maturity);
+      if (m !== 0) return m;
+      return a.directionLabel.localeCompare(b.directionLabel);
+    });
+    return out;
+  }, [displayView, filteredInstruments]);
+
+  /** Strategy Builder–style payoff diagram when "Show payoff" is opened (same pipeline as Index `calculatePayoff`). */
+  const strategyPayoffChartModel = useMemo(() => {
+    if (strategyPayoffDialogKey == null) return null;
+    const summary = strategyViewSummaries.find((s) => s.key === strategyPayoffDialogKey);
+    if (!summary || summary.legs.length === 0) return null;
+    const strategy = hedgingLegsToStrategyComponents(summary.legs);
+    const sb = readStrategyBuilderPricingFromStorage();
+    const sigmaFromStrategy =
+      strategy.reduce((s, o) => s + o.volatility, 0) / Math.max(strategy.length, 1) / 100;
+
+    const impliedSpots = summary.legs
+      .map((l) => l.impliedSpotPrice)
+      .filter((x): x is number => x != null && Number.isFinite(x) && x > 0);
+    const exportSpots = summary.legs
+      .map((l) => l.exportSpotPrice)
+      .filter((x): x is number => x != null && Number.isFinite(x) && x > 0);
+    const spotPriceValuation =
+      impliedSpots.length > 0
+        ? impliedSpots.reduce((a, b) => a + b, 0) / impliedSpots.length
+        : exportSpots.length > 0
+          ? exportSpots.reduce((a, b) => a + b, 0) / exportSpots.length
+          : summary.legs[0].impliedSpotPrice ?? summary.legs[0].exportSpotPrice ?? 1;
+
+    const payoffData = buildPayoffDiagramDataLikeStrategyBuilder(strategy, {
+      spotPrice: spotPriceValuation,
+      domesticRatePercent: sb.domesticRatePercent,
+      foreignRatePercent: sb.foreignRatePercent,
+      interestRatePercent: sb.interestRatePercent,
+      sigmaDecimal: sigmaFromStrategy,
+      optionPricingModel,
+    });
+
+    const exportDomestics = summary.legs
+      .map((l) => l.exportDomesticRate)
+      .filter((x): x is number => x != null && Number.isFinite(x));
+    const exportForeigns = summary.legs
+      .map((l) => l.exportForeignRate)
+      .filter((x): x is number => x != null && Number.isFinite(x));
+    const exportVols = summary.legs
+      .map((l) => l.exportVolatility)
+      .filter((x): x is number => x != null && Number.isFinite(x) && x > 0);
+
+    const spotExportAvg =
+      exportSpots.length > 0
+        ? exportSpots.reduce((a, b) => a + b, 0) / exportSpots.length
+        : spotPriceValuation;
+
+    const exportPayoffData = buildPayoffDiagramDataLikeStrategyBuilder(strategy, {
+      spotPrice: spotExportAvg,
+      domesticRatePercent:
+        exportDomestics.length > 0
+          ? exportDomestics.reduce((a, b) => a + b, 0) / exportDomestics.length
+          : sb.domesticRatePercent,
+      foreignRatePercent:
+        exportForeigns.length > 0
+          ? exportForeigns.reduce((a, b) => a + b, 0) / exportForeigns.length
+          : sb.foreignRatePercent,
+      interestRatePercent: sb.interestRatePercent,
+      sigmaDecimal:
+        exportVols.length > 0
+          ? exportVols.reduce((a, b) => a + b, 0) / exportVols.length / 100
+          : sigmaFromStrategy,
+      optionPricingModel,
+    });
+
+    const firstSym = summary.legs[0]?.currency ?? "—";
+    const currencyPair =
+      CURRENCY_PAIRS.find((p) => p.symbol === firstSym) ?? {
+        symbol: firstSym,
+        name: firstSym,
+        base: "",
+        quote: "USD",
+        category: "energy" as const,
+        defaultSpotRate: spotPriceValuation,
+      };
+    return {
+      payoffData,
+      exportPayoffData,
+      spot: spotPriceValuation,
+      spotExport: exportSpots.length > 0 ? spotExportAvg : spotPriceValuation,
+      strategy,
+      currencyPair,
+      title: summary.name,
+    };
+  }, [strategyPayoffDialogKey, strategyViewSummaries, optionPricingModel]);
 
   // ✅ OPTIMISATION : Memoization des calculs de résumé
   const totalNotional = useMemo(() => {
@@ -1858,6 +2441,276 @@ const HedgingInstruments = () => {
   const uniqueCommodities = useMemo(() => {
     return getUniqueCommodities(instruments);
   }, [instruments]);
+
+  const renderHedgingInstrumentTableRow = (instrument: HedgingInstrument) => {
+    const quantityToHedge = instrument.quantity || 0;
+    const unitPrice = instrument.realOptionPrice || instrument.premium || 0;
+    const todayPrice = calculateTodayPrice(instrument);
+    const isExportedStrategy = instrument.exportSpotPrice && instrument.exportTimeToMaturity;
+    const initialPrice = isExportedStrategy ? unitPrice : (instrument.premium || 0);
+    const isShort = quantityToHedge < 0;
+    let mtmValue: number;
+    if (isShort) {
+      mtmValue = initialPrice - todayPrice;
+    } else {
+      mtmValue = todayPrice - initialPrice;
+    }
+    const dteDisplay = instrument.maturity ? getDte(instrument.maturity, valuationDate) : 0;
+    const timeToMaturity = instrument.maturity ? calculateTimeToMaturity(instrument.maturity, valuationDate) : 0;
+    const volumeToHedge = instrument.notional;
+    const calculatedNotional = unitPrice * volumeToHedge;
+    const pricingModelLabel = getPricingModelLabel(instrument, optionPricingModel);
+    const mdRow =
+      commodityMarketData[instrument.currency] ||
+      getMarketDataFromInstruments(instrument.currency) || { spot: 1, volatility: 20, riskFreeRate: 1 };
+    const isExpRow = !!(instrument.exportSpotPrice && instrument.exportTimeToMaturity);
+    let spotDisplay = 0;
+    let spotIsReal = false;
+    if (useRealMarketPrices) {
+      const realPrice = getRealMarketPrice(instrument.currency);
+      if (realPrice !== null && realPrice > 0) {
+        spotDisplay = realPrice;
+        spotIsReal = true;
+      } else {
+        spotDisplay = instrument.impliedSpotPrice ?? mdRow.spot;
+      }
+    } else {
+      spotDisplay = instrument.impliedSpotPrice ?? mdRow.spot;
+    }
+    let volPctRow: number | null = null;
+    let volSourceRow = "";
+    if (useRealMarketPrices) {
+      const surfaceIV = realTimeVolByInstrumentId[instrument.id];
+      if (surfaceIV != null && surfaceIV > 0) {
+        volPctRow = surfaceIV;
+        volSourceRow = "TPP surface";
+      } else if (instrument.impliedVolatility != null && instrument.impliedVolatility > 0) {
+        volPctRow = instrument.impliedVolatility;
+        volSourceRow = "Individual";
+      } else if (isExpRow && instrument.exportVolatility != null && instrument.exportVolatility > 0) {
+        volPctRow = instrument.exportVolatility;
+        volSourceRow = "Export";
+      } else if (instrument.volatility != null && instrument.volatility > 0) {
+        volPctRow = instrument.volatility;
+        volSourceRow = "Instrument";
+      } else {
+        volPctRow = mdRow.volatility || 20;
+        volSourceRow = "Market";
+      }
+    } else {
+      if (instrument.impliedVolatility != null) {
+        volPctRow = instrument.impliedVolatility;
+        volSourceRow = "Individual";
+      } else if (isExpRow && instrument.exportVolatility != null) {
+        volPctRow = instrument.exportVolatility;
+        volSourceRow = "Export";
+      } else {
+        const realVol = getRealVolatility();
+        if (realVol != null && realVol > 0) {
+          volPctRow = realVol;
+          volSourceRow = "Pricers";
+        } else if (instrument.volatility != null) {
+          volPctRow = instrument.volatility;
+          volSourceRow = "Instrument";
+        } else {
+          volPctRow = mdRow.volatility || 20;
+          volSourceRow = "Market";
+        }
+      }
+    }
+    const rawTtmRow = timeToMaturity;
+    let ratePctRow = 0;
+    let rateSourceRow = "";
+    if (useRealMarketPrices) {
+      const rd = getRate("USD", rawTtmRow);
+      ratePctRow = rd * 100;
+      rateSourceRow = isCurveMode ? "Rate Explorer" : "Fixed (USD)";
+    } else if (isExpRow && instrument.exportDomesticRate != null) {
+      ratePctRow = instrument.exportDomesticRate;
+      rateSourceRow = "Export";
+    } else {
+      const sbR = readStrategyBuilderPricingFromStorage();
+      const rd =
+        sbR.useRealInterestRate && sbR.pricingCurrencyQuote
+          ? getRate(sbR.pricingCurrencyQuote, rawTtmRow)
+          : strategyBuilderAnnualPercentToDecimal(sbR.interestRatePercent);
+      ratePctRow = rd * 100;
+      rateSourceRow = sbR.useRealInterestRate ? "Rate Explorer" : "SB param";
+    }
+    const mdFwd =
+      commodityMarketData[instrument.currency] ||
+      getMarketDataFromInstruments(instrument.currency) || { spot: 1, volatility: 20, riskFreeRate: 2 };
+    const sbRFwd = readStrategyBuilderPricingFromStorage();
+    const rdFwd = useRealMarketPrices
+      ? getRate("USD", rawTtmRow)
+      : isExpRow && instrument.exportDomesticRate != null
+        ? instrument.exportDomesticRate / 100
+        : sbRFwd.useRealInterestRate && sbRFwd.pricingCurrencyQuote
+          ? getRate(sbRFwd.pricingCurrencyQuote, rawTtmRow)
+          : strategyBuilderAnnualPercentToDecimal(sbRFwd.interestRatePercent);
+    const currentSpotFwd = useRealMarketPrices
+      ? (() => {
+          const rp = getRealMarketPrice(instrument.currency);
+          return rp != null && rp > 0
+            ? rp
+            : instrument.impliedSpotPrice || (isExpRow ? instrument.exportSpotPrice! : mdFwd.spot);
+        })()
+      : instrument.impliedSpotPrice || (isExpRow ? instrument.exportSpotPrice! : mdFwd.spot);
+    let forwardVal = 0;
+    let forwardSourceRow = "";
+    if (useRealMarketPrices) {
+      const fromCurve = getCurrentForwardFromTppCurve(instrument.currency, instrument.maturity);
+      if (fromCurve != null && fromCurve > 0) {
+        forwardVal = fromCurve;
+        forwardSourceRow = "TPP curve";
+      } else {
+        forwardVal = calculateCommodityForwardPrice(currentSpotFwd, rdFwd, 0, 0, rawTtmRow);
+        forwardSourceRow = "Theoretical";
+      }
+    } else if (
+      isExpRow &&
+      !instrument.impliedSpotPrice &&
+      instrument.exportForwardPrice != null &&
+      instrument.exportForwardPrice > 0
+    ) {
+      forwardVal = instrument.exportForwardPrice;
+      forwardSourceRow = "Export";
+    } else {
+      forwardVal = calculateCommodityForwardPrice(currentSpotFwd, rdFwd, 0, 0, rawTtmRow);
+      forwardSourceRow = "Theoretical";
+    }
+    const exportStartSnap = instrument.exportHedgingStartDate || instrument.exportStrategyStartDate;
+    const exportTtmSnap = exportStartSnap
+      ? calculateTimeToMaturity(instrument.maturity, exportStartSnap)
+      : instrument.exportTimeToMaturity ?? 0;
+    const exportDteSnap = daysToMaturityFromYearsAct36525(exportTtmSnap);
+    const detailSnapshot: HedgingInstrumentDetailSnapshot = {
+      valuationDate,
+      todayPrice,
+      mtmValue,
+      unitPrice,
+      initialPrice,
+      isExportedStrategy: !!isExportedStrategy,
+      timeToMaturityYears: timeToMaturity,
+      dteDays: dteDisplay,
+      pricingModelLabel,
+      spotDisplay,
+      spotIsReal,
+      volPct: volPctRow,
+      volSource: volSourceRow,
+      ratePct: ratePctRow,
+      rateSource: rateSourceRow,
+      forward: forwardVal,
+      forwardSource: forwardSourceRow,
+      exportTtmYears: exportTtmSnap > 0 || instrument.exportTimeToMaturity != null ? exportTtmSnap : undefined,
+      exportDteDays: exportDteSnap,
+    };
+    const displayMtm = roundPrice4(mtmValue);
+    const mtmStr = displayMtm === 0 ? "0.0000" : (displayMtm >= 0 ? "+" : "") + displayMtm.toFixed(4);
+    return (
+      <TableRow
+        key={instrument.id}
+        className="hover:bg-muted/50 dark:hover:bg-muted/30 border-b border-border transition-colors cursor-pointer"
+        onClick={() => goToInstrumentDetail(instrument, detailSnapshot)}
+      >
+        <TableCell
+          className="font-mono text-xs bg-muted/30 border-r text-center sticky left-0 z-[1] shadow-sm max-w-[92px] truncate"
+          title={instrument.id}
+        >
+          {instrument.id.length > 14 ? `${instrument.id.slice(0, 12)}…` : instrument.id}
+        </TableCell>
+        <TableCell className="border-r">
+          <div className="flex items-center gap-2">
+            <div className="p-1.5 rounded-md bg-muted/50">{getInstrumentIcon(instrument.type)}</div>
+            <span className="font-medium text-sm">{instrument.type}</span>
+          </div>
+        </TableCell>
+        <TableCell className="text-center border-r">
+          <Badge variant="outline" className="font-mono text-xs px-2 py-0.5">
+            {instrument.currency}
+          </Badge>
+        </TableCell>
+        <TableCell className="text-center font-mono text-sm border-r">{quantityToHedge.toFixed(1)}%</TableCell>
+        <TableCell className="text-right font-mono text-sm border-r">
+          {unitPrice > 0 ? unitPrice.toFixed(4) : <span className="text-muted-foreground">N/A</span>}
+        </TableCell>
+        <TableCell className="text-right font-mono text-sm border-r text-blue-600">
+          {todayPrice !== 0 ? todayPrice.toFixed(4) : "N/A"}
+        </TableCell>
+        <TableCell
+          className={`text-right font-mono text-sm border-r ${
+            mtmValue >= 0 ? "text-green-600" : "text-red-600"
+          }`}
+        >
+          {mtmStr}
+        </TableCell>
+        <TableCell className="text-center font-mono text-xs border-r">
+          {timeToMaturity === 0 ? (
+            <span className="text-destructive">Expired</span>
+          ) : (
+            <span>
+              {timeToMaturity.toFixed(2)}y · {dteDisplay}d
+            </span>
+          )}
+        </TableCell>
+        <TableCell className="text-right font-mono text-xs border-r">{spotDisplay.toFixed(4)}</TableCell>
+        <TableCell className="text-right font-mono text-xs border-r">
+          {volPctRow != null ? `${volPctRow.toFixed(1)}%` : "—"}
+        </TableCell>
+        <TableCell className="text-right font-mono text-xs border-r">{ratePctRow.toFixed(2)}%</TableCell>
+        <TableCell className="text-right font-mono text-xs border-r">{forwardVal.toFixed(4)}</TableCell>
+        <TableCell className="text-right font-mono text-xs border-r">
+          {instrument.strike != null ? instrument.strike.toFixed(4) : "N/A"}
+        </TableCell>
+        <TableCell className="text-right font-mono text-xs border-r">
+          {instrument.barrier != null ? instrument.barrier.toFixed(2) : "—"}
+        </TableCell>
+        <TableCell className="text-right font-mono text-xs border-r">
+          {instrument.secondBarrier != null ? instrument.secondBarrier.toFixed(2) : "—"}
+        </TableCell>
+        <TableCell className="text-right font-mono text-xs border-r">
+          {instrument.rebate != null ? instrument.rebate.toFixed(1) : "—"}
+        </TableCell>
+        <TableCell className="text-right font-mono text-xs border-r">{formatCurrency(volumeToHedge)}</TableCell>
+        <TableCell className="text-right font-mono text-xs border-r">
+          {calculatedNotional > 0 ? formatCurrency(calculatedNotional) : formatCurrency(instrument.notional)}
+        </TableCell>
+        <TableCell className="font-mono text-xs border-r whitespace-nowrap">{instrument.maturity}</TableCell>
+        <TableCell className="border-r">{getStatusBadge(timeToMaturity === 0 ? "matured" : (instrument.status || "active").toLowerCase())}</TableCell>
+        <TableCell onClick={(e) => e.stopPropagation()}>
+          <div className="flex items-center gap-0.5">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8 w-8 p-0"
+              title="Details"
+              onClick={() => goToInstrumentDetail(instrument, detailSnapshot)}
+            >
+              <Eye className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8 w-8 p-0"
+              title="Edit"
+              onClick={() => editInstrument(instrument)}
+            >
+              <Edit className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8 w-8 p-0"
+              title="Delete"
+              onClick={() => deleteInstrument(instrument.id)}
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          </div>
+        </TableCell>
+      </TableRow>
+    );
+  };
 
   return (
     <Layout 
@@ -2202,16 +3055,6 @@ const HedgingInstruments = () => {
               </CardDescription>
             </div>
             <div className="flex gap-2">
-              {/* Toggle Export Columns */}
-              <Button 
-                onClick={() => setShowExportColumns(!showExportColumns)}
-                variant={showExportColumns ? "default" : "outline"}
-                size="sm"
-                className="whitespace-nowrap"
-              >
-                {showExportColumns ? "Hide Export" : "Show Export"}
-              </Button>
-              
             <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
               <DialogTrigger asChild>
                 <Button>
@@ -2663,8 +3506,20 @@ const HedgingInstruments = () => {
           </div>
         </CardHeader>
         <CardContent>
-          {/* Filters by portfolio and counterparty */}
-          <div className="flex flex-wrap items-center gap-4 mb-4">
+          {/* Search & filters */}
+          <div className="flex flex-wrap items-end gap-4 mb-4">
+            <div className="space-y-1.5 min-w-[220px] flex-1 max-w-lg">
+              <Label htmlFor="hedging-instrument-search" className="text-muted-foreground text-sm">
+                Search
+              </Label>
+              <Input
+                id="hedging-instrument-search"
+                value={instrumentSearchQuery}
+                onChange={(e) => setInstrumentSearchQuery(e.target.value)}
+                placeholder="ID, type, pair, counterparty..."
+                className="bg-muted/50"
+              />
+            </div>
             <div className="space-y-1.5">
               <Label className="text-muted-foreground text-sm">Display by portfolio</Label>
               <Select value={filterByPortfolio || "all"} onValueChange={(v) => setFilterByPortfolio(v === "all" ? "" : v)}>
@@ -2693,36 +3548,420 @@ const HedgingInstruments = () => {
                 </SelectContent>
               </Select>
             </div>
+            <div className="space-y-1.5">
+              <Label className="text-muted-foreground text-sm">Display by strategy</Label>
+              <Select value={filterByStrategy || "all"} onValueChange={(v) => setFilterByStrategy(v === "all" ? "" : v)}>
+                <SelectTrigger className="w-[200px] bg-muted/50">
+                  <SelectValue placeholder="All strategies" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All strategies</SelectItem>
+                  {strategyNameOptions.map((name) => (
+                    <SelectItem key={name} value={name}>
+                      {name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
-          {/* Tabs */}
-          <Tabs value={selectedTab} onValueChange={setSelectedTab}>
-            <TabsList className="grid w-full grid-cols-5">
-              <TabsTrigger value="all">All</TabsTrigger>
-              <TabsTrigger value="forwards">Forwards</TabsTrigger>
-              <TabsTrigger value="options">Options</TabsTrigger>
-              <TabsTrigger value="swaps">Swaps</TabsTrigger>
-              <TabsTrigger value="hedge-accounting">Hedge Accounting</TabsTrigger>
-            </TabsList>
-            
-            <TabsContent value={selectedTab} className="mt-4">
+          {/* By instrument / strategy / exposure + secondary filters */}
+          <div className="space-y-3">
+            <div className="inline-flex flex-wrap rounded-lg border border-border bg-muted/40 p-1 gap-1">
+              {(
+                [
+                  { id: "instrument" as const, label: "By instrument" },
+                  { id: "strategy" as const, label: "By strategy" },
+                  { id: "exposure" as const, label: "By exposure" },
+                ] as const
+              ).map(({ id, label }) => (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => {
+                    setDisplayView(id);
+                    setStrategyViewSegment("all");
+                    setExposureViewSegment("all");
+                    setStrategyExpandedKey(null);
+                    setStrategyPayoffDialogKey(null);
+                  }}
+                  className={cn(
+                    "rounded-md px-4 py-2 text-sm font-medium transition-colors",
+                    displayView === id
+                      ? "bg-background text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+
+            {displayView === "instrument" && (
+              <div className="inline-flex flex-wrap rounded-lg border border-border bg-muted/40 p-1 gap-1 max-w-full">
+                {(
+                  [
+                    { id: "all", label: "All" },
+                    { id: "forwards", label: "Forwards" },
+                    { id: "options", label: "Options" },
+                    { id: "swaps", label: "Swaps" },
+                    { id: "hedge-accounting", label: "Hedge Accounting" },
+                  ] as const
+                ).map(({ id, label }) => (
+                  <button
+                    key={id}
+                    type="button"
+                    onClick={() => setSelectedTab(id)}
+                    className={cn(
+                      "rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
+                      selectedTab === id
+                        ? "bg-background text-foreground shadow-sm"
+                        : "text-muted-foreground hover:text-foreground"
+                    )}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {displayView === "strategy" && (
+              <div className="inline-flex flex-wrap max-w-full overflow-x-auto rounded-lg border border-border bg-muted/40 p-1 gap-1">
+                <button
+                  type="button"
+                  onClick={() => setStrategyViewSegment("all")}
+                  className={cn(
+                    "rounded-md px-3 py-1.5 text-sm font-medium whitespace-nowrap",
+                    strategyViewSegment === "all"
+                      ? "bg-background text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  All
+                </button>
+                {strategyNameOptions.map((name) => (
+                  <button
+                    key={name}
+                    type="button"
+                    onClick={() => setStrategyViewSegment(name)}
+                    className={cn(
+                      "rounded-md px-3 py-1.5 text-sm font-medium whitespace-nowrap max-w-[220px] truncate",
+                      strategyViewSegment === name
+                        ? "bg-background text-foreground shadow-sm"
+                        : "text-muted-foreground hover:text-foreground"
+                    )}
+                    title={name}
+                  >
+                    {name}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {displayView === "exposure" && (
+              <div className="inline-flex flex-wrap max-w-full overflow-x-auto rounded-lg border border-border bg-muted/40 p-1 gap-1">
+                <button
+                  type="button"
+                  onClick={() => setExposureViewSegment("all")}
+                  className={cn(
+                    "rounded-md px-3 py-1.5 text-sm font-medium",
+                    exposureViewSegment === "all"
+                      ? "bg-background text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  All
+                </button>
+                {commodityExposureOptions.map((sym) => (
+                  <button
+                    key={sym}
+                    type="button"
+                    onClick={() => setExposureViewSegment(sym)}
+                    className={cn(
+                      "rounded-md px-3 py-1.5 text-sm font-mono font-medium",
+                      exposureViewSegment === sym
+                        ? "bg-background text-foreground shadow-sm"
+                        : "text-muted-foreground hover:text-foreground"
+                    )}
+                  >
+                    {sym}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+            <div className="mt-4">
               {filteredInstruments.length === 0 ? (
                 <div className="text-center py-12">
                   <AlertCircle className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                  <h3 className="text-lg font-semibold mb-2">No Commodity Hedging Instruments</h3>
-                  <p className="text-muted-foreground mb-4">
-                    You haven't imported any strategies yet. Create and import strategies from the Strategy Builder.
-                  </p>
-                  <div className="flex gap-2 justify-center">
-                    <Button asChild>
-                      <a href="/strategy-builder">
-                        <Target className="h-4 w-4 mr-2" />
-                        Go to Strategy Builder
-                      </a>
-                    </Button>
-                    <Button variant="outline" onClick={() => setIsAddDialogOpen(true)}>
-                      <Plus className="h-4 w-4 mr-2" />
-                      Add Manual Instrument
-                    </Button>
+                  {instruments.length > 0 ? (
+                    <>
+                      <h3 className="text-lg font-semibold mb-2">No instruments match</h3>
+                      <p className="text-muted-foreground mb-4 max-w-md mx-auto">
+                        Try adjusting the search text or filters (portfolio, counterparty, strategy, tab).
+                      </p>
+                      <Button
+                        variant="outline"
+                        onClick={() => {
+                          setInstrumentSearchQuery("");
+                          setFilterByPortfolio("");
+                          setFilterByCounterparty("");
+                          setFilterByStrategy("");
+                          setSelectedTab("all");
+                          setDisplayView("instrument");
+                          setStrategyViewSegment("all");
+                          setExposureViewSegment("all");
+                          setStrategyExpandedKey(null);
+                          setStrategyPayoffDialogKey(null);
+                        }}
+                      >
+                        Clear search & filters
+                      </Button>
+                    </>
+                  ) : (
+                    <>
+                      <h3 className="text-lg font-semibold mb-2">No Commodity Hedging Instruments</h3>
+                      <p className="text-muted-foreground mb-4">
+                        You haven&apos;t imported any strategies yet. Create and import strategies from the Strategy Builder.
+                      </p>
+                      <div className="flex gap-2 justify-center">
+                        <Button asChild>
+                          <a href="/strategy-builder">
+                            <Target className="h-4 w-4 mr-2" />
+                            Go to Strategy Builder
+                          </a>
+                        </Button>
+                        <Button variant="outline" onClick={() => setIsAddDialogOpen(true)}>
+                          <Plus className="h-4 w-4 mr-2" />
+                          Add Manual Instrument
+                        </Button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              ) : displayView === "strategy" ? (
+                <div className="w-full rounded-xl border bg-card text-card-foreground shadow-sm overflow-hidden">
+                  <div className="border-b bg-muted/20 px-6 py-4">
+                    <h2 className="text-lg font-semibold tracking-tight">Strategies</h2>
+                    <p className="text-sm text-muted-foreground">Group instruments by hedging strategy.</p>
+                  </div>
+                  <div className="p-4 space-y-3 max-h-[min(85vh,900px)] overflow-y-auto">
+                    {strategyViewSummaries.map((s) => (
+                      <div
+                        key={s.key}
+                        className="rounded-lg border bg-background p-4 shadow-sm transition-shadow hover:shadow-md"
+                      >
+                        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                          <button
+                            type="button"
+                            className="text-left flex-1 min-w-0 rounded-md outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                            onClick={() =>
+                              setStrategyExpandedKey((k) => (k === s.key ? null : s.key))
+                            }
+                          >
+                            <div className="flex flex-wrap items-center gap-2">
+                              {strategyExpandedKey === s.key ? (
+                                <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
+                              ) : (
+                                <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+                              )}
+                              <span className="font-semibold text-base">{s.name}</span>
+                              <Badge variant="secondary" className="text-xs font-normal shrink-0">
+                                Exposure — {s.exposureLabel}
+                              </Badge>
+                            </div>
+                            <p className="text-sm text-muted-foreground mt-1.5 pl-6">
+                              {s.legCount} instrument(s) • {s.maturityRange}
+                            </p>
+                          </button>
+                          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:flex-wrap lg:justify-end">
+                            <div className="flex flex-wrap gap-2">
+                              <span className="inline-flex items-center rounded-full border border-border bg-muted/40 px-3 py-1 text-xs font-medium font-mono">
+                                Notional {formatCurrency(s.notionalSum)}
+                              </span>
+                              <span className="inline-flex items-center rounded-full border border-border bg-muted/40 px-3 py-1 text-xs font-medium font-mono">
+                                MTM {formatCurrency(s.mtmDollarSum)}
+                              </span>
+                              <span
+                                className={cn(
+                                  "inline-flex items-center rounded-full border px-3 py-1 text-xs font-medium font-mono",
+                                  s.payoffGlobal >= 0
+                                    ? "border-green-300 bg-green-50 text-green-800 dark:bg-green-950/40 dark:text-green-300"
+                                    : "border-red-300 bg-red-50 text-red-800 dark:bg-red-950/40 dark:text-red-300"
+                                )}
+                              >
+                                Payoff global {formatCurrency(s.payoffGlobal)}
+                              </span>
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="bg-background"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setStrategyPayoffDialogKey(s.key);
+                                }}
+                              >
+                                <BarChart3 className="h-3.5 w-3.5 mr-1.5" />
+                                Show payoff
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="bg-background"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setStrategyExpandedKey((k) => (k === s.key ? null : s.key));
+                                }}
+                              >
+                                <Layers className="h-3.5 w-3.5 mr-1.5" />
+                                Show legs
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+                        {strategyExpandedKey === s.key && (
+                          <div className="mt-4 border-t pt-4 space-y-2">
+                            <p className="text-xs text-muted-foreground flex items-center gap-1">
+                              <Eye className="h-3 w-3" />
+                              Click a row for full instrument details (same as main table).
+                            </p>
+                            <div
+                              className="w-full border rounded-lg overflow-hidden bg-background"
+                            >
+                              <div
+                                className="overflow-x-auto"
+                                style={{ maxHeight: "min(55vh,480px)", minHeight: "200px", overflowY: "auto" }}
+                              >
+                                <Table className="min-w-full border-collapse">
+                                  <TableHeader className="bg-muted/50 dark:bg-muted/80 sticky top-0 z-10">
+                                    <TableRow className="border-b-2 border-border">
+                                      <TableHead className="bg-muted/50 dark:bg-muted/80 font-semibold text-center border-r w-[88px] sticky left-0 z-[1] shadow-sm">
+                                        ID
+                                      </TableHead>
+                                      <TableHead className="font-semibold text-center border-r min-w-[100px]">Type</TableHead>
+                                      <TableHead className="font-semibold text-center border-r w-[96px]">Commodity</TableHead>
+                                      <TableHead className="font-semibold text-center border-r w-[72px]">Qty %</TableHead>
+                                      <TableHead className="font-semibold text-center border-r w-[88px]">Unit</TableHead>
+                                      <TableHead className="font-semibold text-center border-r w-[88px]">Today</TableHead>
+                                      <TableHead className="font-semibold text-center border-r w-[88px]">MTM</TableHead>
+                                      <TableHead className="font-semibold text-center border-r w-[100px]">TTM</TableHead>
+                                      <TableHead className="font-semibold text-center border-r w-[88px]">Spot</TableHead>
+                                      <TableHead className="font-semibold text-center border-r w-[72px]">Vol</TableHead>
+                                      <TableHead className="font-semibold text-center border-r w-[72px]">Rate</TableHead>
+                                      <TableHead className="font-semibold text-center border-r w-[88px]">Forward</TableHead>
+                                      <TableHead className="font-semibold text-center border-r w-[88px]">Strike</TableHead>
+                                      <TableHead className="font-semibold text-center border-r w-[72px]">Bar 1</TableHead>
+                                      <TableHead className="font-semibold text-center border-r w-[72px]">Bar 2</TableHead>
+                                      <TableHead className="font-semibold text-center border-r w-[64px]">Rebate</TableHead>
+                                      <TableHead className="font-semibold text-center border-r w-[88px]">Notional</TableHead>
+                                      <TableHead className="font-semibold text-center border-r w-[96px]">Premium</TableHead>
+                                      <TableHead className="font-semibold text-center border-r w-[96px]">Maturity</TableHead>
+                                      <TableHead className="font-semibold text-center border-r w-[80px]">Status</TableHead>
+                                      <TableHead className="font-semibold text-center w-[100px]">Actions</TableHead>
+                                    </TableRow>
+                                  </TableHeader>
+                                  <TableBody>{s.legs.map((leg) => renderHedgingInstrumentTableRow(leg))}</TableBody>
+                                </Table>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : displayView === "exposure" ? (
+                <div className="w-full rounded-xl border bg-card text-card-foreground shadow-sm overflow-hidden">
+                  <div className="border-b bg-muted/20 px-6 py-4">
+                    <h2 className="text-lg font-semibold tracking-tight">Exposures</h2>
+                    <p className="text-sm text-muted-foreground">
+                      Show hedging strategies and instruments grouped by FX exposure (currency, hedge currency, maturity).
+                    </p>
+                  </div>
+                  <div className="p-4 space-y-4 max-h-[min(85vh,900px)] overflow-y-auto">
+                    {exposureViewGroups.map((g) => (
+                      <div
+                        key={g.key}
+                        className="rounded-lg border bg-background p-4 shadow-sm"
+                      >
+                        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                          <div className="min-w-0 flex-1">
+                            <p className="font-semibold text-base">
+                              Exposure {g.pairLabel} • {g.maturity} • {g.directionLabel}
+                            </p>
+                            <p className="text-sm text-muted-foreground mt-1.5">
+                              Amount {formatExposureAmountFr(g.amountSum)} {g.amountUnit} • Hedge requests {g.hedgeRequests}{" "}
+                              • Strategies {g.strategyCount}
+                              {g.legacyNoLink && (
+                                <span className="text-orange-600 dark:text-orange-400"> • Legacy match (no link)</span>
+                              )}
+                            </p>
+                          </div>
+                          <div className="flex flex-wrap gap-2 lg:justify-end shrink-0">
+                            <span className="inline-flex items-center rounded-full border border-border bg-muted/40 px-3 py-1 text-xs font-medium font-mono">
+                              Notional {formatCurrency(g.notionalSum)}
+                            </span>
+                            <span className="inline-flex items-center rounded-full border border-border bg-muted/40 px-3 py-1 text-xs font-medium font-mono">
+                              Target {g.targetRate != null ? g.targetRate.toFixed(4) : "—"} • P&L-rate{" "}
+                              {g.plRate != null ? g.plRate.toFixed(4) : "—"}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="mt-4 border rounded-lg overflow-hidden bg-muted/10">
+                          <div className="overflow-x-auto" style={{ maxHeight: "min(55vh,420px)", minHeight: "120px", overflowY: "auto" }}>
+                            <Table className="min-w-[720px] border-collapse text-sm">
+                              <TableHeader className="bg-muted/50 sticky top-0 z-10">
+                                <TableRow>
+                                  <TableHead className="font-semibold border-r w-[100px]">Hedge Request</TableHead>
+                                  <TableHead className="font-semibold border-r min-w-[120px]">Strategy</TableHead>
+                                  <TableHead className="font-semibold border-r font-mono w-[160px]">ID</TableHead>
+                                  <TableHead className="font-semibold border-r">Type</TableHead>
+                                  <TableHead className="font-semibold border-r whitespace-nowrap w-[110px]">Maturity</TableHead>
+                                  <TableHead className="font-semibold border-r text-right w-[120px]">Notional</TableHead>
+                                  <TableHead className="font-semibold min-w-[120px]">Counterparty</TableHead>
+                                </TableRow>
+                              </TableHeader>
+                              <TableBody>
+                                {g.legs.map((leg) => {
+                                  const cpLabel =
+                                    counterparties.find((c) => c.id === leg.counterparty)?.name ||
+                                    leg.counterparty ||
+                                    "—";
+                                  return (
+                                    <TableRow
+                                      key={leg.id}
+                                      className="cursor-pointer hover:bg-muted/40"
+                                      onClick={() =>
+                                        navigate(`/hedging/instrument/${encodeURIComponent(leg.id)}`)
+                                      }
+                                    >
+                                      <TableCell className="border-r text-muted-foreground">—</TableCell>
+                                      <TableCell className="border-r font-medium">
+                                        {leg.strategyName?.trim() || "—"}
+                                      </TableCell>
+                                      <TableCell className="border-r font-mono text-xs" title={leg.id}>
+                                        {leg.id.length > 22 ? `${leg.id.slice(0, 20)}…` : leg.id}
+                                      </TableCell>
+                                      <TableCell className="border-r">{leg.type}</TableCell>
+                                      <TableCell className="border-r font-mono text-xs whitespace-nowrap">
+                                        {leg.maturity}
+                                      </TableCell>
+                                      <TableCell className="border-r text-right font-mono">
+                                        {formatCurrency(leg.notional)}
+                                      </TableCell>
+                                      <TableCell className="text-muted-foreground">{cpLabel}</TableCell>
+                                    </TableRow>
+                                  );
+                                })}
+                              </TableBody>
+                            </Table>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
               ) : (
@@ -2731,665 +3970,53 @@ const HedgingInstruments = () => {
                     <Table className="min-w-full border-collapse">
                      <TableHeader className="bg-muted/50 dark:bg-muted/80 sticky top-0 z-10">
                        <TableRow className="border-b-2 border-border">
-                         {/* Fixed columns */}
-                         <TableHead rowSpan={2} className="bg-muted/50 dark:bg-muted/80 font-semibold text-center border-r border-border w-[60px] sticky left-0 z-[1] shadow-sm">ID</TableHead>
-                         <TableHead rowSpan={2} className="bg-muted/50 dark:bg-muted/80 font-semibold text-center border-r border-border w-[90px]">Type</TableHead>
-                         <TableHead rowSpan={2} className="bg-muted/50 dark:bg-muted/80 font-semibold text-center border-r border-border w-[100px]">Commodity</TableHead>
-                         <TableHead rowSpan={2} className="bg-muted/50 dark:bg-muted/80 font-semibold text-center border-r border-border w-[80px]">Quantity (%)</TableHead>
-                         <TableHead rowSpan={2} className="bg-muted/50 dark:bg-muted/80 font-semibold text-center border-r border-border w-[110px]">Unit Price (Initial)</TableHead>
-                         <TableHead rowSpan={2} className="bg-muted/50 dark:bg-muted/80 font-semibold text-center border-r border-border w-[100px]">Today Price</TableHead>
-                         <TableHead rowSpan={2} className="bg-muted/50 dark:bg-muted/80 font-semibold text-center border-r border-border w-[100px]">MTM</TableHead>
-                         
-                         {/* Dynamic columns with conditional Export */}
-                         <TableHead colSpan={showExportColumns ? 2 : 1} className="text-center border-b border-r border-border bg-blue-50 dark:bg-blue-950/30 font-semibold w-[110px]">Time to Maturity</TableHead>
-                         <TableHead colSpan={showExportColumns ? 2 : 1} className="text-center border-b border-r border-border bg-green-50 dark:bg-green-950/30 font-semibold w-[100px]">Spot Price</TableHead>
-                         <TableHead colSpan={showExportColumns ? 2 : 1} className="text-center border-b border-r border-border bg-yellow-50 dark:bg-yellow-950/30 font-semibold w-[100px]">Volatility (%)</TableHead>
-                         <TableHead colSpan={showExportColumns ? 2 : 1} className="text-center border-b border-r border-border bg-purple-50 dark:bg-purple-950/30 font-semibold w-[110px]">Risk-Free Rate (%)</TableHead>
-                         <TableHead colSpan={showExportColumns ? 2 : 1} className="text-center border-b border-r border-border bg-indigo-50 dark:bg-indigo-950/30 font-semibold w-[110px]">Forward Price</TableHead>
-                         <TableHead colSpan={showExportColumns ? 2 : 1} className="text-center border-b border-r border-border bg-orange-50 dark:bg-orange-950/30 font-semibold w-[110px]">Strike Analysis</TableHead>
-                         
-                         {/* Fixed end columns */}
-                         <TableHead rowSpan={2} className="bg-muted/50 dark:bg-muted/80 font-semibold text-center border-r border-border w-[80px]">Barrier 1</TableHead>
-                         <TableHead rowSpan={2} className="bg-muted/50 dark:bg-muted/80 font-semibold text-center border-r border-border w-[80px]">Barrier 2</TableHead>
-                         <TableHead rowSpan={2} className="bg-muted/50 dark:bg-muted/80 font-semibold text-center border-r border-border w-[80px]">Rebate (%)</TableHead>
-                         <TableHead rowSpan={2} className="bg-muted/50 dark:bg-muted/80 font-semibold text-center border-r border-border w-[90px]">Notional</TableHead>
-                         <TableHead rowSpan={2} className="bg-muted/50 dark:bg-muted/80 font-semibold text-center border-r border-border w-[100px]">Total premium</TableHead>
-                         <TableHead rowSpan={2} className="bg-muted/50 dark:bg-muted/80 font-semibold text-center border-r border-border w-[100px]">Maturity</TableHead>
-                         <TableHead rowSpan={2} className="bg-muted/50 dark:bg-muted/80 font-semibold text-center border-r border-border w-[80px]">Status</TableHead>
-                         <TableHead rowSpan={2} className="bg-muted/50 dark:bg-muted/80 font-semibold text-center w-[120px]">Actions</TableHead>
-                    </TableRow>
-                       <TableRow className="border-b border-border">
-                         {/* Sub-headers for dynamic columns */}
-                         {showExportColumns && <TableHead className="text-xs text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/30 border-r border-border font-medium">Export</TableHead>}
-                         <TableHead className="text-xs text-green-600 dark:text-green-400 bg-blue-50 dark:bg-blue-950/30 border-r border-border font-medium">Current</TableHead>
-                         
-                         {showExportColumns && <TableHead className="text-xs text-blue-600 dark:text-blue-400 bg-green-50 dark:bg-green-950/30 border-r border-border font-medium">Export</TableHead>}
-                         <TableHead className="text-xs text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-950/30 border-r border-border font-medium">Current</TableHead>
-                         
-                         {showExportColumns && <TableHead className="text-xs text-blue-600 dark:text-blue-400 bg-yellow-50 dark:bg-yellow-950/30 border-r border-border font-medium">Export</TableHead>}
-                         <TableHead className="text-xs text-green-600 dark:text-green-400 bg-yellow-50 dark:bg-yellow-950/30 border-r border-border font-medium">Current</TableHead>
-                         
-                         {showExportColumns && <TableHead className="text-xs text-blue-600 dark:text-blue-400 bg-purple-50 dark:bg-purple-950/30 border-r border-border font-medium">Export</TableHead>}
-                         <TableHead className="text-xs text-green-600 dark:text-green-400 bg-purple-50 dark:bg-purple-950/30 border-r border-border font-medium">Current</TableHead>
-                         
-                         {showExportColumns && <TableHead className="text-xs text-blue-600 dark:text-blue-400 bg-pink-50 dark:bg-pink-950/30 border-r border-border font-medium">Export</TableHead>}
-                         <TableHead className="text-xs text-green-600 dark:text-green-400 bg-pink-50 dark:bg-pink-950/30 border-r border-border font-medium">Current</TableHead>
-                         
-                         {showExportColumns && <TableHead className="text-xs text-blue-600 dark:text-blue-400 bg-indigo-50 dark:bg-indigo-950/30 border-r border-border font-medium">Export</TableHead>}
-                         <TableHead className="text-xs text-green-600 dark:text-green-400 bg-indigo-50 dark:bg-indigo-950/30 border-r border-border font-medium">Current</TableHead>
-                         
-                         {showExportColumns && <TableHead className="text-xs text-blue-600 dark:text-blue-400 bg-orange-50 dark:bg-orange-950/30 border-r border-border font-medium">Export</TableHead>}
-                         <TableHead className="text-xs text-green-600 dark:text-green-400 bg-orange-50 dark:bg-orange-950/30 font-medium">Current</TableHead>
+                         <TableHead className="bg-muted/50 dark:bg-muted/80 font-semibold text-center border-r w-[88px] sticky left-0 z-[1] shadow-sm">ID</TableHead>
+                         <TableHead className="font-semibold text-center border-r min-w-[100px]">Type</TableHead>
+                         <TableHead className="font-semibold text-center border-r w-[96px]">Commodity</TableHead>
+                         <TableHead className="font-semibold text-center border-r w-[72px]">Qty %</TableHead>
+                         <TableHead className="font-semibold text-center border-r w-[88px]">Unit</TableHead>
+                         <TableHead className="font-semibold text-center border-r w-[88px]">Today</TableHead>
+                         <TableHead className="font-semibold text-center border-r w-[88px]">MTM</TableHead>
+                         <TableHead className="font-semibold text-center border-r w-[100px]">TTM</TableHead>
+                         <TableHead className="font-semibold text-center border-r w-[88px]">Spot</TableHead>
+                         <TableHead className="font-semibold text-center border-r w-[72px]">Vol</TableHead>
+                         <TableHead className="font-semibold text-center border-r w-[72px]">Rate</TableHead>
+                         <TableHead className="font-semibold text-center border-r w-[88px]">Forward</TableHead>
+                         <TableHead className="font-semibold text-center border-r w-[88px]">Strike</TableHead>
+                         <TableHead className="font-semibold text-center border-r w-[72px]">Bar 1</TableHead>
+                         <TableHead className="font-semibold text-center border-r w-[72px]">Bar 2</TableHead>
+                         <TableHead className="font-semibold text-center border-r w-[64px]">Rebate</TableHead>
+                         <TableHead className="font-semibold text-center border-r w-[88px]">Notional</TableHead>
+                         <TableHead className="font-semibold text-center border-r w-[96px]">Premium</TableHead>
+                         <TableHead className="font-semibold text-center border-r w-[96px]">Maturity</TableHead>
+                         <TableHead className="font-semibold text-center border-r w-[80px]">Status</TableHead>
+                         <TableHead className="font-semibold text-center w-[100px]">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filteredInstruments.map((instrument) => {
-                      // Calculate derived values
-                      const quantityToHedge = instrument.quantity || 0;
-                      // Use real option price from Detailed Results if available, otherwise use premium
-                      const unitPrice = instrument.realOptionPrice || instrument.premium || 0;
-                      // Calculate today's price using current market parameters
-                      const todayPrice = calculateTodayPrice(instrument);
-                      
-                      // ✅ Calculate MTM with proper long/short logic (same as total MTM calculation)
-                      // ✅ CORRECTION : Logique correcte pour initialPrice dans le tableau
-                      const isExportedStrategy = instrument.exportSpotPrice && instrument.exportTimeToMaturity;
-                      // Pour les stratégies exportées : initialPrice = prix d'export (pour MTM=0 à l'export)
-                      // Pour les stratégies manuelles : initialPrice = premium saisi par l'utilisateur
-                      const initialPrice = isExportedStrategy ? unitPrice : (instrument.premium || 0);
-                      
-                      const isShort = quantityToHedge < 0;
-                      let mtmValue;
-                      if (isShort) {
-                        // For short positions: MTM = Initial Price - Today's Price
-                        mtmValue = initialPrice - todayPrice;
-                      } else {
-                        // For long positions: MTM = Today's Price - Initial Price  
-                        mtmValue = todayPrice - initialPrice;
+                    {hedgingTableDisplayItems.map((row) => {
+                      if (row.kind === "group") {
+                        return (
+                          <TableRow key={row.key}>
+                            <TableCell
+                              colSpan={HEDGING_TABLE_COL_COUNT}
+                              className="bg-muted/70 font-semibold text-sm py-2.5 border-b border-border"
+                            >
+                              <>Exposure: {row.title}</>
+                            </TableCell>
+                          </TableRow>
+                        );
                       }
-                      
-                      console.log(`[DEBUG] ${instrument.id}: Table MTM - Initial: ${initialPrice.toFixed(6)}, Today: ${todayPrice.toFixed(6)}, MTM: ${mtmValue.toFixed(6)}, Exported: ${isExportedStrategy}`);
-                        const dteDisplay = instrument.maturity ? getDte(instrument.maturity, valuationDate) : 0;
-                        const timeToMaturity = instrument.maturity ? calculateTimeToMaturity(instrument.maturity, valuationDate) : 0;
-                      // Use implied volatility from Detailed Results if available, otherwise use component volatility
-                      const volatility = instrument.impliedVolatility || instrument.volatility || 0;
-                      // FIX: Le notional contient déjà la quantité appliquée, donc volumeToHedge = notional
-                      const volumeToHedge = instrument.notional; // Plus de double multiplication
-                      const calculatedNotional = unitPrice * volumeToHedge;
-                      
-                      return (
-                         <TableRow key={instrument.id} className="hover:bg-muted/50 dark:hover:bg-muted/30 border-b border-border transition-all duration-200 group">
-                           <TableCell className="font-semibold bg-muted/50 dark:bg-muted/80 border-r border-border text-center sticky left-0 z-[1] shadow-sm text-foreground w-[60px]">
-                             <div className="px-2 py-1 rounded-md bg-background">
-                               {instrument.id}
-                             </div>
-                           </TableCell>
-                          <TableCell className="py-3">
-                            <div className="flex items-center gap-3">
-                              <div className="p-2 rounded-lg bg-muted/50 group-hover:bg-muted transition-colors">
-                              {getInstrumentIcon(instrument.type)}
-                              </div>
-                              <div className="space-y-1">
-                                <div className="font-medium text-foreground">{instrument.type}</div>
-                                {instrument.strategyName && (
-                                  <div className="text-xs text-muted-foreground flex items-center gap-1">
-                                    <span className="w-1 h-1 bg-slate-400 rounded-full"></span>
-                                    From: {instrument.strategyName}
-                                  </div>
-                                )}
-                                {instrument.repricingData && (
-                                  <div className="text-xs text-blue-600 dark:text-blue-400 flex items-center gap-1">
-                                    <span className="w-1 h-1 bg-blue-400 rounded-full"></span>
-                                    Period Data ✓
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          </TableCell>
-                          <TableCell className="text-center">
-                            <Badge variant="outline" className="font-mono font-semibold px-3 py-1 bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-800 hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors">
-                              {instrument.currency}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-center">
-                            <div className="inline-flex items-center justify-center px-3 py-1 rounded-full bg-green-50 dark:bg-green-950/30 text-green-700 dark:text-green-400 font-mono font-semibold text-sm">
-                            {quantityToHedge.toFixed(1)}%
-                            </div>
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <div className="font-mono text-foreground font-semibold">
-                              {unitPrice > 0 ? unitPrice.toFixed(4) : 
-                                <span className="text-slate-400 italic">N/A</span>
-                              }
-                            </div>
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <div className="space-y-1">
-                              <div className={`font-mono font-semibold ${todayPrice !== 0 ? "text-blue-600" : "text-slate-400"}`}>
-                              {todayPrice !== 0 ? todayPrice.toFixed(4) : 'N/A'}
-                              </div>
-                            {(() => {
-                              // Détecter le modèle de pricing utilisé (EXACTEMENT la même logique que calculateTodayPrice)
-                              const optionType = instrument.type.toLowerCase();
-                              let modelName = "unknown";
-                              let modelColor = "bg-muted text-muted-foreground";
-                              
-                              // 1. OPTIONS DOUBLE BARRIÈRE - PRIORITÉ ABSOLUE (avant toutes les autres)
-                              if (optionType.includes('double')) {
-                                modelName = "closed-form (double)";
-                                modelColor = "bg-purple-50 dark:bg-purple-950/30 text-purple-700 dark:text-purple-400";
-                              }
-                              // 2. OPTIONS BARRIÈRES SIMPLES - DEUXIÈME PRIORITÉ
-                              else if (optionType.includes('knock-out') || optionType.includes('knock-in') || 
-                                  optionType.includes('barrier') || optionType.includes('ko ') || optionType.includes('ki ') ||
-                                  optionType.includes('knockout') || optionType.includes('knockin') || optionType.includes('reverse')) {
-                                modelName = "closed-form";
-                                modelColor = "bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-400";
-                              }
-                              // 3. OPTIONS DIGITALES - TROISIÈME PRIORITÉ
-                              else if (optionType.includes('touch') || optionType.includes('binary') || 
-                                       optionType.includes('digital')) {
-                                modelName = "monte-carlo";
-                                modelColor = "bg-orange-50 dark:bg-orange-950/30 text-orange-700 dark:text-orange-400";
-                              }
-                              // 4. OPTIONS VANILLES EXPLICITES
-                              else if (optionType === 'vanilla call' || optionType === 'vanilla put') {
-                                modelName = optionPricingModel === 'monte-carlo' ? "monte-carlo" : "black-scholes";
-                                modelColor = optionPricingModel === 'monte-carlo' ? "bg-orange-50 dark:bg-orange-950/30 text-orange-700 dark:text-orange-400" : "bg-green-50 dark:bg-green-950/30 text-green-700 dark:text-green-400";
-                              }
-                              // 5. FORWARDS
-                              else if (optionType === 'forward') {
-                                modelName = "commodity-forward";
-                                modelColor = "bg-cyan-50 dark:bg-cyan-950/30 text-cyan-700 dark:text-cyan-400";
-                              }
-                              // 6. SWAPS
-                              else if (optionType === 'swap') {
-                                modelName = "commodity-swap";
-                                modelColor = "bg-indigo-50 dark:bg-indigo-950/30 text-indigo-700 dark:text-indigo-400";
-                              }
-                              // 7. OPTIONS VANILLES GÉNÉRIQUES - SEULEMENT si pas déjà traité
-                              else if (optionType.includes('call') && !optionType.includes('knock')) {
-                                modelName = optionPricingModel === 'monte-carlo' ? "monte-carlo" : "black-scholes";
-                                modelColor = optionPricingModel === 'monte-carlo' ? "bg-orange-50 dark:bg-orange-950/30 text-orange-700 dark:text-orange-400" : "bg-green-50 dark:bg-green-950/30 text-green-700 dark:text-green-400";
-                              } else if (optionType.includes('put') && !optionType.includes('knock')) {
-                                modelName = optionPricingModel === 'monte-carlo' ? "monte-carlo" : "black-scholes";
-                                modelColor = optionPricingModel === 'monte-carlo' ? "bg-orange-50 dark:bg-orange-950/30 text-orange-700 dark:text-orange-400" : "bg-green-50 dark:bg-green-950/30 text-green-700 dark:text-green-400";
-                              }
-                              
-                              return (
-                                <div className={`text-xs px-2 py-1 rounded-md font-medium ${modelColor}`}>
-                                  {modelName}
-                                </div>
-                              );
-                            })()}
-                            </div>
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <div className={`inline-flex items-center justify-center px-3 py-1 rounded-lg font-mono font-semibold ${
-                              mtmValue >= 0 
-                                ? 'bg-green-50 dark:bg-green-950/30 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-800' 
-                                : 'bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-800'
-                            }`}>
-                              {(() => {
-                                const displayMtm = roundPrice4(mtmValue);
-                                return displayMtm === 0 ? '0.0000' : (displayMtm >= 0 ? '+' : '') + displayMtm.toFixed(4);
-                              })()}
-                            </div>
-                          </TableCell>
-                                                     {/* Time to Maturity - Export: même formule que Current, avec date de début export pour cohérence même jour */}
-                           {showExportColumns && (
-                             <TableCell className="font-mono text-center bg-blue-50 dark:bg-blue-950/30 border-r border-border">
-                              {(() => {
-                                const exportStart = instrument.exportHedgingStartDate || instrument.exportStrategyStartDate;
-                                const exportTtm = exportStart
-                                  ? calculateTimeToMaturity(instrument.maturity, exportStart)
-                                  : (instrument.exportTimeToMaturity ?? 0);
-                                const exportDteVal = daysToMaturityFromYearsAct36525(exportTtm);
-                                if (exportTtm <= 0 && !instrument.exportTimeToMaturity) return <div className="text-xs text-blue-600 dark:text-blue-400">N/A</div>;
-                                return (
-                                  <>
-                                    <div className="text-xs text-blue-600 dark:text-blue-400">
-                                      {exportTtm.toFixed(4)}y
-                                    </div>
-                                    <div className="text-xs text-gray-500 dark:text-gray-400">
-                                      {exportDteVal}d
-                                    </div>
-                                  </>
-                                );
-                              })()}
-                          </TableCell>
-                           )}
-                          
-                          {/* Time to Maturity - Current */}
-                           <TableCell className="text-center bg-green-50/80 dark:bg-green-950/30 border-r border-border">
-                            <div className="space-y-1">
-                              <div className={`text-sm font-mono font-semibold ${timeToMaturity === 0 ? 'text-red-600 dark:text-red-400' : 'text-green-700 dark:text-green-400'}`}>
-                              {timeToMaturity.toFixed(4)}y
-                            </div>
-                              <div className={`text-xs px-2 py-1 rounded-md ${timeToMaturity === 0 ? 'text-red-600 dark:text-red-400 bg-red-100/50 dark:bg-red-950/30' : 'text-green-600 dark:text-green-400 bg-green-100/50 dark:bg-green-950/30'}`}>
-                              {timeToMaturity === 0 ? 'EXPIRED' : `${dteDisplay}d`}
-                              </div>
-                              <div className={`text-xs px-2 py-1 rounded-md ${timeToMaturity === 0 ? 'text-red-500 dark:text-red-400 bg-red-50 dark:bg-red-950/30' : 'text-green-500 dark:text-green-400 bg-green-50 dark:bg-green-950/30'}`}>
-                                {timeToMaturity === 0 ? `Expired on ${instrument.maturity}` : `From ${valuationDate} to ${instrument.maturity}`}
-                              </div>
-                            </div>
-                          </TableCell>
-                          
-                                                     {/* Spot Price - Export (conditional) */}
-                           {showExportColumns && (
-                             <TableCell className="text-center bg-blue-50/80 dark:bg-blue-950/30 border-r border-border">
-                               <div className="text-sm font-mono font-semibold text-blue-700 dark:text-blue-400">
-                              {instrument.exportSpotPrice ? 
-                                instrument.exportSpotPrice.toFixed(6) : 
-                                   <span className="text-blue-400 italic">N/A</span>
-                              }
-                            </div>
-                          </TableCell>
-                           )}
-                          
-                          {/* Spot Price - Current: prix spot brut (non bootstrapé) */}
-                           <TableCell className="text-center bg-green-50/80 dark:bg-green-950/30 border-r border-border">
-                            {(() => {
-                              const marketData = commodityMarketData[instrument.currency] || getMarketDataFromInstruments(instrument.currency) || { spot: 1.0000, volatility: 20, domesticRate: 1.0, foreignRate: 1.0 };
-                              
-                              let currentSpot: number;
-                              let isUsingRealPrice = false;
-                              if (useRealMarketPrices) {
-                                const realPrice = getRealMarketPrice(instrument.currency);
-                                if (realPrice !== null && realPrice > 0) {
-                                  currentSpot = realPrice;
-                                  isUsingRealPrice = true;
-                                } else {
-                                  currentSpot = instrument.impliedSpotPrice || marketData.spot;
-                                }
-                              } else {
-                                currentSpot = instrument.impliedSpotPrice || marketData.spot;
-                              }
-                              
-                              return (
-                                <div className="space-y-1">
-                                  <div className="flex items-center gap-1">
-                                    <Input
-                                      type="number"
-                                      value={instrument.impliedSpotPrice ?? currentSpot}
-                                      onChange={(e) => {
-                                        if (!isUsingRealPrice) {
-                                        const value = parseFloat(e.target.value);
-                                        if (!isNaN(value) && value > 0) {
-                                          updateInstrumentSpotPrice(instrument.id, value);
-                                          }
-                                        }
-                                      }}
-                                      placeholder={currentSpot.toFixed(6)}
-                                      disabled={isUsingRealPrice}
-                                      className={`w-20 h-6 text-xs text-center border-green-200 dark:border-green-800 focus:border-green-400 dark:focus:border-green-600 focus:ring-green-400/20 ${
-                                        isUsingRealPrice ? 'bg-green-50 dark:bg-green-950/30 border-green-300 dark:border-green-700' : 'bg-background'
-                                      }`}
-                                      step="0.0001"
-                                      min="0"
-                                    />
-                                    {instrument.impliedSpotPrice && !isUsingRealPrice && (
-                                      <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        className="h-4 w-4 p-0 text-gray-400 hover:text-red-500"
-                                        onClick={() => resetInstrumentSpotPrice(instrument.id)}
-                                        title="Reset to global spot price"
-                                      >
-                                        ×
-                                      </Button>
-                                    )}
-                                  </div>
-                                <div className={`text-xs px-2 py-1 rounded-md ${
-                                  isUsingRealPrice 
-                                    ? 'text-green-700 dark:text-green-400 bg-green-100/70 dark:bg-green-950/30' 
-                                    : 'text-green-600 dark:text-green-400 bg-green-100/50 dark:bg-green-950/30'
-                                }`}>
-                                    {isUsingRealPrice ? 'Real: ' : ''}{currentSpot.toFixed(4)}
-                                  </div>
-                                </div>
-                              );
-                            })()}
-                          </TableCell>
-                          
-                                                     {/* Volatility - Export (conditional) */}
-                           {showExportColumns && (
-                             <TableCell className="text-center bg-blue-50/80 dark:bg-blue-950/30 border-r border-border">
-                               <div className="text-sm font-mono font-semibold text-blue-700 dark:text-blue-400">
-                              {instrument.exportVolatility ? 
-                                `${instrument.exportVolatility.toFixed(2)}%` : 
-                                   <span className="text-blue-400 italic">N/A</span>
-                              }
-                            </div>
-                          </TableCell>
-                           )}
-                          
-                          {/* Volatility - Current (mirrors calculateTodayPrice priority) */}
-                           <TableCell className="text-center bg-green-50/80 dark:bg-green-950/30 border-r border-border">
-                            <div className="space-y-1">
-                              {(() => {
-                                const md = commodityMarketData[instrument.currency] || getMarketDataFromInstruments(instrument.currency) || { spot: 1, volatility: 20, riskFreeRate: 1 };
-                                const isExp = !!(instrument.exportSpotPrice && instrument.exportTimeToMaturity);
-                                let volPct: number | null = null;
-                                let source = '';
-                                if (useRealMarketPrices) {
-                                  const surfaceIV = realTimeVolByInstrumentId[instrument.id];
-                                  if (surfaceIV != null && surfaceIV > 0) { volPct = surfaceIV; source = 'TPP surface'; }
-                                  else if (instrument.impliedVolatility != null && instrument.impliedVolatility > 0) { volPct = instrument.impliedVolatility; source = 'Individual'; }
-                                  else if (isExp && instrument.exportVolatility != null && instrument.exportVolatility > 0) { volPct = instrument.exportVolatility; source = 'Export'; }
-                                  else if (instrument.volatility != null && instrument.volatility > 0) { volPct = instrument.volatility; source = 'Instrument'; }
-                                  else { volPct = md.volatility || 20; source = 'Market'; }
-                                } else {
-                                  if (instrument.impliedVolatility != null) { volPct = instrument.impliedVolatility; source = 'Individual'; }
-                                  else if (isExp && instrument.exportVolatility != null) { volPct = instrument.exportVolatility; source = 'Export'; }
-                                  else {
-                                    const realVol = getRealVolatility();
-                                    if (realVol != null && realVol > 0) { volPct = realVol; source = 'Pricers'; }
-                                    else if (instrument.volatility != null) { volPct = instrument.volatility; source = 'Instrument'; }
-                                    else { volPct = md.volatility || 20; source = 'Market'; }
-                                  }
-                                }
-                                return (
-                                  <>
-                                    <div className="font-mono text-sm font-semibold text-green-700 dark:text-green-400">
-                                      {volPct != null ? Number(volPct).toFixed(2) : '—'}%
-                                    </div>
-                                    <div className="text-xs text-green-600 dark:text-green-400 bg-green-100/50 dark:bg-green-950/30 px-2 py-1 rounded-md">
-                                      {source}
-                                    </div>
-                                  </>
-                                );
-                              })()}
-                            </div>
-                          </TableCell>
-                          
-                                                     {/* Risk-Free Rate - Export (conditional) */}
-                           {showExportColumns && (
-                             <TableCell className="font-mono text-center bg-blue-50 dark:bg-blue-950/30 border-r border-border">
-                            <div className="text-xs text-blue-600 dark:text-blue-400">
-                              {instrument.exportDomesticRate ? 
-                                `${instrument.exportDomesticRate.toFixed(3)}%` : 
-                                'N/A'
-                              }
-                                </div>
-                          </TableCell>
-                           )}
-                          
-                          {/* Risk-Free Rate - Current (mirrors calculateTodayPrice r_d) */}
-                          <TableCell className="font-mono text-center bg-green-50 dark:bg-green-950/30">
-                            {(() => {
-                              const rawTtm = calculateTimeToMaturity(instrument.maturity, valuationDate);
-                              const isExp = !!(instrument.exportSpotPrice && instrument.exportTimeToMaturity);
-                              let ratePct: number;
-                              let src = '';
-                              if (useRealMarketPrices) {
-                                const rd = getRate('USD', rawTtm);
-                                ratePct = rd * 100;
-                                src = isCurveMode ? 'Rate Explorer' : 'Fixed (USD)';
-                              } else if (isExp && instrument.exportDomesticRate != null) {
-                                ratePct = instrument.exportDomesticRate;
-                                src = 'Export';
-                              } else {
-                                const sbR = readStrategyBuilderPricingFromStorage();
-                                const rd = sbR.useRealInterestRate && sbR.pricingCurrencyQuote
-                                  ? getRate(sbR.pricingCurrencyQuote, rawTtm)
-                                  : strategyBuilderAnnualPercentToDecimal(sbR.interestRatePercent);
-                                ratePct = rd * 100;
-                                src = sbR.useRealInterestRate ? 'Rate Explorer' : 'SB param';
-                              }
-                              return (
-                                <>
-                                  <div className="text-xs text-green-600 dark:text-green-400">
-                                    {ratePct.toFixed(3)}%
-                                  </div>
-                                  <div className="text-xs text-green-500 dark:text-green-500 opacity-70">
-                                    {src}
-                                  </div>
-                                </>
-                              );
-                            })()}
-                          </TableCell>
-                          
-                          
-                                                     {/* Forward Price - Export (conditional) */}
-                           {showExportColumns && (
-                             <TableCell className="font-mono text-center bg-blue-50 dark:bg-blue-950/30 border-r border-border">
-<div className="text-xs text-blue-600 dark:text-blue-400">
-                                {instrument.exportForwardPrice ?
-                                instrument.exportForwardPrice.toFixed(6) : 
-                                'N/A'
-                              }
-                            </div>
-                          </TableCell>
-                           )}
-                          
-                          {/* Forward Price - Current (mirrors calculateTodayPrice S) */}
-                          <TableCell className="font-mono text-center bg-green-50 dark:bg-green-950/30">
-                            {(() => {
-                              const md = commodityMarketData[instrument.currency] || getMarketDataFromInstruments(instrument.currency) || { spot: 1, volatility: 20, riskFreeRate: 2 };
-                              const rawTtm = calculateTimeToMaturity(instrument.maturity, valuationDate);
-                              const isExp = !!(instrument.exportSpotPrice && instrument.exportTimeToMaturity);
-
-                              const sbR = readStrategyBuilderPricingFromStorage();
-                              const rd = useRealMarketPrices
-                                ? getRate('USD', rawTtm)
-                                : (isExp && instrument.exportDomesticRate != null)
-                                  ? instrument.exportDomesticRate / 100
-                                  : (sbR.useRealInterestRate && sbR.pricingCurrencyQuote ? getRate(sbR.pricingCurrencyQuote, rawTtm) : strategyBuilderAnnualPercentToDecimal(sbR.interestRatePercent));
-                              const currentSpot = useRealMarketPrices
-                                ? (() => { const rp = getRealMarketPrice(instrument.currency); return (rp != null && rp > 0) ? rp : (instrument.impliedSpotPrice || (isExp ? instrument.exportSpotPrice! : md.spot)); })()
-                                : (instrument.impliedSpotPrice || (isExp ? instrument.exportSpotPrice! : md.spot));
-
-                              let fwd: number;
-                              let src = '';
-                              if (useRealMarketPrices) {
-                                const fromCurve = getCurrentForwardFromTppCurve(instrument.currency, instrument.maturity);
-                                if (fromCurve != null && fromCurve > 0) { fwd = fromCurve; src = 'TPP curve'; }
-                                else { fwd = calculateCommodityForwardPrice(currentSpot, rd, 0, 0, rawTtm); src = 'Theoretical'; }
-                              } else if (isExp && !instrument.impliedSpotPrice && instrument.exportForwardPrice != null && instrument.exportForwardPrice > 0) {
-                                fwd = instrument.exportForwardPrice; src = 'Export';
-                              } else {
-                                fwd = calculateCommodityForwardPrice(currentSpot, rd, 0, 0, rawTtm); src = 'Theoretical';
-                              }
-                              return (
-                                <>
-                                  <div className="text-xs text-green-600 dark:text-green-400">{fwd.toFixed(6)}</div>
-                                  <div className="text-xs text-green-500 dark:text-green-500 opacity-70">{src}</div>
-                                </>
-                              );
-                            })()}
-                          </TableCell>
-                          
-                                                     {/* Strike - Export (conditional) */}
-                           {showExportColumns && (
-                             <TableCell className="font-mono text-center bg-blue-50 dark:bg-blue-950/30 border-r border-border">
-<div className="text-xs text-blue-600 dark:text-blue-400">
-                                {(() => {
-                                  if (instrument.exportStrike != null) return instrument.exportStrike.toFixed(4);
-                                  if (instrument.originalComponent && instrument.exportSpotPrice != null) {
-                                    const exportStrike = instrument.originalComponent.strikeType === 'percent'
-                                      ? instrument.exportSpotPrice * (instrument.originalComponent.strike / 100)
-                                      : instrument.originalComponent.strike;
-                                    return exportStrike.toFixed(4);
-                                  }
-                                  return instrument.strike != null ? instrument.strike.toFixed(4) : 'N/A';
-                                })()}
-                            </div>
-                            {instrument.originalComponent && (
-                              <div className="text-xs text-gray-500 dark:text-gray-400">
-                                {instrument.originalComponent.strikeType}: {instrument.originalComponent.strike}
-                              </div>
-                            )}
-                          </TableCell>
-                           )}
-                          
-                          {/* Strike - Current */}
-                          <TableCell className="font-mono text-center bg-green-50 dark:bg-green-950/30">
-                            <div className="text-xs text-green-600 dark:text-green-400">
-                            {instrument.strike ? instrument.strike.toFixed(4) : 'N/A'}
-                            </div>
-                            {instrument.originalComponent && (
-                              <div className="text-xs text-gray-500 dark:text-gray-400">
-                                Current calculation
-                              </div>
-                            )}
-                            {instrument.dynamicStrikeInfo && (
-                              <div className="text-xs text-orange-600 dark:text-orange-400">
-                                Dyn: {instrument.dynamicStrikeInfo.calculatedStrikePercent}
-                              </div>
-                            )}
-                          </TableCell>
-                          <TableCell className="font-mono text-right">
-                            {instrument.barrier ? instrument.barrier.toFixed(4) : 'N/A'}
-                          </TableCell>
-                          <TableCell className="font-mono text-right">
-                            {instrument.secondBarrier ? instrument.secondBarrier.toFixed(4) : 'N/A'}
-                          </TableCell>
-                          <TableCell className="font-mono text-right">
-                            {instrument.rebate ? instrument.rebate.toFixed(2) : 'N/A'}
-                          </TableCell>
-                          <TableCell className="font-mono text-right">
-                            {formatCurrency(volumeToHedge)}
-                          </TableCell>
-                          <TableCell className="font-mono text-right">
-                            {calculatedNotional > 0 ? formatCurrency(calculatedNotional) : formatCurrency(instrument.notional)}
-                          </TableCell>
-                          <TableCell>{instrument.maturity}</TableCell>
-                        <TableCell>
-                          {instrument.effectiveness_ratio ? (
-                            <div className="flex items-center gap-2">
-                              <Progress 
-                                value={instrument.effectiveness_ratio} 
-                                className="w-16 h-2" 
-                              />
-                              <span className="text-sm font-medium">
-                                {instrument.effectiveness_ratio}%
-                              </span>
-                            </div>
-                          ) : (
-                            <span className="text-muted-foreground">N/A</span>
-                          )}
-                        </TableCell>
-                        <TableCell>{getStatusBadge(timeToMaturity === 0 ? 'matured' : (instrument.status || 'active').toLowerCase())}</TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            <Button 
-                              variant="ghost" 
-                              size="sm" 
-                              title="View Details"
-                              onClick={() => viewInstrument(instrument)}
-                            >
-                              <Eye className="h-4 w-4" />
-                            </Button>
-                            <Button 
-                              variant="ghost" 
-                              size="sm" 
-                              title="Edit"
-                              onClick={() => editInstrument(instrument)}
-                            >
-                              <Edit className="h-4 w-4" />
-                            </Button>
-                            <Button 
-                              variant="ghost" 
-                              size="sm" 
-                              title="Delete"
-                              onClick={() => deleteInstrument(instrument.id)}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                      );
+                      return renderHedgingInstrumentTableRow(row.instrument);
                     })}
                   </TableBody>
                 </Table>
                   </div>
                 </div>
               )}
-            </TabsContent>
-          </Tabs>
+            </div>
         </CardContent>
       </Card>
-
-      {/* View Instrument Dialog */}
-      <Dialog open={isViewDialogOpen} onOpenChange={setIsViewDialogOpen}>
-        <DialogContent className="sm:max-w-[600px]">
-          <DialogHeader>
-            <DialogTitle>Instrument Details</DialogTitle>
-            <DialogDescription>
-              View detailed information about this hedging instrument
-            </DialogDescription>
-          </DialogHeader>
-          {selectedInstrument && (
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label className="text-sm font-medium">ID</Label>
-                  <p className="text-sm text-muted-foreground">{selectedInstrument.id}</p>
-                </div>
-                <div>
-                  <Label className="text-sm font-medium">Type</Label>
-                  <p className="text-sm text-muted-foreground">{selectedInstrument.type}</p>
-                </div>
-                <div>
-                  <Label className="text-sm font-medium">Currency Pair</Label>
-                  <p className="text-sm text-muted-foreground">{selectedInstrument.currency}</p>
-                </div>
-                <div>
-                  <Label className="text-sm font-medium">Quantity</Label>
-                  <p className="text-sm text-muted-foreground">{selectedInstrument.quantity?.toFixed(1)}%</p>
-                </div>
-                <div>
-                  <Label className="text-sm font-medium">Strike</Label>
-                  <p className="text-sm text-muted-foreground">{selectedInstrument.strike?.toFixed(4) || 'N/A'}</p>
-                </div>
-                <div>
-                  <Label className="text-sm font-medium">Maturity</Label>
-                  <p className="text-sm text-muted-foreground">{selectedInstrument.maturity}</p>
-                </div>
-                {selectedInstrument.barrier && (
-                  <div>
-                    <Label className="text-sm font-medium">Barrier 1</Label>
-                    <p className="text-sm text-muted-foreground">{selectedInstrument.barrier.toFixed(4)}</p>
-                  </div>
-                )}
-                {selectedInstrument.secondBarrier && (
-                  <div>
-                    <Label className="text-sm font-medium">Barrier 2</Label>
-                    <p className="text-sm text-muted-foreground">{selectedInstrument.secondBarrier.toFixed(4)}</p>
-                  </div>
-                )}
-                {selectedInstrument.rebate && (
-                  <div>
-                    <Label className="text-sm font-medium">Rebate (%)</Label>
-                    <p className="text-sm text-muted-foreground">{selectedInstrument.rebate.toFixed(2)}%</p>
-                  </div>
-                )}
-                <div>
-                  <Label className="text-sm font-medium">Notional</Label>
-                  <p className="text-sm text-muted-foreground">{formatCurrency(selectedInstrument.notional)}</p>
-                </div>
-                <div>
-                  <Label className="text-sm font-medium">Status</Label>
-                  <p className="text-sm text-muted-foreground">{selectedInstrument.status}</p>
-                </div>
-              </div>
-              {selectedInstrument.strategyName && (
-                <div>
-                  <Label className="text-sm font-medium">Strategy Source</Label>
-                  <p className="text-sm text-muted-foreground">{selectedInstrument.strategyName}</p>
-                </div>
-              )}
-            </div>
-          )}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsViewDialogOpen(false)}>
-              Close
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       {/* Edit Instrument Dialog */}
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
@@ -3406,6 +4033,42 @@ const HedgingInstruments = () => {
               onSave={saveInstrumentChanges}
               onCancel={() => setIsEditDialogOpen(false)}
             />
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={strategyPayoffDialogKey !== null}
+        onOpenChange={(open) => {
+          if (!open) setStrategyPayoffDialogKey(null);
+        }}
+      >
+        <DialogContent className="sm:max-w-[960px] max-h-[92vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Payoff analysis</DialogTitle>
+            <DialogDescription>
+              Same Payoff Chart as Strategy Builder. Switch between Valuation date and Export parameters. Strategy:{" "}
+              {strategyPayoffChartModel?.title ?? "—"}
+            </DialogDescription>
+          </DialogHeader>
+          {strategyPayoffChartModel &&
+          (strategyPayoffChartModel.payoffData.length > 0 || strategyPayoffChartModel.exportPayoffData.length > 0) ? (
+            <PayoffChart
+              data={strategyPayoffChartModel.payoffData}
+              exportPayoffData={strategyPayoffChartModel.exportPayoffData}
+              spot={strategyPayoffChartModel.spot}
+              spotExport={strategyPayoffChartModel.spotExport}
+              showPayoffSourceTabs
+              strategy={strategyPayoffChartModel.strategy}
+              currencyPair={strategyPayoffChartModel.currencyPair}
+              includePremium={true}
+              showPremiumToggle={true}
+              className="border-0 shadow-none"
+            />
+          ) : (
+            <p className="text-sm text-muted-foreground py-6">
+              Unable to build payoff diagram for this strategy (missing legs or parameters).
+            </p>
           )}
         </DialogContent>
       </Dialog>

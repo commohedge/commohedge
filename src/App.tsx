@@ -18,6 +18,7 @@ import "./utils/cleanupLocalStorage";
 import Dashboard from "./pages/Dashboard";
 import Exposures from "./pages/Exposures";
 import HedgingInstruments from "./pages/HedgingInstruments";
+import HedgingInstrumentDetail from "./pages/HedgingInstrumentDetail";
 import RiskAnalysis from "./pages/RiskAnalysis";
 import PositionMonitor from "./pages/PositionMonitor";
 import Index from "./pages/Index";
@@ -83,6 +84,7 @@ const App = () => {
             <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
             <Route path="/exposures" element={<ProtectedRoute><Exposures /></ProtectedRoute>} />
             <Route path="/hedging" element={<ProtectedRoute><HedgingInstruments /></ProtectedRoute>} />
+            <Route path="/hedging/instrument/:instrumentId" element={<ProtectedRoute><HedgingInstrumentDetail /></ProtectedRoute>} />
             <Route path="/risk-analysis" element={<ProtectedRoute><RiskAnalysis /></ProtectedRoute>} />
             
             {/* Strategy Builder and Advanced Features */}

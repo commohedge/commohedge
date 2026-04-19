@@ -633,6 +633,10 @@ const rawRealOptionPrice = strategyDetail?.calculatedPrice || periodResult.optio
     return Math.max(0.0001, totalPremium); // Minimum premium of 0.01%
   }
 
+  getHedgingInstrumentById(id: string): HedgingInstrument | undefined {
+    return this.hedgingInstruments.find((inst) => inst.id === id);
+  }
+
   getHedgingInstruments(): HedgingInstrument[] {
     return [...this.hedgingInstruments];
   }

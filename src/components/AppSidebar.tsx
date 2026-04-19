@@ -20,7 +20,6 @@ import {
   LineChart,
   Percent,
   MessageSquare,
-  SatelliteDish,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
@@ -47,15 +46,12 @@ import { SyncIndicator } from "./SyncIndicator";
 import { BRAND } from "@/constants/branding";
 import "@/styles/sidebar-zoom.css";
 
-const WORLD_MONITOR_URL =
-  import.meta.env.VITE_WORLD_MONITOR_URL?.trim() || "http://localhost:3000";
-
 type MarketDataNavItem = {
   title: string;
   url: string;
   icon: LucideIcon;
   description: string;
-  /** Opens in a new tab (separate app, e.g. WorldMonitor) */
+  /** Opens in a new tab (separate app) */
   externalHref?: string;
 };
 
@@ -86,13 +82,6 @@ const marketDataItems: MarketDataNavItem[] = [
     url: "/market-news",
     icon: Newspaper,
     description: "Latest commodity market news and insights"
-  },
-  {
-    title: "World news",
-    url: "/world-monitor",
-    icon: SatelliteDish,
-    description: "WorldMonitor — global news (separate app, opens in new tab)",
-    externalHref: WORLD_MONITOR_URL,
   },
   {
     title: "Economic Calendar",

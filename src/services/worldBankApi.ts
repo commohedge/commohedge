@@ -98,8 +98,10 @@ const COMMODITY_CATEGORIES: Record<string, string> = {
   'IRON_ORE': WORLD_BANK_CATEGORIES.METALS,
   'COPPER': WORLD_BANK_CATEGORIES.METALS,
   'LEAD': WORLD_BANK_CATEGORIES.METALS,
+  'TIN': WORLD_BANK_CATEGORIES.METALS,
   'Tin': WORLD_BANK_CATEGORIES.METALS,
   'NICKEL': WORLD_BANK_CATEGORIES.METALS,
+  'ZINC': WORLD_BANK_CATEGORIES.METALS,
   'Zinc': WORLD_BANK_CATEGORIES.METALS,
   'GOLD': WORLD_BANK_CATEGORIES.METALS,
   'PLATINUM': WORLD_BANK_CATEGORIES.METALS,
@@ -114,6 +116,98 @@ const COMMODITY_CATEGORIES: Record<string, string> = {
   'UREA_EE_BULK': WORLD_BANK_CATEGORIES.FERTILIZERS,
   'UREA': WORLD_BANK_CATEGORIES.FERTILIZERS,
   'POTASH': WORLD_BANK_CATEGORIES.FERTILIZERS
+};
+
+// Reverse mapping: Pink Sheet column header name → internal symbol.
+// The World Bank Pink Sheet uses full descriptive names in column headers,
+// while our internal logic uses abbreviated symbols for category/display lookups.
+const HEADER_NAME_TO_SYMBOL: Record<string, string> = {
+  // Energy
+  'Crude oil, average':            'CRUDE_PETRO',
+  'Crude oil, Brent':              'CRUDE_BRENT',
+  'Crude oil, Dubai':              'CRUDE_DUBAI',
+  'Crude oil, WTI':                'CRUDE_WTI',
+  'Coal, Australian':              'COAL_AUS',
+  'Coal, South African':           'COAL_SAFRICA',
+  'Natural gas, US':               'NGAS_US',
+  'Natural gas, Europe':           'NGAS_EUR',
+  'Liquefied natural gas, Japan':  'NGAS_JP',
+  'Natural gas index':             'iNATGAS',
+
+  // Agricultural – Beverages
+  'Cocoa':                'COCOA',
+  'Coffee, Arabica':      'COFFEE_ARABIC',
+  'Coffee, Robusta':      'COFFEE_ROBUS',
+  'Tea, avg 3 auctions':  'TEA_AVG',
+  'Tea, Colombo':         'TEA_COLOMBO',
+  'Tea, Kolkata':         'TEA_KOLKATA',
+  'Tea, Mombasa':         'TEA_MOMBASA',
+
+  // Agricultural – Oils & meals
+  'Coconut oil':      'COCONUT_OIL',
+  'Groundnuts':       'GRNUT',
+  'Fish meal':        'FISH_MEAL',
+  'Groundnut oil':    'GRNUT_OIL',
+  'Palm oil':         'PALM_OIL',
+  'Palm kernel oil':  'PLMKRNL_OIL',
+  'Soybeans':         'SOYBEANS',
+  'Soybean oil':      'SOYBEAN_OIL',
+  'Soybean meal':     'SOYBEAN_MEAL',
+  'Rapeseed oil':     'RAPESEED_OIL',
+  'Sunflower oil':    'SUNFLOWER_OIL',
+
+  // Agricultural – Grains
+  'Barley':               'BARLEY',
+  'Maize':                'MAIZE',
+  'Sorghum':              'SORGHUM',
+  'Rice, Thai 5%':        'RICE_05',
+  'Rice, Thai 25%':       'RICE_25',
+  'Rice, Thai A.1':       'RICE_A1',
+  'Rice, Viet Namese 5%': 'RICE_05_VNM',
+  'Wheat, US SRW':        'WHEAT_US_SRW',
+  'Wheat, US HRW':        'WHEAT_US_HRW',
+
+  // Agricultural – Other food
+  'Banana, Europe':      'BANANA_EU',
+  'Banana, US':          'BANANA_US',
+  'Orange':              'ORANGE',
+  'Beef':                'BEEF',
+  'Chicken':             'CHICKEN',
+  'Lamb':                'LAMB',
+  'Shrimps, Mexican':    'SHRIMP_MEX',
+  'Sugar, EU':           'SUGAR_EU',
+  'Sugar, US':           'SUGAR_US',
+  'Sugar, world':        'SUGAR_WLD',
+  'Tobacco, US import u.v.': 'TOBAC_US',
+
+  // Agricultural – Raw materials
+  'Logs, Cameroon':      'LOGS_CMR',
+  'Logs, Malaysian':     'LOGS_MYS',
+  'Sawnwood, Cameroon':  'SAWNWD_CMR',
+  'Sawnwood, Malaysian': 'SAWNWD_MYS',
+  'Plywood':             'PLYWOOD',
+  'Cotton, A Index':     'COTTON_A_INDX',
+  'Rubber, TSR20':       'RUBBER_TSR20',
+  'Rubber, RSS3':        'RUBBER1_MYSG',
+
+  // Fertilizers
+  'Phosphate rock':       'PHOSROCK',
+  'DAP':                  'DAP',
+  'TSP':                  'TSP',
+  'Urea':                 'UREA',
+  'Potassium chloride':   'POTASH',
+
+  // Metals & Precious metals
+  'Aluminum':          'ALUMINUM',
+  'Iron ore, cfr spot': 'IRON_ORE',
+  'Copper':            'COPPER',
+  'Lead':              'LEAD',
+  'Tin':               'TIN',
+  'Nickel':            'NICKEL',
+  'Zinc':              'ZINC',
+  'Gold':              'GOLD',
+  'Platinum':          'PLATINUM',
+  'Silver':            'SILVER',
 };
 
 // Mapping des noms d'affichage
@@ -201,8 +295,10 @@ const COMMODITY_DISPLAY_NAMES: Record<string, string> = {
   'IRON_ORE': 'Iron ore',
   'COPPER': 'Copper',
   'LEAD': 'Lead',
+  'TIN': 'Tin',
   'Tin': 'Tin',
   'NICKEL': 'Nickel',
+  'ZINC': 'Zinc',
   'Zinc': 'Zinc',
   'GOLD': 'Gold',
   'PLATINUM': 'Platinum',
@@ -364,6 +460,18 @@ function detectFileStructure(data: any[][]): {
   };
 }
 
+/**
+ * Normalise un Pink Sheet header name so it can be looked up in HEADER_NAME_TO_SYMBOL.
+ * Strips trailing footnote markers like " **", " *", " (2)", trims whitespace.
+ */
+function normalizeHeaderName(raw: string): string {
+  return raw
+    .replace(/\s*\*{1,2}\s*$/, '')   // trailing * or **
+    .replace(/\s*\(\d+\)\s*$/, '')    // trailing (1), (2) …
+    .replace(/\s{2,}/g, ' ')          // collapse multiple spaces
+    .trim();
+}
+
 // Fonction pour extraire les informations de commodité
 function extractCommodityInfo(data: any[][], structure: any): {
   names: string[];
@@ -374,38 +482,33 @@ function extractCommodityInfo(data: any[][], structure: any): {
   const units: string[] = [];
   const symbols: string[] = [];
   
-  // Chercher les noms des commodités dans les lignes d'en-tête
   for (let colIndex of structure.commodityColumns) {
     let name = '';
     let unit = '';
     let symbol = '';
     
-    // Chercher le nom dans les lignes d'en-tête (en priorité les lignes les plus proches des données)
     for (let row = Math.max(0, structure.headerRows - 3); row < structure.headerRows; row++) {
       const cell = data[row]?.[colIndex];
       if (cell && typeof cell === 'string' && cell.trim().length > 0) {
         const cellValue = cell.trim();
         
-        // Identifier les unités
         if (!unit && (cellValue.includes('$') || cellValue.includes('USD') || cellValue.includes('ton') || 
                      cellValue.includes('kg') || cellValue.includes('bbl') || cellValue.includes('cents') ||
-                     cellValue.includes('yen') || cellValue.includes('euro') || cellValue.includes('per'))) {
+                     cellValue.includes('yen') || cellValue.includes('euro') || cellValue.includes('per') ||
+                     cellValue.includes('mmbtu') || cellValue.includes('dmtu') || cellValue.includes('sheet') ||
+                     cellValue.includes('cubic') || cellValue.includes('troy') || cellValue.match(/^\(.*=.*\)$/))) {
           unit = cellValue;
         }
-        // Identifier le nom principal (ligne la plus proche des données avec un nom significatif)
-        // Accepter aussi les noms courts comme "DAP", "TSP" pour les fertilizers
         else if (!name && cellValue.length >= 2 && !cellValue.match(/^\d+$/) && 
                 !cellValue.toLowerCase().includes('unit') && !cellValue.toLowerCase().includes('source')) {
           name = cellValue;
         }
-        // Identifier le symbole (généralement court et en majuscules)
-        else if (!symbol && cellValue.length <= 15 && cellValue.match(/^[A-Z_0-9]+$/)) {
+        else if (!symbol && cellValue.length <= 20 && cellValue.match(/^[A-Z_0-9]+$/)) {
           symbol = cellValue;
         }
       }
     }
     
-    // Si pas de nom trouvé, chercher dans toutes les lignes d'en-tête
     if (!name) {
       for (let row = 0; row < structure.headerRows; row++) {
         const cell = data[row]?.[colIndex];
@@ -420,18 +523,24 @@ function extractCommodityInfo(data: any[][], structure: any): {
       }
     }
     
-    // Si toujours pas de nom, utiliser un nom générique
     if (!name) {
       name = `Commodity_${colIndex}`;
     }
-    
-    // Générer un symbole basé sur le nom si pas trouvé
+
+    // Try to resolve the symbol via the known header-name mapping first.
+    // This handles footnote markers ("**") and format changes gracefully.
     if (!symbol) {
-      symbol = name
-        .replace(/[^a-zA-Z0-9\s]/g, '') // Remove special characters
-        .replace(/\s+/g, '_') // Replace spaces with underscores
-        .toUpperCase()
-        .substring(0, 15);
+      const normalized = normalizeHeaderName(name);
+      const mapped = HEADER_NAME_TO_SYMBOL[normalized] || HEADER_NAME_TO_SYMBOL[name];
+      if (mapped) {
+        symbol = mapped;
+      } else {
+        symbol = normalized
+          .replace(/[^a-zA-Z0-9\s]/g, '')
+          .replace(/\s+/g, '_')
+          .toUpperCase()
+          .substring(0, 20);
+      }
     }
     
     names.push(name);
