@@ -330,19 +330,6 @@ const SupabaseLogin: React.FC = () => {
                 {isSignUp ? "Déjà un compte ? Se connecter" : "Pas encore de compte ? S’inscrire"}
               </Button>
             </div>
-
-            {!isSignUp && (
-              <div className="rounded-sm border border-[#aef833]/25 bg-[#070e1d]/80 p-4">
-                <h4 className="mb-2 font-headline text-xs font-bold uppercase tracking-wider text-[#aef833]">Compte démo</h4>
-                <p className="text-xs leading-relaxed text-[#c1caaf]">
-                  Email :{" "}
-                  <code className="rounded bg-[#232a3a] px-1.5 py-0.5 font-mono text-[#dce2f7]">demo@fx-hedging.com</code>
-                  <br />
-                  Mot de passe :{" "}
-                  <code className="rounded bg-[#232a3a] px-1.5 py-0.5 font-mono text-[#dce2f7]">demo123</code>
-                </p>
-              </div>
-            )}
           </CardContent>
         </Card>
 

@@ -3563,7 +3563,7 @@ const HedgingInstruments = () => {
                   ))}
                 </SelectContent>
               </Select>
-            </div>
+          </div>
           </div>
           {/* By instrument / strategy / exposure + secondary filters */}
           <div className="space-y-3">
@@ -3721,22 +3721,22 @@ const HedgingInstruments = () => {
                     </>
                   ) : (
                     <>
-                      <h3 className="text-lg font-semibold mb-2">No Commodity Hedging Instruments</h3>
-                      <p className="text-muted-foreground mb-4">
+                  <h3 className="text-lg font-semibold mb-2">No Commodity Hedging Instruments</h3>
+                  <p className="text-muted-foreground mb-4">
                         You haven&apos;t imported any strategies yet. Create and import strategies from the Strategy Builder.
-                      </p>
-                      <div className="flex gap-2 justify-center">
-                        <Button asChild>
-                          <a href="/strategy-builder">
-                            <Target className="h-4 w-4 mr-2" />
-                            Go to Strategy Builder
-                          </a>
-                        </Button>
-                        <Button variant="outline" onClick={() => setIsAddDialogOpen(true)}>
-                          <Plus className="h-4 w-4 mr-2" />
-                          Add Manual Instrument
-                        </Button>
-                      </div>
+                  </p>
+                  <div className="flex gap-2 justify-center">
+                    <Button asChild>
+                      <a href="/strategy-builder">
+                        <Target className="h-4 w-4 mr-2" />
+                        Go to Strategy Builder
+                      </a>
+                    </Button>
+                    <Button variant="outline" onClick={() => setIsAddDialogOpen(true)}>
+                      <Plus className="h-4 w-4 mr-2" />
+                      Add Manual Instrument
+                    </Button>
+                  </div>
                     </>
                   )}
                 </div>
@@ -3745,7 +3745,7 @@ const HedgingInstruments = () => {
                   <div className="border-b bg-muted/20 px-6 py-4">
                     <h2 className="text-lg font-semibold tracking-tight">Strategies</h2>
                     <p className="text-sm text-muted-foreground">Group instruments by hedging strategy.</p>
-                  </div>
+                             </div>
                   <div className="p-4 space-y-3 max-h-[min(85vh,900px)] overflow-y-auto">
                     {strategyViewSummaries.map((s) => (
                       <div
@@ -3770,7 +3770,7 @@ const HedgingInstruments = () => {
                               <Badge variant="secondary" className="text-xs font-normal shrink-0">
                                 Exposure — {s.exposureLabel}
                               </Badge>
-                            </div>
+                                  </div>
                             <p className="text-sm text-muted-foreground mt-1.5 pl-6">
                               {s.legCount} instrument(s) • {s.maturityRange}
                             </p>
@@ -3793,7 +3793,7 @@ const HedgingInstruments = () => {
                               >
                                 Payoff global {formatCurrency(s.payoffGlobal)}
                               </span>
-                            </div>
+                              </div>
                             <div className="flex flex-wrap gap-2">
                               <Button
                                 variant="outline"
@@ -3820,8 +3820,8 @@ const HedgingInstruments = () => {
                                 Show legs
                               </Button>
                             </div>
-                          </div>
-                        </div>
+                            </div>
+                            </div>
                         {strategyExpandedKey === s.key && (
                           <div className="mt-4 border-t pt-4 space-y-2">
                             <p className="text-xs text-muted-foreground flex items-center gap-1">
@@ -3866,13 +3866,13 @@ const HedgingInstruments = () => {
                                   <TableBody>{s.legs.map((leg) => renderHedgingInstrumentTableRow(leg))}</TableBody>
                                 </Table>
                               </div>
+                                </div>
                             </div>
-                          </div>
                         )}
-                      </div>
+                            </div>
                     ))}
-                  </div>
-                </div>
+                              </div>
+                              </div>
               ) : displayView === "exposure" ? (
                 <div className="w-full rounded-xl border bg-card text-card-foreground shadow-sm overflow-hidden">
                   <div className="border-b bg-muted/20 px-6 py-4">
@@ -3880,7 +3880,7 @@ const HedgingInstruments = () => {
                     <p className="text-sm text-muted-foreground">
                       Show hedging strategies and instruments grouped by FX exposure (currency, hedge currency, maturity).
                     </p>
-                  </div>
+                            </div>
                   <div className="p-4 space-y-4 max-h-[min(85vh,900px)] overflow-y-auto">
                     {exposureViewGroups.map((g) => (
                       <div
@@ -3899,7 +3899,7 @@ const HedgingInstruments = () => {
                                 <span className="text-orange-600 dark:text-orange-400"> • Legacy match (no link)</span>
                               )}
                             </p>
-                          </div>
+                                  </div>
                           <div className="flex flex-wrap gap-2 lg:justify-end shrink-0">
                             <span className="inline-flex items-center rounded-full border border-border bg-muted/40 px-3 py-1 text-xs font-medium font-mono">
                               Notional {formatCurrency(g.notionalSum)}
@@ -3908,8 +3908,8 @@ const HedgingInstruments = () => {
                               Target {g.targetRate != null ? g.targetRate.toFixed(4) : "—"} • P&L-rate{" "}
                               {g.plRate != null ? g.plRate.toFixed(4) : "—"}
                             </span>
-                          </div>
-                        </div>
+                                  </div>
+                                </div>
                         <div className="mt-4 border rounded-lg overflow-hidden bg-muted/10">
                           <div className="overflow-x-auto" style={{ maxHeight: "min(55vh,420px)", minHeight: "120px", overflowY: "auto" }}>
                             <Table className="min-w-[720px] border-collapse text-sm">
@@ -3930,7 +3930,7 @@ const HedgingInstruments = () => {
                                     counterparties.find((c) => c.id === leg.counterparty)?.name ||
                                     leg.counterparty ||
                                     "—";
-                                  return (
+                                return (
                                     <TableRow
                                       key={leg.id}
                                       className="cursor-pointer hover:bg-muted/40"
@@ -3941,30 +3941,30 @@ const HedgingInstruments = () => {
                                       <TableCell className="border-r text-muted-foreground">—</TableCell>
                                       <TableCell className="border-r font-medium">
                                         {leg.strategyName?.trim() || "—"}
-                                      </TableCell>
+                          </TableCell>
                                       <TableCell className="border-r font-mono text-xs" title={leg.id}>
                                         {leg.id.length > 22 ? `${leg.id.slice(0, 20)}…` : leg.id}
-                                      </TableCell>
+                          </TableCell>
                                       <TableCell className="border-r">{leg.type}</TableCell>
                                       <TableCell className="border-r font-mono text-xs whitespace-nowrap">
                                         {leg.maturity}
-                                      </TableCell>
+                          </TableCell>
                                       <TableCell className="border-r text-right font-mono">
                                         {formatCurrency(leg.notional)}
-                                      </TableCell>
+                          </TableCell>
                                       <TableCell className="text-muted-foreground">{cpLabel}</TableCell>
                                     </TableRow>
                                   );
                                 })}
                               </TableBody>
                             </Table>
-                          </div>
-                        </div>
-                      </div>
+                            </div>
+                              </div>
+                            </div>
                     ))}
-                  </div>
-                </div>
-              ) : (
+                              </div>
+                            </div>
+                          ) : (
                 <div className="w-full border rounded-lg overflow-hidden bg-background">
                   <div className="overflow-x-auto" style={{ maxHeight: 'calc(100vh - 250px)', minHeight: '600px', overflowY: 'auto' }}>
                     <Table className="min-w-full border-collapse">
@@ -4003,9 +4003,9 @@ const HedgingInstruments = () => {
                               className="bg-muted/70 font-semibold text-sm py-2.5 border-b border-border"
                             >
                               <>Exposure: {row.title}</>
-                            </TableCell>
-                          </TableRow>
-                        );
+                        </TableCell>
+                      </TableRow>
+                      );
                       }
                       return renderHedgingInstrumentTableRow(row.instrument);
                     })}
