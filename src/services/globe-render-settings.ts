@@ -79,9 +79,12 @@ export const GLOBE_TEXTURE_OPTIONS: { value: GlobeTexture; label: string }[] = [
   { value: 'blue-marble', label: 'Blue Marble (NASA)' },
 ];
 
+/** Textures servies depuis unpkg (le dépôt n’inclut pas `public/textures/` par défaut — les chemins locaux 404 cassaient le globe). Aligné sur la version `three-globe` du lockfile. */
+const THREE_GLOBE_ASSETS = 'https://unpkg.com/three-globe@2.45.2/example/img';
+
 export const GLOBE_TEXTURE_URLS: Record<GlobeTexture, string> = {
-  'topographic': '/textures/earth-topo-bathy.jpg',
-  'blue-marble': '/textures/earth-blue-marble.jpg',
+  topographic: `${THREE_GLOBE_ASSETS}/earth-topology.png`,
+  'blue-marble': `${THREE_GLOBE_ASSETS}/earth-blue-marble.jpg`,
 };
 
 export function getGlobeTexture(): GlobeTexture {

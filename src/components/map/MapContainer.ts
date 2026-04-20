@@ -145,7 +145,8 @@ export class MapContainer {
     this.container = container;
     this.initialState = initialState;
     this.isMobile = isMobileDevice();
-    this.useGlobe = preferGlobe && this.hasWebGLSupport();
+    // Globe.gl / Three.js utilisent souvent WebGL1 ; Deck.gl + MapLibre préfèrent WebGL2.
+    this.useGlobe = preferGlobe && this.hasBasicWebGLSupport();
 
     // Use deck.gl on desktop with WebGL support, SVG on mobile
     this.useDeckGL = !this.useGlobe && this.shouldUseDeckGL();
@@ -153,21 +154,32 @@ export class MapContainer {
     this.init();
   }
 
-  private hasWebGLSupport(): boolean {
+  /** WebGL2 — requis pour une carte 2D Deck.gl / MapLibre fiable. */
+  private hasWebGL2Support(): boolean {
     try {
       const canvas = document.createElement('canvas');
-      // deck.gl + maplibre rely on WebGL2 features in desktop mode.
-      // Some Linux WebKitGTK builds expose only WebGL1, which can lead to
-      // an empty/black render surface instead of a usable map.
-      const gl2 = canvas.getContext('webgl2');
-      return !!gl2;
+      return !!canvas.getContext('webgl2');
+    } catch {
+      return false;
+    }
+  }
+
+  /** WebGL1 ou 2 — suffisant pour le globe 3D (globe.gl). */
+  private hasBasicWebGLSupport(): boolean {
+    try {
+      const canvas = document.createElement('canvas');
+      return !!(
+        canvas.getContext('webgl2') ||
+        canvas.getContext('webgl') ||
+        canvas.getContext('experimental-webgl')
+      );
     } catch {
       return false;
     }
   }
 
   private shouldUseDeckGL(): boolean {
-    if (!this.hasWebGLSupport()) return false;
+    if (!this.hasWebGL2Support()) return false;
     if (!this.isMobile) return true;
     const mem = (navigator as any).deviceMemory;
     if (mem !== undefined && mem < 3) return false;

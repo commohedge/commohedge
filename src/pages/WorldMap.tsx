@@ -298,8 +298,8 @@ export function WorldMapContent({ embedded = false }: WorldMapContentProps) {
           <div className="world-map-toolbar flex flex-wrap items-center justify-end gap-1 shrink-0">
             {globeBlockedByWebgl && (
               <p className="w-full text-[11px] text-amber-600 dark:text-amber-400 mb-1">
-                WebGL2 indisponible : le globe 3D est désactivé. Affichage carte 2D. Essayez un autre navigateur ou
-                mettez à jour les pilotes graphiques.
+                WebGL indisponible : le globe 3D est désactivé. Affichage carte 2D ou SVG. Activez l’accélération
+                matérielle dans le navigateur ou mettez à jour les pilotes graphiques.
               </p>
             )}
             <div className="relative mr-auto min-w-[240px] max-w-[420px] w-full sm:w-auto">
