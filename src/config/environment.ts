@@ -1,4 +1,20 @@
 // Configuration de l'environnement
+//
+// Intelligence workspace (carte, Hormuz, AIS, Live TV) — variables optionnelles utiles :
+// - VITE_PMTILES_URL / VITE_PMTILES_URL_PUBLIC : tuiles vectorielles Protomaps (carte détaillée)
+// - VITE_LIVE_NEWS_API_BASE : relais métadonnées YouTube (défaut interne world-watcher si non défini)
+// - VITE_WS_API_URL : API WorldMonitor / RPC (optionnel)
+// - VITE_FUTURES_SUPABASE_URL / VITE_FUTURES_SUPABASE_PUBLISHABLE_KEY : second projet Supabase (scraping / terminal)
+// Les Edge Functions `hormuz-tracker` et `ais-sse` doivent être déployées sur le projet visé par
+// VITE_SUPABASE_URL + VITE_SUPABASE_ANON_KEY (ou utiliser les mêmes URL/clés que le projet `fertilizers`).
+// Copier les entrées du fichier `fertilizers/.env` vers la racine de cette app (fichier `.env` local, non versionné).
+//
+// Carte / intelligence :
+// - VITE_WS_API_URL : API WorldMonitor (couches RPC). Par défaut le code utilise api.worldmonitor.app en localhost.
+// - VITE_PMTILES_URL : tuiles Protomaps vectorielles (optionnel) ; sans → fond OpenFreeMap / CARTO.
+// - VITE_MAP_INTERACTION_MODE=flat : affichage 2D “plat” côté deck ; sans → mode 3D bâtiments quand le style le permet.
+// - Globe 3D : WebGL2 requis ; bouton 2D/3D sur la carte. Workspace intégré : globe par défaut (desktop).
+//   VITE_DEFAULT_MAP_MODE=globe|flat pour forcer le défaut si pas de clé localStorage.
 export const config = {
   // Supabase Configuration
   supabase: {

@@ -36,6 +36,9 @@ import RegressionAnalysis from "./pages/RegressionAnalysis";
 import RateExplorer from "./pages/RateExplorer";
 import HedgeHelper from "./pages/HedgeHelper";
 import TickerPeekPro from "./pages/TickerPeekPro";
+import IntelWorkspace from "./pages/IntelWorkspace";
+import WorldMap from "./pages/WorldMap";
+import CommodityNews from "./pages/CommodityNews";
 import LandingPage from "./pages/LandingPage";
 import SupabaseLogin from "./pages/SupabaseLogin";
 import AuthCallback from "./pages/AuthCallback";
@@ -93,6 +96,9 @@ const App = () => {
             <Route path="/positions" element={<ProtectedRoute><PositionMonitor /></ProtectedRoute>} />
             <Route path="/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
             <Route path="/commodity-market" element={<ProtectedRoute><CommodityMarket /></ProtectedRoute>} />
+            <Route path="/intel-workspace" element={<ProtectedRoute><IntelWorkspace /></ProtectedRoute>} />
+            <Route path="/world-map" element={<ProtectedRoute><WorldMap /></ProtectedRoute>} />
+            <Route path="/commodity-news" element={<ProtectedRoute><CommodityNews /></ProtectedRoute>} />
             <Route path="/market-news" element={<ProtectedRoute><MarketNews /></ProtectedRoute>} />
             <Route path="/economic-calendar" element={<ProtectedRoute><EconomicCalendar /></ProtectedRoute>} />
             <Route path="/advanced-chart" element={<ProtectedRoute><AdvancedChart /></ProtectedRoute>} />

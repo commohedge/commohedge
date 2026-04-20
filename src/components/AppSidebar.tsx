@@ -20,6 +20,7 @@ import {
   LineChart,
   Percent,
   MessageSquare,
+  LayoutGrid,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
@@ -70,6 +71,12 @@ const marketDataItems: MarketDataNavItem[] = [
     url: "/commodity-market",
     icon: Globe,
     description: "Real-time commodity market data and prices"
+  },
+  {
+    title: "Intelligence workspace",
+    url: "/intel-workspace",
+    icon: LayoutGrid,
+    description: "Map, live news, commodity feeds, chart & prices in one layout"
   },
   {
     title: "Rate Explorer",
