@@ -150,8 +150,33 @@ function loadFromCache(category: CommodityCategory): any[] | null {
       return item;
     });
 
-    console.log(`Loading cached data for ${category}: ${migratedData.length} items (${Math.round((now - cacheData.timestamp) / (1000 * 60 * 60))} hours old)`);
-    return migratedData;
+    // Never treat an empty cache as "valid" — it blocks live fetches and breaks lightweight UIs (e.g. landing tickers).
+    if (!Array.isArray(migratedData) || migratedData.length === 0) {
+      console.warn(`Cached data for ${category} is empty; clearing cache key to force refetch`);
+      try {
+        localStorage.removeItem(getCacheKey(category));
+      } catch {}
+      return null;
+    }
+
+    // Drop obviously-invalid rows from cache (previously we could persist empty/partial parses).
+    const filtered = migratedData.filter((item: any) => {
+      const price = typeof item?.price === 'number' ? item.price : Number(item?.price);
+      if (!Number.isFinite(price)) return false;
+      if (category === 'freight') return price >= 0;
+      return price > 0;
+    });
+
+    if (filtered.length === 0) {
+      console.warn(`Cached data for ${category} contained 0 usable prices; clearing cache key to force refetch`);
+      try {
+        localStorage.removeItem(getCacheKey(category));
+      } catch {}
+      return null;
+    }
+
+    console.log(`Loading cached data for ${category}: ${filtered.length} items (${Math.round((now - cacheData.timestamp) / (1000 * 60 * 60))} hours old)`);
+    return filtered;
   } catch (error) {
     console.error(`Error loading cache for ${category}:`, error);
     return null;
@@ -903,14 +928,22 @@ export async function fetchCommoditiesData(category: CommodityCategory = 'metals
       // Fallback to individual symbol pages (optimized parallel processing)
       console.log('🔄 Falling back to individual symbol scraping (slower but more reliable)...');
       const freightData = await fetchFreightData();
-      saveToCache(category, freightData);
+      if (freightData.length > 0) {
+        saveToCache(category, freightData);
+      } else {
+        console.warn(`Freight fetch produced 0 rows; not caching empty result for ${category}`);
+      }
       return freightData;
     }
     
     // Special handling for bunker
     if (category === 'bunker') {
       const bunkerData = await fetchBunkerData();
-      saveToCache(category, bunkerData);
+      if (bunkerData.length > 0) {
+        saveToCache(category, bunkerData);
+      } else {
+        console.warn(`Bunker fetch produced 0 rows; not caching empty result for ${category}`);
+      }
       return bunkerData;
     }
 
@@ -920,7 +953,11 @@ export async function fetchCommoditiesData(category: CommodityCategory = 'metals
     
     // Parse the HTML retrieved to extract commodity data
     const commodities = normalizeCommoditySymbols(parseCommoditiesData(data, category));
-    saveToCache(category, commodities);
+    if (commodities.length > 0) {
+      saveToCache(category, commodities);
+    } else {
+      console.warn(`Category scrape produced 0 rows; not caching empty result for ${category}`);
+    }
     return commodities;
   } catch (error) {
     console.error(`Error fetching ${category} data:`, error);

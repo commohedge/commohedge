@@ -4,7 +4,7 @@ import LandingNav from "@/components/LandingNav";
 import { ChevronDown, ChevronUp, Star } from "lucide-react";
 import { BRAND } from "@/constants/branding";
 import "@/styles/landing-terminal.css";
-import { Commodity, fetchCommoditiesData } from "@/services/commodityApi";
+import { Commodity, CommodityCategory, fetchCommoditiesData, refreshCommoditiesData } from "@/services/commodityApi";
 
 /** Hero & vertical imagery — same AIDA assets as Stitch reference */
 const TERMINAL_MEDIA = {
@@ -50,6 +50,72 @@ function formatLandingChange(c: Commodity): { text: string; up: boolean } {
   const up = pct >= 0;
   const abs = Math.abs(pct).toFixed(2);
   return { text: `${up ? "+" : "-"}${abs}%`, up };
+}
+
+function norm(s: string) {
+  return (s || "").toLowerCase();
+}
+
+function isRenderableCommodity(c: Commodity, category: CommodityCategory): boolean {
+  const price = Number.isFinite(c.price) ? c.price : NaN;
+  if (!Number.isFinite(price)) return false;
+  if (category === "freight") return price >= 0;
+  return price > 0;
+}
+
+function scoreCommodityMatch(c: Commodity, tokens: string[]): number {
+  const hay = `${norm(c.symbol)} ${norm(c.name)}`;
+  let score = 0;
+  for (const t of tokens) {
+    if (!t) continue;
+    if (hay.includes(t)) score += 2;
+  }
+  // small boost for obvious symbol prefixes
+  const sym = (c.symbol || "").toUpperCase();
+  if (tokens.some((t) => sym.includes(t.toUpperCase()))) score += 1;
+  return score;
+}
+
+function pickBestCommodity(rows: Commodity[], category: CommodityCategory, tokens: string[]): Commodity | null {
+  const usable = rows.filter((r) => isRenderableCommodity(r, category));
+  if (usable.length === 0) return null;
+
+  let best: Commodity | null = null;
+  let bestScore = -1;
+  for (const r of usable) {
+    const sc = scoreCommodityMatch(r, tokens);
+    if (sc > bestScore) {
+      bestScore = sc;
+      best = r;
+    }
+  }
+
+  // If we couldn't match tokens, fall back to first usable row (still real data from Commodity Market feed).
+  return bestScore > 0 ? best : usable[0];
+}
+
+function pickBestCommodityExcluding(
+  rows: Commodity[],
+  category: CommodityCategory,
+  tokens: string[],
+  exclude: Commodity | null
+): Commodity | null {
+  if (!exclude) return pickBestCommodity(rows, category, tokens);
+  const filtered = rows.filter((r) => r.symbol !== exclude.symbol || r.name !== exclude.name);
+  return pickBestCommodity(filtered, category, tokens);
+}
+
+async function loadCommodityCategoryRows(category: CommodityCategory): Promise<Commodity[]> {
+  const first = await fetchCommoditiesData(category, false);
+  const usableFirst = first.filter((r) => isRenderableCommodity(r, category));
+  if (usableFirst.length > 0) return first;
+
+  // Cache can be empty/invalid; force refresh like the Commodity Market "Refresh" button.
+  try {
+    return await refreshCommoditiesData(category);
+  } catch {
+    return first;
+  }
 }
 
 function TickerRow({ runId, items }: { runId: string; items: LandingTickerItem[] }) {
@@ -146,47 +212,35 @@ const LandingPage = () => {
   useEffect(() => {
     let cancelled = false;
 
-    const pickBy = (rows: Commodity[], pred: (c: Commodity) => boolean) =>
-      rows.find(pred) || null;
-
     const loadTicker = async () => {
       try {
-        // Use the same data source as the Commodity Market page.
+        // Same pipeline as Commodity Market, but resilient to empty localStorage caches.
         const [energy, freight, bunker, metals] = await Promise.all([
-          fetchCommoditiesData("energy"),
-          fetchCommoditiesData("freight"),
-          fetchCommoditiesData("bunker"),
-          fetchCommoditiesData("metals"),
+          loadCommodityCategoryRows("energy"),
+          loadCommodityCategoryRows("freight"),
+          loadCommodityCategoryRows("bunker"),
+          loadCommodityCategoryRows("metals"),
         ]);
 
         const wti =
-          pickBy(energy, (c) => (c.name || "").toLowerCase().includes("wti")) ||
-          pickBy(energy, (c) => (c.symbol || "").toUpperCase().includes("CL")) ||
-          energy[0] ||
-          null;
+          pickBestCommodity(energy, "energy", ["wti", "crude", "light", "cl"]) ||
+          pickBestCommodity(energy, "energy", ["nymex", "oil"]);
 
         const brent =
-          pickBy(energy, (c) => (c.name || "").toLowerCase().includes("brent")) ||
-          pickBy(energy, (c) => (c.symbol || "").toUpperCase().includes("BRN")) ||
-          energy[1] ||
+          pickBestCommodityExcluding(energy, "energy", ["brent", "brn", "ice", "north sea"], wti) ||
           null;
 
         const baltic =
-          pickBy(freight, (c) => (c.name || "").toLowerCase().includes("baltic")) ||
-          freight[0] ||
-          null;
+          pickBestCommodity(freight, "freight", ["baltic", "bdiy", "dry"]) ||
+          pickBestCommodity(freight, "freight", ["freight", "route", "container"]);
 
         const vlsfoSingapore =
-          pickBy(bunker, (c) => (c.symbol || "").toUpperCase().startsWith("VLSFO") && (c.name || "").toLowerCase().includes("singapore")) ||
-          pickBy(bunker, (c) => (c.name || "").toLowerCase().includes("singapore") && (c.name || "").toLowerCase().includes("vlsfo")) ||
-          pickBy(bunker, (c) => (c.symbol || "").toUpperCase().startsWith("VLSFO")) ||
-          null;
+          pickBestCommodity(bunker, "bunker", ["vlsfo", "singapore", "sg"]) ||
+          pickBestCommodity(bunker, "bunker", ["vlsfo"]);
 
         const ironOre =
-          pickBy(metals, (c) => (c.name || "").toLowerCase().includes("iron ore")) ||
-          pickBy(metals, (c) => (c.name || "").includes("62")) ||
-          metals[0] ||
-          null;
+          pickBestCommodity(metals, "metals", ["iron ore", "62", "fe", "tio", "ore"]) ||
+          pickBestCommodity(metals, "metals", ["steel"]);
 
         const next: LandingTickerItem[] = [
           wti
@@ -204,7 +258,7 @@ const LandingPage = () => {
           baltic
             ? (() => {
                 const chg = formatLandingChange(baltic);
-                return { label: "Baltic", value: formatLandingValue(baltic), change: chg.text, up: chg.up };
+                return { label: "Baltic dry", value: formatLandingValue(baltic), change: chg.text, up: chg.up };
               })()
             : FALLBACK_TICKER_ITEMS[2],
           vlsfoSingapore
@@ -216,7 +270,7 @@ const LandingPage = () => {
           ironOre
             ? (() => {
                 const chg = formatLandingChange(ironOre);
-                return { label: "Iron ore", value: formatLandingValue(ironOre), change: chg.text, up: chg.up };
+                return { label: "Iron ore 62%", value: formatLandingValue(ironOre), change: chg.text, up: chg.up };
               })()
             : FALLBACK_TICKER_ITEMS[4],
         ];
