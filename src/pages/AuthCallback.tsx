@@ -20,7 +20,7 @@ const AuthCallback: React.FC = () => {
           
           if (error) {
             console.error('Erreur lors de la récupération de la session:', error)
-            navigate('/login?error=auth_error')
+            navigate('/supabase-login?error=auth_error')
             return
           }
 
@@ -29,7 +29,7 @@ const AuthCallback: React.FC = () => {
             navigate('/dashboard')
           } else {
             // Pas de session, rediriger vers la page de connexion
-            navigate('/login')
+            navigate('/supabase-login')
           }
         }
       } catch (error) {
@@ -38,7 +38,7 @@ const AuthCallback: React.FC = () => {
           window.opener.postMessage({ type: 'GOOGLE_AUTH_ERROR', error: error.message }, window.location.origin)
           window.close()
         } else {
-          navigate('/login?error=auth_error')
+          navigate('/supabase-login?error=auth_error')
         }
       }
     }
@@ -53,10 +53,10 @@ const AuthCallback: React.FC = () => {
           <Loader2 className="h-8 w-8 animate-spin text-white" />
         </div>
         <h2 className="text-xl font-semibold text-white mb-2">
-          Finalisation de la connexion...
+          Finishing sign-in...
         </h2>
         <p className="text-white/70">
-          Veuillez patienter pendant que nous vous connectons.
+          Please wait while we sign you in.
         </p>
       </div>
     </div>

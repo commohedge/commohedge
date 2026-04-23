@@ -18,8 +18,8 @@
 export const config = {
   // Supabase Configuration
   supabase: {
-    url: import.meta.env.VITE_SUPABASE_URL || 'https://fwjdrsubflqmllkhhdef.supabase.co',
-    anonKey: import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZ3amRyc3ViZmxxbWxsa2hoZGVmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjA2MjY2OTAsImV4cCI6MjA3NjIwMjY5MH0.0p6Dn7upz3-beCUVO1aVVBUj64ThBujci6imrIljxsA'
+    url: import.meta.env.VITE_SUPABASE_URL || 'https://iflnsckduohrcafafcpj.supabase.co',
+    anonKey: import.meta.env.VITE_SUPABASE_ANON_KEY || 'sb_publishable_1wxQlJYrs4cqXinMMohHtw_KIsybCpJ'
   },
   
   // Application Configuration

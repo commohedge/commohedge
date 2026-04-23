@@ -130,13 +130,13 @@ class SupabaseAuthService {
       return {
         success: true,
         user: data.user,
-        message: 'Connexion réussie !'
+        message: 'Signed in successfully!'
       }
     } catch (error: any) {
       console.error('Erreur de connexion:', error)
       return {
         success: false,
-        error: error.message || 'Erreur lors de la connexion'
+        error: error.message || 'Error while signing in'
       }
     }
   }
@@ -152,7 +152,7 @@ class SupabaseAuthService {
       )
 
       if (!popup) {
-        throw new Error('Popup bloquée. Veuillez autoriser les popups pour ce site.')
+        throw new Error('Popup blocked. Please allow popups for this site.')
       }
 
       // Obtenir l'URL d'authentification Google
@@ -189,12 +189,12 @@ class SupabaseAuthService {
                 resolve({
                   success: true,
                   user: user,
-                  message: 'Connexion Google réussie !'
+                  message: 'Signed in with Google successfully!'
                 })
               } else {
                 resolve({
                   success: false,
-                  error: 'Authentification échouée'
+                  error: 'Authentication failed'
                 })
               }
             })
@@ -203,7 +203,7 @@ class SupabaseAuthService {
             clearInterval(checkClosed)
             resolve({
               success: false,
-              error: event.data.error || 'Erreur d\'authentification'
+              error: event.data.error || 'Authentication error'
             })
           }
         }
@@ -220,12 +220,12 @@ class SupabaseAuthService {
                 resolve({
                   success: true,
                   user: user,
-                  message: 'Connexion Google réussie !'
+                  message: 'Signed in with Google successfully!'
                 })
               } else {
                 resolve({
                   success: false,
-                  error: 'Authentification annulée'
+                  error: 'Authentication cancelled'
                 })
               }
             })
@@ -241,7 +241,7 @@ class SupabaseAuthService {
           window.removeEventListener('message', messageHandler)
           resolve({
             success: false,
-            error: 'Timeout de l\'authentification'
+            error: 'Authentication timed out'
           })
         }, 300000) // 5 minutes
       })
@@ -250,7 +250,7 @@ class SupabaseAuthService {
       console.error('Erreur de connexion Google:', error)
       return {
         success: false,
-        error: error.message || 'Erreur lors de la connexion Google'
+        error: error.message || 'Error while signing in with Google'
       }
     }
   }
@@ -263,13 +263,13 @@ class SupabaseAuthService {
 
       return {
         success: true,
-        message: 'Déconnexion réussie !'
+        message: 'Signed out successfully!'
       }
     } catch (error: any) {
       console.error('Erreur de déconnexion:', error)
       return {
         success: false,
-        error: error.message || 'Erreur lors de la déconnexion'
+        error: error.message || 'Error while signing out'
       }
     }
   }
@@ -321,13 +321,13 @@ class SupabaseAuthService {
 
       return {
         success: true,
-        message: 'Email de réinitialisation envoyé !'
+        message: 'Password reset email sent!'
       }
     } catch (error: any) {
       console.error('Erreur de réinitialisation:', error)
       return {
         success: false,
-        error: error.message || 'Erreur lors de la réinitialisation'
+        error: error.message || 'Error while resetting password'
       }
     }
   }
@@ -343,13 +343,13 @@ class SupabaseAuthService {
 
       return {
         success: true,
-        message: 'Profil mis à jour !'
+        message: 'Profile updated!'
       }
     } catch (error: any) {
       console.error('Erreur de mise à jour du profil:', error)
       return {
         success: false,
-        error: error.message || 'Erreur lors de la mise à jour'
+        error: error.message || 'Error while updating profile'
       }
     }
   }

@@ -28,7 +28,7 @@ export const useSupabaseAuth = () => {
         setUser(null)
       }
     } catch (error) {
-      console.error('Erreur lors de la vérification de l\'authentification:', error)
+      console.error('Error while checking authentication:', error)
       setIsAuthenticated(false)
       setUser(null)
     } finally {
@@ -56,10 +56,10 @@ export const useSupabaseAuth = () => {
       
       return result
     } catch (error) {
-      console.error('Erreur d\'inscription:', error)
+      console.error('Sign-up error:', error)
       toast({
-        title: "Erreur d'inscription",
-          description: "An unexpected error occurred",
+        title: "Sign-up error",
+        description: "An unexpected error occurred",
         variant: "destructive"
       })
       return { success: false, error: 'Unexpected error' }
@@ -75,7 +75,7 @@ export const useSupabaseAuth = () => {
       
       if (result.success) {
         toast({
-          title: "Connexion réussie",
+          title: "Signed in",
           description: result.message,
         })
         
@@ -93,7 +93,7 @@ export const useSupabaseAuth = () => {
         }
       } else {
         toast({
-          title: "Erreur de connexion",
+          title: "Sign-in error",
           description: result.error,
           variant: "destructive"
         })
@@ -101,10 +101,10 @@ export const useSupabaseAuth = () => {
       
       return result
     } catch (error) {
-      console.error('Erreur de connexion:', error)
+      console.error('Sign-in error:', error)
       toast({
-        title: "Erreur de connexion",
-          description: "An unexpected error occurred",
+        title: "Sign-in error",
+        description: "An unexpected error occurred",
         variant: "destructive"
       })
       return { success: false, error: 'Unexpected error' }
@@ -120,7 +120,7 @@ export const useSupabaseAuth = () => {
       
       if (result.success) {
         toast({
-          title: "Connexion Google réussie",
+          title: "Signed in with Google",
           description: result.message,
         })
         
@@ -131,7 +131,7 @@ export const useSupabaseAuth = () => {
         }
       } else {
         toast({
-          title: "Erreur de connexion Google",
+          title: "Google sign-in error",
           description: result.error,
           variant: "destructive"
         })
@@ -139,10 +139,10 @@ export const useSupabaseAuth = () => {
       
       return result
     } catch (error) {
-      console.error('Erreur de connexion Google:', error)
+      console.error('Google sign-in error:', error)
       toast({
-        title: "Erreur de connexion Google",
-          description: "An unexpected error occurred",
+        title: "Google sign-in error",
+        description: "An unexpected error occurred",
         variant: "destructive"
       })
       return { success: false, error: 'Unexpected error' }
@@ -158,7 +158,7 @@ export const useSupabaseAuth = () => {
       
       if (result.success) {
         toast({
-          title: "Déconnexion réussie",
+          title: "Signed out",
           description: result.message,
         })
         
@@ -167,7 +167,7 @@ export const useSupabaseAuth = () => {
         setIsAuthenticated(false)
       } else {
         toast({
-          title: "Erreur de déconnexion",
+          title: "Sign-out error",
           description: result.error,
           variant: "destructive"
         })
@@ -175,10 +175,10 @@ export const useSupabaseAuth = () => {
       
       return result
     } catch (error) {
-      console.error('Erreur de déconnexion:', error)
+      console.error('Sign-out error:', error)
       toast({
-        title: "Erreur de déconnexion",
-          description: "An unexpected error occurred",
+        title: "Sign-out error",
+        description: "An unexpected error occurred",
         variant: "destructive"
       })
       return { success: false, error: 'Unexpected error' }
@@ -194,12 +194,12 @@ export const useSupabaseAuth = () => {
       
       if (result.success) {
         toast({
-          title: "Email envoyé",
+          title: "Email sent",
           description: result.message,
         })
       } else {
         toast({
-          title: "Erreur d'envoi",
+          title: "Email error",
           description: result.error,
           variant: "destructive"
         })
@@ -207,10 +207,10 @@ export const useSupabaseAuth = () => {
       
       return result
     } catch (error) {
-      console.error('Erreur de réinitialisation:', error)
+      console.error('Password reset error:', error)
       toast({
-        title: "Erreur de réinitialisation",
-          description: "An unexpected error occurred",
+        title: "Password reset error",
+        description: "An unexpected error occurred",
         variant: "destructive"
       })
       return { success: false, error: 'Unexpected error' }
@@ -226,7 +226,7 @@ export const useSupabaseAuth = () => {
       
       if (result.success) {
         toast({
-          title: "Profil mis à jour",
+          title: "Profile updated",
           description: result.message,
         })
         
@@ -238,7 +238,7 @@ export const useSupabaseAuth = () => {
         }
       } else {
         toast({
-          title: "Erreur de mise à jour",
+          title: "Profile update error",
           description: result.error,
           variant: "destructive"
         })
@@ -246,10 +246,10 @@ export const useSupabaseAuth = () => {
       
       return result
     } catch (error) {
-      console.error('Erreur de mise à jour du profil:', error)
+      console.error('Profile update error:', error)
       toast({
-        title: "Erreur de mise à jour",
-          description: "An unexpected error occurred",
+        title: "Profile update error",
+        description: "An unexpected error occurred",
         variant: "destructive"
       })
       return { success: false, error: 'Unexpected error' }

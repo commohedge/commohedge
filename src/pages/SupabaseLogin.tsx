@@ -46,17 +46,17 @@ const SupabaseLogin: React.FC = () => {
     setError("");
 
     if (!email || !password) {
-      setError("Veuillez remplir tous les champs");
+      setError("Please fill in all fields");
       return;
     }
 
     if (isSignUp && !name.trim()) {
-      setError("Veuillez entrer votre nom complet");
+      setError("Please enter your full name");
       return;
     }
 
     if (password.length < 6) {
-      setError("Le mot de passe doit contenir au moins 6 caractères");
+      setError("Password must be at least 6 characters long");
       return;
     }
 
@@ -66,8 +66,8 @@ const SupabaseLogin: React.FC = () => {
         result = await signUp(email, password, { name, role });
         if (result.success) {
           toast({
-            title: "Inscription réussie",
-            description: result.message || "Vérifiez votre email pour confirmer votre compte",
+            title: "Sign up successful",
+            description: result.message || "Check your email to confirm your account",
           });
 
           if (result.user?.email_confirmed_at) {
@@ -84,10 +84,10 @@ const SupabaseLogin: React.FC = () => {
       }
 
       if (!result.success) {
-        setError(result.error || "Une erreur est survenue");
+        setError(result.error || "Something went wrong");
       }
     } catch {
-      setError("Une erreur inattendue est survenue");
+      setError("An unexpected error occurred");
     }
   };
 
@@ -95,16 +95,16 @@ const SupabaseLogin: React.FC = () => {
     try {
       const result = await signInWithGoogle();
       if (!result.success) {
-        setError(result.error || "Erreur de connexion Google");
+        setError(result.error || "Google sign-in error");
       }
     } catch {
-      setError("Erreur de connexion Google");
+      setError("Google sign-in error");
     }
   };
 
   const handleForgotPassword = async () => {
     if (!email) {
-      setError("Veuillez entrer votre email d'abord");
+      setError("Please enter your email first");
       return;
     }
 
@@ -112,14 +112,14 @@ const SupabaseLogin: React.FC = () => {
       const result = await resetPassword(email);
       if (result.success) {
         toast({
-          title: "Email envoyé",
-          description: "Vérifiez votre boîte email pour réinitialiser votre mot de passe",
+          title: "Email sent",
+          description: "Check your inbox to reset your password",
         });
       } else {
-        setError(result.error || "Erreur d'envoi de l'email");
+        setError(result.error || "Failed to send email");
       }
     } catch {
-      setError("Erreur de réinitialisation");
+      setError("Password reset error");
     }
   };
 
@@ -128,7 +128,7 @@ const SupabaseLogin: React.FC = () => {
       <div className="landing-terminal-root dark flex min-h-screen items-center justify-center bg-[#0c1322] text-[#dce2f7]">
         <div className="flex items-center gap-2 font-headline">
           <Loader2 className="h-6 w-6 animate-spin text-[#aef833]" />
-          <span>Vérification de la session…</span>
+          <span>Checking session…</span>
         </div>
       </div>
     );
@@ -154,7 +154,7 @@ const SupabaseLogin: React.FC = () => {
           className="mb-6 -ml-2 w-fit font-headline text-xs font-bold uppercase tracking-wider text-[#c1caaf] hover:bg-white/5 hover:text-white"
         >
           <ArrowLeft className="mr-2 h-4 w-4" />
-          Retour à l&apos;accueil
+          Back to home
         </Button>
 
         <Card className="landing-glass-card border border-[#424a35]/25 bg-[#141b2b]/70 shadow-2xl backdrop-blur-xl">
@@ -170,19 +170,19 @@ const SupabaseLogin: React.FC = () => {
 
             <div>
               <CardTitle className="font-headline text-2xl font-bold tracking-tight text-white">
-                {isSignUp ? "Créer un compte" : "Connexion"}
+                {isSignUp ? "Create an account" : "Sign in"}
               </CardTitle>
               <CardDescription className="text-[#c1caaf]">
                 {isSignUp
                   ? `${BRAND.name} — ${BRAND.tagline}`
-                  : `Accédez au terminal ${BRAND.name}`}
+                  : `Access the ${BRAND.name} terminal`}
               </CardDescription>
             </div>
 
             <div className="flex justify-center gap-2">
               <Badge variant="outline" className="border-[#aef833]/35 font-headline text-[10px] uppercase tracking-wider text-[#aef833]">
                 <CheckCircle className="mr-1 h-3 w-3" />
-                Sécurisé
+                Secure
               </Badge>
               <Badge variant="outline" className="border-[#424a35]/50 font-headline text-[10px] uppercase tracking-wider text-[#aeb5c5]">
                 Supabase Auth
@@ -206,7 +206,7 @@ const SupabaseLogin: React.FC = () => {
                 disabled={isLoading}
               >
                 <Chrome className="mr-2 h-5 w-5" />
-                Continuer avec Google
+                Continue with Google
               </Button>
 
               <Button
@@ -217,7 +217,7 @@ const SupabaseLogin: React.FC = () => {
                 <Apple className="mr-2 h-5 w-5" />
                 Apple
                 <Badge variant="secondary" className="ml-2 text-[10px]">
-                  Bientôt
+                  Coming soon
                 </Badge>
               </Button>
             </div>
@@ -227,7 +227,7 @@ const SupabaseLogin: React.FC = () => {
                 <div className="w-full border-t border-[#424a35]/30" />
               </div>
               <div className="relative flex justify-center text-xs">
-                <span className="bg-[#141b2b]/90 px-2 font-headline uppercase tracking-widest text-[#8c947b]">ou</span>
+                <span className="bg-[#141b2b]/90 px-2 font-headline uppercase tracking-widest text-[#8c947b]">or</span>
               </div>
             </div>
 
@@ -235,7 +235,7 @@ const SupabaseLogin: React.FC = () => {
               {isSignUp && (
                 <div className="space-y-2">
                   <Label htmlFor="name" className="font-headline text-xs uppercase tracking-wide text-[#c1caaf]">
-                    Nom complet
+                    Full name
                   </Label>
                   <Input
                     id="name"
@@ -243,7 +243,7 @@ const SupabaseLogin: React.FC = () => {
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                     className="rounded-sm border-[#424a35]/40 bg-[#070e1d] text-white placeholder:text-[#8c947b]/80 focus-visible:ring-[#aef833]/40"
-                    placeholder="Votre nom"
+                    placeholder="Your name"
                     required={isSignUp}
                   />
                 </div>
@@ -269,7 +269,7 @@ const SupabaseLogin: React.FC = () => {
 
               <div className="space-y-2">
                 <Label htmlFor="password" className="font-headline text-xs uppercase tracking-wide text-[#c1caaf]">
-                  Mot de passe
+                  Password
                 </Label>
                 <div className="relative">
                   <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#8c947b]" />
@@ -302,7 +302,7 @@ const SupabaseLogin: React.FC = () => {
                     onClick={handleForgotPassword}
                     className="h-auto p-0 font-headline text-xs uppercase tracking-wide text-[#aef833] hover:text-[#dce2f7]"
                   >
-                    Mot de passe oublié ?
+                    Forgot password?
                   </Button>
                 </div>
               )}
@@ -313,7 +313,7 @@ const SupabaseLogin: React.FC = () => {
                 className="landing-btn-industrial landing-industrial-gradient w-full rounded-sm font-headline font-bold uppercase tracking-widest text-[#213600] hover:brightness-110"
               >
                 {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                {isSignUp ? "Créer le compte" : "Se connecter"}
+                {isSignUp ? "Create account" : "Sign in"}
               </Button>
             </form>
 
@@ -327,7 +327,7 @@ const SupabaseLogin: React.FC = () => {
                 }}
                 className="h-auto p-0 font-headline text-xs text-[#aeb5c5] hover:text-white"
               >
-                {isSignUp ? "Déjà un compte ? Se connecter" : "Pas encore de compte ? S’inscrire"}
+                {isSignUp ? "Already have an account? Sign in" : "No account yet? Sign up"}
               </Button>
             </div>
           </CardContent>
