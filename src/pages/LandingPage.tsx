@@ -4,6 +4,7 @@ import LandingNav from "@/components/LandingNav";
 import { ChevronDown, ChevronUp, Star } from "lucide-react";
 import { BRAND } from "@/constants/branding";
 import "@/styles/landing-terminal.css";
+import { Commodity, fetchCommoditiesData } from "@/services/commodityApi";
 
 /** Hero & vertical imagery — same AIDA assets as Stitch reference */
 const TERMINAL_MEDIA = {
@@ -23,18 +24,38 @@ const LANDING_SCREENSHOTS = {
   strategyBuilder: "/landing-page/{D85B4F5E-E1E0-46D1-859F-6225E4FEEC9B}.png",
 } as const;
 
-const TICKER_ITEMS = [
-  { label: "WTI CRUDE", value: "$78.42", change: "+0.45%", up: true },
-  { label: "BRENT", value: "$82.15", change: "+1.12%", up: true },
-  { label: "BALTIC DRY", value: "1,842", change: "-2.40%", up: false },
-  { label: "VLSFO SINGAPORE", value: "$645.50", change: "+0.88%", up: true },
-  { label: "IRON ORE 62%", value: "$114.20", change: "+0.15%", up: true },
+type LandingTickerItem = { label: string; value: string; change: string; up: boolean };
+
+const FALLBACK_TICKER_ITEMS: LandingTickerItem[] = [
+  { label: "WTI", value: "—", change: "—", up: true },
+  { label: "Brent", value: "—", change: "—", up: true },
+  { label: "Baltic (freight)", value: "—", change: "—", up: true },
+  { label: "VLSFO Singapore", value: "—", change: "—", up: true },
+  { label: "Iron ore", value: "—", change: "—", up: true },
 ];
 
-function TickerRow({ runId }: { runId: string }) {
+function formatLandingValue(c: Commodity): string {
+  const price = Number.isFinite(c.price) ? c.price : NaN;
+  if (!Number.isFinite(price)) return "—";
+
+  const ccy = (c.currency || "").toUpperCase();
+  const n = price.toLocaleString("en-US", { maximumFractionDigits: 2, minimumFractionDigits: 2 });
+  if (!ccy || ccy === "USD") return `$${n}`;
+  return `${n} ${ccy}`;
+}
+
+function formatLandingChange(c: Commodity): { text: string; up: boolean } {
+  const pct = Number.isFinite(c.percentChange) ? c.percentChange : NaN;
+  if (!Number.isFinite(pct)) return { text: "—", up: true };
+  const up = pct >= 0;
+  const abs = Math.abs(pct).toFixed(2);
+  return { text: `${up ? "+" : "-"}${abs}%`, up };
+}
+
+function TickerRow({ runId, items }: { runId: string; items: LandingTickerItem[] }) {
   return (
     <>
-      {TICKER_ITEMS.map((item) => (
+      {items.map((item) => (
         <div key={`${runId}-${item.label}`} className="flex items-center space-x-2">
           <span className="text-[10px] font-bold uppercase text-[#c1caaf]">{item.label}</span>
           <span className="font-headline text-sm font-medium text-white">{item.value}</span>
@@ -117,9 +138,102 @@ const LandingPage = () => {
   const navigate = useNavigate();
   const heroImgRef = useRef<HTMLImageElement>(null);
   const [openFaq, setOpenFaq] = useState<number | null>(null);
+  const [tickerItems, setTickerItems] = useState<LandingTickerItem[]>(FALLBACK_TICKER_ITEMS);
 
   useLandingReveal();
   useHeroParallax(heroImgRef);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const pickBy = (rows: Commodity[], pred: (c: Commodity) => boolean) =>
+      rows.find(pred) || null;
+
+    const loadTicker = async () => {
+      try {
+        // Use the same data source as the Commodity Market page.
+        const [energy, freight, bunker, metals] = await Promise.all([
+          fetchCommoditiesData("energy"),
+          fetchCommoditiesData("freight"),
+          fetchCommoditiesData("bunker"),
+          fetchCommoditiesData("metals"),
+        ]);
+
+        const wti =
+          pickBy(energy, (c) => (c.name || "").toLowerCase().includes("wti")) ||
+          pickBy(energy, (c) => (c.symbol || "").toUpperCase().includes("CL")) ||
+          energy[0] ||
+          null;
+
+        const brent =
+          pickBy(energy, (c) => (c.name || "").toLowerCase().includes("brent")) ||
+          pickBy(energy, (c) => (c.symbol || "").toUpperCase().includes("BRN")) ||
+          energy[1] ||
+          null;
+
+        const baltic =
+          pickBy(freight, (c) => (c.name || "").toLowerCase().includes("baltic")) ||
+          freight[0] ||
+          null;
+
+        const vlsfoSingapore =
+          pickBy(bunker, (c) => (c.symbol || "").toUpperCase().startsWith("VLSFO") && (c.name || "").toLowerCase().includes("singapore")) ||
+          pickBy(bunker, (c) => (c.name || "").toLowerCase().includes("singapore") && (c.name || "").toLowerCase().includes("vlsfo")) ||
+          pickBy(bunker, (c) => (c.symbol || "").toUpperCase().startsWith("VLSFO")) ||
+          null;
+
+        const ironOre =
+          pickBy(metals, (c) => (c.name || "").toLowerCase().includes("iron ore")) ||
+          pickBy(metals, (c) => (c.name || "").includes("62")) ||
+          metals[0] ||
+          null;
+
+        const next: LandingTickerItem[] = [
+          wti
+            ? (() => {
+                const chg = formatLandingChange(wti);
+                return { label: "WTI", value: formatLandingValue(wti), change: chg.text, up: chg.up };
+              })()
+            : FALLBACK_TICKER_ITEMS[0],
+          brent
+            ? (() => {
+                const chg = formatLandingChange(brent);
+                return { label: "Brent", value: formatLandingValue(brent), change: chg.text, up: chg.up };
+              })()
+            : FALLBACK_TICKER_ITEMS[1],
+          baltic
+            ? (() => {
+                const chg = formatLandingChange(baltic);
+                return { label: "Baltic", value: formatLandingValue(baltic), change: chg.text, up: chg.up };
+              })()
+            : FALLBACK_TICKER_ITEMS[2],
+          vlsfoSingapore
+            ? (() => {
+                const chg = formatLandingChange(vlsfoSingapore);
+                return { label: "VLSFO Singapore", value: formatLandingValue(vlsfoSingapore), change: chg.text, up: chg.up };
+              })()
+            : FALLBACK_TICKER_ITEMS[3],
+          ironOre
+            ? (() => {
+                const chg = formatLandingChange(ironOre);
+                return { label: "Iron ore", value: formatLandingValue(ironOre), change: chg.text, up: chg.up };
+              })()
+            : FALLBACK_TICKER_ITEMS[4],
+        ];
+
+        if (!cancelled) setTickerItems(next);
+      } catch {
+        // keep fallback; Commodity Market page will show details if needed
+      }
+    };
+
+    void loadTicker();
+    const interval = window.setInterval(loadTicker, 5 * 60 * 1000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, []);
 
   const handleTiltMove = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     const card = e.currentTarget;
@@ -242,8 +356,8 @@ const LandingPage = () => {
         <div className="relative z-20 border-y border-[#424a35]/10 bg-[#070e1d] py-3">
           <div className="landing-ticker-wrap">
             <div className="landing-ticker-content">
-              <TickerRow runId="a" />
-              <TickerRow runId="b" />
+              <TickerRow runId="a" items={tickerItems} />
+              <TickerRow runId="b" items={tickerItems} />
             </div>
           </div>
         </div>
