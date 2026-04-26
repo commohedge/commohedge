@@ -89,7 +89,7 @@ export function FuturesPanel({ currency, onSelect }: FuturesPanelProps) {
         <div>
           <div className="flex items-center gap-3 mb-1">
             <h2 className="text-xl font-bold">{currency.name}</h2>
-            <span className="text-sm font-mono text-accent">{currency.symbol}</span>
+            <span className="text-sm font-mono text-accent-foreground">{currency.symbol}</span>
           </div>
           <div className="flex items-center gap-3 text-sm">
             <span className="font-mono font-medium">{currency.last}</span>
@@ -209,7 +209,7 @@ export function FuturesPanel({ currency, onSelect }: FuturesPanelProps) {
                     className="hover:bg-table-row-hover cursor-pointer transition-colors group"
                   >
                     <td className="px-3 py-2.5">
-                      <span className="data-cell font-semibold text-accent">{future.contract}</span>
+                      <span className="data-cell font-semibold text-accent-foreground">{future.contract}</span>
                     </td>
                     <td className="px-3 py-2.5 text-sm">{future.month}</td>
                     <td className="px-3 py-2.5 data-cell font-medium">{future.last || "N/A"}</td>

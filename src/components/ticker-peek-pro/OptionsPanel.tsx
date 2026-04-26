@@ -92,7 +92,7 @@ export function OptionsPanel({ contract, onViewVolatility }: OptionsPanelProps) 
         {onViewVolatility && (
           <button
             onClick={() => onViewVolatility(contract.contract)}
-            className="flex items-center gap-2 px-4 py-2 rounded-md bg-accent/10 text-accent hover:bg-accent/20 text-sm font-medium transition-colors"
+            className="flex items-center gap-2 px-4 py-2 rounded-md bg-accent/20 text-accent-foreground hover:bg-accent/30 text-sm font-medium transition-colors border border-accent/30"
           >
             Vol & Greeks
           </button>

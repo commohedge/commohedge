@@ -162,7 +162,7 @@ export function VolatilityPanel({ contract, optionSymbol }: VolatilityPanelProps
         <div>
           <div className="flex items-center gap-3 mb-1">
             <h2 className="text-xl font-bold">Volatility & Greeks</h2>
-            <span className="text-sm font-mono text-accent">{optionSymbol}</span>
+            <span className="text-sm font-mono text-accent-foreground">{optionSymbol}</span>
           </div>
           <div className="flex items-center gap-4 text-sm">
             <span className="font-mono font-medium">{contract.last}</span>
