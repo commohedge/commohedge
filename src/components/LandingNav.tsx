@@ -145,29 +145,32 @@ const LandingNav = () => {
       </button>
 
       {isMobileMenuOpen && (
-        <div className="absolute left-0 right-0 top-full max-h-[calc(100svh-3.5rem)] overflow-y-auto border-b border-[#424a35]/30 bg-[#0c1322]/97 px-4 py-4 backdrop-blur-xl sm:px-6 md:hidden">
-          <div className="flex flex-col gap-1">
+        <div className="absolute left-0 right-0 top-full max-h-[calc(100svh-3.5rem)] overflow-y-auto border-b border-[#424a35]/30 bg-[#0c1322] px-4 py-5 shadow-2xl shadow-black/40 backdrop-blur-xl sm:px-6 md:hidden">
+          <div className="flex flex-col gap-2">
             {navLinks.map((link) => (
               <button
                 key={link.name}
                 type="button"
                 onClick={() => go(link.href, link.external)}
-                className="rounded-sm px-3 py-3 text-left font-headline text-sm font-bold uppercase tracking-tight text-[#dce2f7] hover:bg-white/5"
+                className="rounded-sm border border-transparent px-3 py-3 text-left font-headline text-[13px] font-bold uppercase tracking-[0.18em] text-white hover:border-[#424a35]/30 hover:bg-white/5"
               >
                 {link.name}
               </button>
             ))}
 
-            <div className="mt-2 border-t border-[#424a35]/20 pt-3">
-              <p className="mb-1 px-3 text-[10px] font-bold uppercase tracking-widest text-[#aef833]">Our Products</p>
-              <div className="flex flex-col">
+            <div className="mt-2 rounded-sm border border-[#424a35]/20 bg-[#070e1d]/40 p-3">
+              <div className="mb-2 flex items-center justify-between px-1">
+                <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-[#aef833]">Our Products</p>
+                <span className="text-[10px] uppercase tracking-widest text-[#8c947b]">External</span>
+              </div>
+              <div className="flex flex-col gap-1">
                 {products.map((p) => (
                   <a
                     key={p.href}
                     href={p.href}
                     target="_blank"
                     rel="noreferrer"
-                    className="rounded-sm px-3 py-3 text-left font-headline text-sm font-bold uppercase tracking-tight text-[#dce2f7] hover:bg-white/5"
+                    className="rounded-sm border border-transparent px-3 py-3 text-left font-headline text-[13px] font-bold uppercase tracking-[0.18em] text-white hover:border-[#424a35]/30 hover:bg-white/5"
                     onClick={() => setIsMobileMenuOpen(false)}
                   >
                     {p.name}
@@ -176,14 +179,14 @@ const LandingNav = () => {
               </div>
             </div>
 
-            <div className="mt-3 flex flex-col gap-2 border-t border-[#424a35]/20 pt-3">
+            <div className="mt-3 flex flex-col gap-2">
               <button
                 type="button"
                 onClick={() => {
                   setIsMobileMenuOpen(false);
                   navigate("/login");
                 }}
-                className="rounded-sm border border-[#424a35]/30 bg-[#141b2b]/60 px-3 py-3 text-center font-headline text-sm font-bold uppercase text-[#dce2f7]"
+                className="rounded-sm border border-[#424a35]/35 bg-[#141b2b]/60 px-3 py-3 text-center font-headline text-[13px] font-bold uppercase tracking-[0.18em] text-white"
               >
                 Client login
               </button>
@@ -193,7 +196,7 @@ const LandingNav = () => {
                   setIsMobileMenuOpen(false);
                   navigate("/login?mode=signup");
                 }}
-                className="landing-btn-industrial bg-[#aef833] py-3 text-center font-headline text-sm font-bold uppercase text-[#213600]"
+                className="landing-btn-industrial bg-[#aef833] py-3 text-center font-headline text-[13px] font-black uppercase tracking-[0.18em] text-[#213600]"
               >
                 Launch terminal
               </button>
