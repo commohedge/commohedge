@@ -312,58 +312,58 @@ const Dashboard = () => {
         { label: "Dashboard" }
       ]}
     >
-      <div className="space-y-6 p-6">
+      <div className="space-y-4 p-0 sm:space-y-6 sm:p-2 md:p-6">
         {/* Header */}
         <div className="relative overflow-hidden">
           <div className="absolute inset-0 bg-gradient-to-r from-blue-900/5 via-indigo-900/5 to-purple-900/5 rounded-2xl" />
           
-          <div className="relative bg-background/80 dark:bg-background/90 backdrop-blur-sm border border-border rounded-2xl p-8 shadow-xl">
-            <div className="flex flex-col lg:flex-row lg:justify-between lg:items-start gap-6">
+          <div className="relative rounded-xl border border-border bg-background/80 p-4 shadow-xl backdrop-blur-sm dark:bg-background/90 sm:rounded-2xl sm:p-6 md:p-8">
+            <div className="flex flex-col gap-4 sm:gap-6 lg:flex-row lg:items-start lg:justify-between">
               <div className="space-y-3">
-                <div className="flex items-center gap-3">
-                  <div className="p-3 bg-gradient-to-br from-blue-900 to-indigo-700 rounded-xl text-white shadow-lg">
-                    <BarChart3 className="h-6 w-6" />
+                <div className="flex items-start gap-3 sm:items-center">
+                  <div className="shrink-0 rounded-xl bg-gradient-to-br from-blue-900 to-indigo-700 p-2.5 text-white shadow-lg sm:p-3">
+                    <BarChart3 className="h-5 w-5 sm:h-6 sm:w-6" />
                   </div>
-                  <div>
-                    <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-900 to-indigo-600 bg-clip-text text-transparent">
+                  <div className="min-w-0">
+                    <h1 className="bg-gradient-to-r from-blue-900 to-indigo-600 bg-clip-text text-xl font-bold text-transparent sm:text-2xl md:text-3xl">
                       Risk Management Dashboard
                     </h1>
-                    <p className="text-muted-foreground font-medium">
+                    <p className="text-sm font-medium text-muted-foreground sm:text-base">
                       Real-time risk monitoring and commodity market analysis
                     </p>
                   </div>
                 </div>
                 
-        <div className="flex items-center gap-4">
-                  <div className="px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-700 border border-blue-200">
+                <div className="flex flex-wrap items-center gap-2 sm:gap-4">
+                  <div className="rounded-full border border-blue-200 bg-blue-100 px-3 py-1 text-xs font-medium text-blue-700">
                     Last Updated: {lastUpdate.toLocaleTimeString()}
-          </div>
-          <div className={`flex items-center gap-2 text-sm ${isLiveMode ? 'text-green-600' : 'text-gray-600'}`}>
-            {isLiveMode ? <Play className="h-4 w-4" /> : <Pause className="h-4 w-4" />}
-            {isLiveMode ? 'Live Mode' : 'Static Mode'}
-          </div>
-        </div>
+                  </div>
+                  <div className={`flex items-center gap-2 text-xs sm:text-sm ${isLiveMode ? 'text-green-600' : 'text-gray-600'}`}>
+                    {isLiveMode ? <Play className="h-4 w-4" /> : <Pause className="h-4 w-4" />}
+                    {isLiveMode ? 'Live Mode' : 'Static Mode'}
+                  </div>
+                </div>
               </div>
               
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={updateMarketData}
-            className="flex items-center gap-2"
-          >
-            <RefreshCw className="h-4 w-4" />
-            Refresh Data
-          </Button>
-          <Button
-            variant={isLiveMode ? "destructive" : "default"}
-            size="sm"
-            onClick={() => setLiveMode(!isLiveMode)}
-            className="flex items-center gap-2"
-          >
-            {isLiveMode ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
-            {isLiveMode ? 'Stop Live' : 'Start Live'}
-          </Button>
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={updateMarketData}
+                  className="flex flex-1 items-center justify-center gap-2 sm:flex-none"
+                >
+                  <RefreshCw className="h-4 w-4" />
+                  Refresh Data
+                </Button>
+                <Button
+                  variant={isLiveMode ? "destructive" : "default"}
+                  size="sm"
+                  onClick={() => setLiveMode(!isLiveMode)}
+                  className="flex flex-1 items-center justify-center gap-2 sm:flex-none"
+                >
+                  {isLiveMode ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+                  {isLiveMode ? 'Stop Live' : 'Start Live'}
+                </Button>
               </div>
             </div>
         </div>
@@ -439,7 +439,7 @@ const Dashboard = () => {
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
         {/* Currency Exposure Overview */}
-        <Card className="col-span-4">
+        <Card className="md:col-span-2 lg:col-span-4">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Globe className="h-5 w-5" />
@@ -480,7 +480,7 @@ const Dashboard = () => {
         </Card>
 
         {/* Risk Alerts */}
-        <Card className="col-span-3">
+        <Card className="md:col-span-2 lg:col-span-3">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <AlertTriangle className="h-5 w-5" />

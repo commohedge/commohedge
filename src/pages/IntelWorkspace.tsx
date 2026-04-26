@@ -23,8 +23,9 @@ import "@/styles/live-news-panel.css";
 import "@/styles/live-webcams-panel.css";
 import "@/styles/hormuz-panel.css";
 import "@/styles/intel-workspace.css";
-import { GripVertical, LayoutGrid, RotateCcw } from "lucide-react";
+import { GripVertical, LayoutGrid, Pin, RotateCcw } from "lucide-react";
 import { loadFromStorage, saveToStorage } from "@/utils";
+import { addIntelPin } from "@/intel/pins";
 
 const STORAGE_KEY = "fx_intel_workspace_layout_v6";
 
@@ -71,10 +72,12 @@ function loadLayout(): Layout {
 function WorkspacePanelChrome({
   title,
   className,
+  pinId,
   children,
 }: {
   title: string;
   className?: string;
+  pinId?: string;
   children: React.ReactNode;
 }) {
   return (
@@ -87,6 +90,20 @@ function WorkspacePanelChrome({
       <div className="intel-drag-handle flex shrink-0 cursor-grab items-center gap-1.5 border-b border-border/60 bg-muted/30 px-2 py-1.5 active:cursor-grabbing">
         <GripVertical className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
         <span className="truncate text-xs font-semibold leading-tight text-foreground sm:text-sm">{title}</span>
+        {pinId ? (
+          <button
+            type="button"
+            className="ml-auto inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
+            title="Pin to sidebar"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              addIntelPin({ id: pinId, title });
+            }}
+          >
+            <Pin className="h-4 w-4" />
+          </button>
+        ) : null}
       </div>
       <div className="min-h-0 flex-1 overflow-auto p-1.5">{children}</div>
     </div>
@@ -210,7 +227,7 @@ export default function IntelWorkspace() {
             useCSSTransforms
           >
             <div key="world-map" className="min-h-0">
-              <WorkspacePanelChrome title="Situation mondiale" className="h-full">
+              <WorkspacePanelChrome title="Situation mondiale" className="h-full" pinId="world-map">
                 <WorldMapContent embedded />
               </WorkspacePanelChrome>
             </div>
@@ -228,13 +245,13 @@ export default function IntelWorkspace() {
             </div>
 
             <div key="market-news" className="min-h-0">
-              <WorkspacePanelChrome title="Market News">
+              <WorkspacePanelChrome title="Market News" pinId="market-news">
                 <MarketNewsContent compact />
               </WorkspacePanelChrome>
             </div>
 
             <div key="economic-calendar" className="min-h-0">
-              <WorkspacePanelChrome title="Economic Calendar">
+              <WorkspacePanelChrome title="Economic Calendar" pinId="economic-calendar">
                 <EconomicCalendarContent compact />
               </WorkspacePanelChrome>
             </div>
@@ -249,7 +266,7 @@ export default function IntelWorkspace() {
               const { name: commodityTitle } = getEffectivePanelConfig(section.panelKey, "commodity");
               return (
                 <div key={section.gridId} className="min-h-0">
-                  <WorkspacePanelChrome title={commodityTitle}>
+                  <WorkspacePanelChrome title={commodityTitle} pinId={section.gridId}>
                     <CommodityNewsCategoryPanel section={section} />
                   </WorkspacePanelChrome>
                 </div>
@@ -257,13 +274,13 @@ export default function IntelWorkspace() {
             })}
 
             <div key="advanced-chart" className="min-h-0">
-              <WorkspacePanelChrome title="Advanced Chart" className="h-full min-h-[320px]">
+              <WorkspacePanelChrome title="Advanced Chart" className="h-full min-h-[320px]" pinId="advanced-chart">
                 <AdvancedChartContent compact />
               </WorkspacePanelChrome>
             </div>
 
             <div key="commodity-prices" className="min-h-0">
-              <WorkspacePanelChrome title="Commodity prices" className="h-full min-h-[280px]">
+              <WorkspacePanelChrome title="Commodity prices" className="h-full min-h-[280px]" pinId="commodity-prices">
                 <CommodityMarketPricesPanel />
               </WorkspacePanelChrome>
             </div>

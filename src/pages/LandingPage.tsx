@@ -342,67 +342,145 @@ const LandingPage = () => {
     <div className="landing-terminal-root dark min-h-screen overflow-x-hidden bg-[#0c1322] font-sans text-[#dce2f7] selection:bg-[#aef833] selection:text-[#213600]">
       <LandingNav />
 
-      <main className="pt-[5.5rem]">
+      <main className="pt-[3.5rem] sm:pt-[4.5rem] md:pt-[5.5rem]">
         {/* Hero */}
-        <section className="hero-glow-container relative flex h-screen w-full items-center overflow-hidden px-6 md:px-12" id="top">
+        <section
+          className="hero-glow-container relative flex min-h-[calc(100svh-3.5rem)] w-full items-center overflow-hidden px-4 py-12 sm:min-h-[calc(100svh-4.5rem)] sm:px-6 md:min-h-[calc(100vh-5.5rem)] md:px-12 md:py-0"
+          id="top"
+        >
           <div className="absolute inset-0 z-0 overflow-hidden">
             <img
               ref={heroImgRef}
               id="landing-hero-img"
               alt="CommoHedge — container ship at sea, global commodity trade lanes"
-              className="landing-hero-img landing-floating-vessel h-full w-full scale-110 object-cover opacity-60"
+              className="landing-hero-img landing-floating-vessel h-full w-full scale-110 object-cover opacity-60 md:opacity-70"
               src={TERMINAL_MEDIA.heroShip}
             />
-            <div className="absolute inset-0 bg-gradient-to-r from-[#0c1322] via-[#0c1322]/40 to-transparent" />
+            <div className="absolute inset-0 bg-gradient-to-b from-[#0c1322]/55 via-[#0c1322]/35 to-[#0c1322]" />
+            <div className="absolute inset-0 bg-gradient-to-r from-[#0c1322] via-[#0c1322]/55 to-[#0c1322]/15 md:to-transparent" />
+            <div className="landing-grid absolute inset-0 opacity-30" />
+            <div className="landing-spotlight absolute inset-0 opacity-70" />
           </div>
 
-          <div className="landing-reveal landing-reveal-active relative z-10 max-w-4xl">
-            <div className="mb-6 inline-flex items-center space-x-3 rounded-full border border-[#424a35]/20 bg-[#232a3a] px-4 py-1">
-              <span className="h-2 w-2 shrink-0 animate-pulse rounded-full bg-[#aef833]" />
-              <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#aef833]">
-                Pricing & hedging terminal online
-              </span>
-            </div>
-            <h1 className="mb-8 font-headline text-5xl font-bold uppercase leading-[0.9] tracking-tighter text-white sm:text-7xl md:text-8xl lg:text-9xl">
-              {BRAND.heroLine1} <br /> <span className="text-[#aef833]">{BRAND.heroLine2}</span>
-            </h1>
-            <p className="mb-10 max-w-2xl text-lg font-light leading-relaxed text-[#c1caaf] md:text-2xl">
-              <span className="font-medium text-[#dce2f7]">{BRAND.name}</span> brings together options pricing, exposures, the strategy builder, and stress tests — built for treasury and risk teams on physical and paper commodity and FX books.
-            </p>
-            <div className="flex flex-wrap gap-4">
-              <button
-                type="button"
-                onClick={() => navigate("/login?mode=signup")}
-                className="group landing-btn-industrial landing-industrial-gradient flex items-center px-8 py-4 font-headline font-bold uppercase tracking-widest text-[#213600] transition-all hover:brightness-110 md:px-10"
-              >
-                Launch terminal
-                <span className="material-symbols-outlined ml-2 transition-transform group-hover:translate-x-1">arrow_forward</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => navigate("/pricers")}
-                className="landing-btn-industrial bg-[#2e3545] px-8 py-4 font-headline font-bold uppercase tracking-widest text-white transition-all hover:bg-[#323949] md:px-10"
-              >
-                Open pricers
-              </button>
-            </div>
-          </div>
-
-          <div
-            className="landing-reveal landing-reveal-active absolute bottom-24 right-6 hidden border-l border-[#424a35]/30 pl-8 xl:right-12 xl:block"
-            style={{ transitionDelay: "400ms" }}
-          >
-            <div className="mb-8">
-              <p className="mb-1 text-[10px] uppercase tracking-widest text-[#c1caaf]">Sample benchmark (illustrative)</p>
-              <p className="font-headline text-4xl font-bold text-white">4,291.50</p>
-              <p className="text-sm font-bold text-[#aef833]">
-                +12.4% <span className="ml-1 text-xs font-light opacity-60">24H</span>
+          <div className="relative z-10 mx-auto grid w-full max-w-[1920px] grid-cols-1 items-center gap-10 lg:grid-cols-12 lg:gap-12">
+            <div className="landing-reveal landing-reveal-active lg:col-span-7 xl:col-span-7">
+              <div className="mb-5 inline-flex items-center space-x-2 rounded-full border border-[#aef833]/25 bg-[#aef833]/[0.06] px-3 py-1 sm:mb-6 sm:space-x-3 sm:px-4">
+                <span className="h-2 w-2 shrink-0 animate-pulse rounded-full bg-[#aef833]" />
+                <span className="text-[9px] font-bold uppercase tracking-[0.18em] text-[#aef833] sm:text-[10px] sm:tracking-[0.2em]">
+                  Pricing & hedging terminal · Live
+                </span>
+              </div>
+              <h1 className="mb-6 font-headline text-[2.5rem] font-bold uppercase leading-[0.95] tracking-tighter text-white sm:mb-8 sm:text-7xl sm:leading-[0.88] md:text-8xl lg:text-[7.5rem] xl:text-[9rem]">
+                {BRAND.heroLine1} <br /> <span className="bg-gradient-to-br from-[#aef833] to-[#93db04] bg-clip-text text-transparent">{BRAND.heroLine2}</span>
+              </h1>
+              <p className="mb-8 max-w-2xl text-base font-light leading-relaxed text-[#c1caaf] sm:mb-10 sm:text-lg md:text-xl">
+                <span className="font-medium text-[#dce2f7]">{BRAND.name}</span> unifies commodity pricing, exposures and hedging into one institutional-grade terminal — from daily desk monitoring to board-ready risk reviews, with a single consistent pricing spine.
               </p>
+              <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:gap-4">
+                <button
+                  type="button"
+                  onClick={() => navigate("/request-access")}
+                  className="group landing-btn-industrial landing-industrial-gradient flex w-full items-center justify-center px-6 py-3.5 font-headline text-sm font-bold uppercase tracking-widest text-[#213600] shadow-[0_10px_40px_-10px_rgba(174,248,51,0.5)] transition-all hover:brightness-110 sm:w-auto sm:px-8 sm:py-4 sm:text-base md:px-10"
+                >
+                  Request access
+                  <span className="material-symbols-outlined ml-2 transition-transform group-hover:translate-x-1">arrow_forward</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => navigate("/login")}
+                  className="landing-btn-industrial w-full border border-[#424a35]/40 bg-[#141b2b]/40 px-6 py-3.5 text-center font-headline text-sm font-bold uppercase tracking-widest text-white backdrop-blur transition-all hover:bg-[#1b2333]/60 sm:w-auto sm:px-8 sm:py-4 sm:text-base md:px-10"
+                >
+                  Sign in
+                </button>
+              </div>
+
+              <div className="mt-10 flex flex-wrap gap-x-8 gap-y-4 border-t border-[#424a35]/20 pt-6 sm:mt-12 sm:gap-x-10 sm:pt-8">
+                {[
+                  { v: "12+", l: "Instruments priced" },
+                  { v: "6+", l: "Modules live" },
+                  { v: "<150ms", l: "Pricer latency" },
+                  { v: "99.98%", l: "Coverage" },
+                ].map((s) => (
+                  <div key={s.l}>
+                    <p className="font-headline text-2xl font-bold text-white sm:text-3xl">{s.v}</p>
+                    <p className="mt-0.5 font-headline text-[10px] font-bold uppercase tracking-[0.18em] text-[#aef833]">{s.l}</p>
+                  </div>
+                ))}
+              </div>
             </div>
-            <div>
-              <p className="mb-1 text-[10px] uppercase tracking-widest text-[#c1caaf]">Modules live</p>
-              <p className="font-headline text-4xl font-bold text-white">6+</p>
-            </div>
+
+            {/* Floating live terminal preview */}
+            <aside
+              className="landing-reveal landing-reveal-active hidden lg:col-span-5 lg:block xl:col-span-5"
+              style={{ transitionDelay: "300ms" }}
+            >
+              <div className="landing-preview relative ml-auto w-full max-w-[420px] overflow-hidden rounded-sm">
+                <div className="flex items-center justify-between border-b border-[#424a35]/25 bg-[#070e1d]/70 px-4 py-3">
+                  <div className="flex items-center gap-2">
+                    <span className="h-2 w-2 animate-pulse rounded-full bg-[#aef833]" />
+                    <span className="font-headline text-[10px] font-bold uppercase tracking-[0.2em] text-[#dce2f7]">
+                      Live terminal
+                    </span>
+                  </div>
+                  <span className="font-headline text-[10px] uppercase tracking-widest text-[#8c947b]">
+                    Real-time
+                  </span>
+                </div>
+
+                <div className="border-b border-[#424a35]/15 bg-gradient-to-br from-[#0c1322]/80 to-[#070e1d]/40 px-5 py-5">
+                  <div className="flex items-end justify-between gap-4">
+                    <div className="min-w-0">
+                      <p className="mb-1 text-[10px] uppercase tracking-widest text-[#8c947b]">Total exposure (illustrative)</p>
+                      <p className="truncate font-headline text-3xl font-bold text-white">$2.45B</p>
+                      <div className="mt-1 flex items-center gap-2 text-xs">
+                        <span className="font-mono text-[#aef833]">↗ +0.83% MTD</span>
+                        <span className="text-[#8c947b]">· 78% hedged</span>
+                      </div>
+                    </div>
+                    <svg
+                      viewBox="0 0 120 40"
+                      preserveAspectRatio="none"
+                      className="h-12 w-28 shrink-0"
+                      aria-hidden
+                    >
+                      <polyline
+                        className="landing-spark"
+                        points="0,30 12,28 24,22 36,25 48,18 60,20 72,12 84,15 96,8 108,10 120,4"
+                      />
+                    </svg>
+                  </div>
+                </div>
+
+                <div className="px-5 py-4">
+                  <div className="mb-3 flex items-center justify-between">
+                    <p className="text-[9px] font-bold uppercase tracking-widest text-[#8c947b]">Live prices</p>
+                    <p className="text-[9px] uppercase tracking-widest text-[#8c947b]">Δ 24h</p>
+                  </div>
+                  <div className="space-y-2.5">
+                    {(tickerItems.length ? tickerItems : FALLBACK_TICKER_ITEMS).slice(0, 4).map((it) => (
+                      <div key={it.label} className="flex items-center justify-between text-xs">
+                        <span className="font-headline text-[10px] font-bold uppercase tracking-wider text-[#dce2f7]">{it.label}</span>
+                        <div className="flex items-center gap-3 font-mono tabular-nums">
+                          <span className="text-white">{it.value}</span>
+                          <span className={`min-w-[3.5rem] text-right ${it.up ? "text-[#aef833]" : "text-red-400"}`}>{it.change}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 border-t border-[#424a35]/15 bg-[#070e1d]/60">
+                  <div className="border-r border-[#424a35]/15 px-5 py-3">
+                    <p className="text-[9px] uppercase tracking-widest text-[#8c947b]">VaR 95</p>
+                    <p className="font-headline text-base font-bold text-white">$3.2M</p>
+                  </div>
+                  <div className="px-5 py-3">
+                    <p className="text-[9px] uppercase tracking-widest text-[#8c947b]">Open hedges</p>
+                    <p className="font-headline text-base font-bold text-white">42</p>
+                  </div>
+                </div>
+              </div>
+            </aside>
           </div>
         </section>
 
@@ -416,47 +494,78 @@ const LandingPage = () => {
           </div>
         </div>
 
-        {/* Verticals */}
-        <section className="bg-[#0c1322] px-6 py-24 md:px-12 md:py-32" id="verticals">
+        {/* Trusted by — proof band */}
+        <section className="border-b border-[#424a35]/10 bg-[#070e1d] px-4 py-12 sm:px-6 md:px-12 md:py-14">
           <div className="mx-auto max-w-[1920px]">
-            <div className="landing-reveal mb-16 md:mb-24">
-              <h2 className="mb-6 font-headline text-4xl font-bold uppercase tracking-tighter text-white md:text-6xl lg:text-7xl">
-                Sectors <br /> we cover
-              </h2>
-              <p className="mb-6 max-w-xl text-sm text-[#c1caaf] md:text-base">
-                Oil, metals, and agriculture — each desk opens the right CommoHedge module in one click.
-              </p>
-              <div className="h-1 w-24 bg-[#aef833]" />
+            <p className="landing-reveal mb-8 text-center font-headline text-[10px] font-bold uppercase tracking-[0.3em] text-[#8c947b] sm:mb-10">
+              Built for treasurers, traders and risk teams
+            </p>
+            <div className="grid grid-cols-2 gap-x-6 gap-y-8 sm:grid-cols-3 md:grid-cols-6">
+              {[
+                "Treasury desks",
+                "Trading floors",
+                "Risk committees",
+                "CFO offices",
+                "Mining groups",
+                "Energy majors",
+              ].map((label, i) => (
+                <div
+                  key={label}
+                  className="landing-reveal group flex items-center justify-center"
+                  style={{ transitionDelay: `${i * 60}ms` }}
+                >
+                  <span className="font-headline text-[11px] font-bold uppercase tracking-[0.25em] text-[#424a35] transition-colors group-hover:text-[#aef833] sm:text-xs">
+                    {label}
+                  </span>
+                </div>
+              ))}
             </div>
-            <div className="grid grid-cols-1 gap-8 md:grid-cols-3">
+          </div>
+        </section>
+
+        {/* Verticals */}
+        <section className="bg-[#0c1322] px-4 py-16 sm:px-6 sm:py-20 md:px-12 md:py-32" id="verticals">
+          <div className="mx-auto max-w-[1920px]">
+            <div className="landing-reveal mb-12 max-w-3xl sm:mb-16 md:mb-20">
+              <p className="mb-4 font-headline text-[10px] font-bold uppercase tracking-[0.3em] text-[#aef833]">
+                Sector coverage
+              </p>
+              <h2 className="mb-5 font-headline text-3xl font-bold uppercase tracking-tighter text-white sm:mb-6 sm:text-4xl md:text-6xl lg:text-7xl">
+                One terminal,<br /> three core desks.
+              </h2>
+              <p className="max-w-xl text-sm text-[#c1caaf] md:text-base">
+                Oil, metals and agriculture — each module loads the right pricers, curves and strategy templates so your desk gets to work in seconds.
+              </p>
+            </div>
+            <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
               {[
                 {
-                  sector: "Sector 01",
                   title: "Oil & energy",
-                  desc: "Crude, distillates, and refined hedges with Black-76 and barrier models tied to your curves.",
+                  desc: "Crude, distillates and refined hedges. Black-76, barriers and Asians wired to your forward curves.",
                   img: TERMINAL_MEDIA.oilEnergy,
                   path: "/pricers",
+                  icon: "oil_barrel",
                 },
                 {
-                  sector: "Sector 02",
                   title: "Metals & mining",
-                  desc: "Base and precious metals: vol surfaces, forwards, and exposure roll-up for subsidiaries.",
+                  desc: "Base and precious metals — vol surfaces, forwards and group-wide exposure roll-up across subsidiaries.",
                   img: TERMINAL_MEDIA.metals,
                   path: "/commodity-market",
                   delay: "150ms",
+                  icon: "diamond",
                 },
                 {
-                  sector: "Sector 03",
                   title: "Agriculture",
-                  desc: "Grains and softs: strategy builder, stress paths, and hedge ratio views before execution.",
+                  desc: "Grains and softs — strategy builder, stress paths and hedge-ratio views before you press the trade.",
                   img: TERMINAL_MEDIA.agriculture,
                   path: "/strategy-builder",
                   delay: "300ms",
+                  icon: "eco",
                 },
               ].map((v) => (
                 <div
                   key={v.title}
-                  className="landing-reveal group relative aspect-[4/5] overflow-hidden bg-[#141b2b] landing-tilt-card"
+                  className="landing-reveal landing-tilt-card group relative aspect-[4/5] overflow-hidden rounded-sm border border-[#424a35]/20 bg-[#141b2b]"
                   style={{ transitionDelay: v.delay }}
                   onMouseMove={handleTiltMove}
                   onMouseLeave={handleTiltLeave}
@@ -466,11 +575,15 @@ const LandingPage = () => {
                     className="h-full w-full object-cover grayscale transition-all duration-700 group-hover:scale-110 group-hover:grayscale-0"
                     src={v.img}
                   />
-                  <div className="absolute inset-0 bg-[#0c1322]/40 transition-colors group-hover:bg-[#0c1322]/10" />
-                  <div className="pointer-events-none absolute bottom-0 left-0 w-full bg-gradient-to-t from-[#0c1322] to-transparent p-8 md:p-10">
-                    <p className="mb-4 font-headline text-xs font-bold uppercase tracking-[0.3em] text-[#aef833]">{v.sector}</p>
-                    <h3 className="mb-4 font-headline text-3xl font-bold uppercase text-white md:text-4xl">{v.title}</h3>
-                    <p className="mb-6 max-w-xs text-sm text-[#c1caaf] opacity-0 transition-opacity duration-500 group-hover:opacity-100">{v.desc}</p>
+                  <div className="absolute inset-0 bg-gradient-to-t from-[#0c1322] via-[#0c1322]/40 to-[#0c1322]/10 transition-opacity group-hover:from-[#0c1322] group-hover:via-[#0c1322]/30 group-hover:to-transparent" />
+
+                  <div className="absolute right-5 top-5 flex h-11 w-11 items-center justify-center rounded-sm border border-[#aef833]/25 bg-[#070e1d]/70 backdrop-blur transition-transform group-hover:-translate-y-1">
+                    <span className="material-symbols-outlined text-[#aef833]">{v.icon}</span>
+                  </div>
+
+                  <div className="pointer-events-none absolute bottom-0 left-0 w-full p-5 sm:p-8 md:p-10">
+                    <h3 className="mb-3 font-headline text-2xl font-bold uppercase text-white sm:mb-4 sm:text-3xl md:text-4xl">{v.title}</h3>
+                    <p className="mb-5 max-w-xs text-sm leading-relaxed text-[#c1caaf]">{v.desc}</p>
                     <button
                       type="button"
                       onClick={() => navigate(v.path)}
@@ -486,47 +599,122 @@ const LandingPage = () => {
           </div>
         </section>
 
+        {/* How it works */}
+        <section className="relative overflow-hidden bg-[#0c1322] px-4 py-16 sm:px-6 sm:py-20 md:px-12 md:py-28" id="how-it-works">
+          <div className="landing-spotlight absolute inset-0 opacity-50" />
+          <div className="relative mx-auto max-w-[1920px]">
+            <div className="landing-reveal mx-auto mb-12 max-w-2xl text-center sm:mb-16">
+              <p className="mb-3 font-headline text-[10px] font-bold uppercase tracking-[0.3em] text-[#aef833]">
+                How it works
+              </p>
+              <h2 className="font-headline text-3xl font-bold uppercase tracking-tighter text-white sm:text-4xl md:text-5xl lg:text-6xl">
+                From price feed <br className="hidden sm:block" /> to board pack.
+              </h2>
+              <p className="mx-auto mt-5 max-w-xl text-sm text-[#c1caaf] md:text-base">
+                A single workflow your team can run end-to-end — without spreadsheets falling out of sync.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 gap-5 md:grid-cols-3 md:gap-6">
+              {[
+                {
+                  n: "01",
+                  t: "Connect data",
+                  d: "Plug in commodity feeds, subsidiary exposures, and reference curves. Manual overrides where you need them, audit trail by default.",
+                  icon: "input",
+                },
+                {
+                  n: "02",
+                  t: "Price & build",
+                  d: "Forwards, vanillas, barriers, swaps, Asians. Strategy builder and scenarios share the same pricing spine — every module agrees.",
+                  icon: "construction",
+                },
+                {
+                  n: "03",
+                  t: "Monitor & report",
+                  d: "MTM, hedge ratios, exposure roll-up, and board-ready exports — kept consistent across desk, treasury and committee.",
+                  icon: "monitoring",
+                },
+              ].map((step, i) => (
+                <div
+                  key={step.n}
+                  className="landing-reveal landing-glass-card landing-hairline relative overflow-hidden rounded-sm p-6 sm:p-8"
+                  style={{ transitionDelay: `${i * 120}ms` }}
+                >
+                  <div className="mb-6 flex items-center justify-between">
+                    <span className="landing-step-num font-headline text-6xl font-black leading-none sm:text-7xl">{step.n}</span>
+                    <div className="flex h-11 w-11 items-center justify-center rounded-sm border border-[#aef833]/30 bg-[#070e1d]/60">
+                      <span className="material-symbols-outlined text-[#aef833]">{step.icon}</span>
+                    </div>
+                  </div>
+                  <h3 className="mb-3 font-headline text-xl font-bold uppercase text-white sm:text-2xl">{step.t}</h3>
+                  <p className="text-sm leading-relaxed text-[#c1caaf]">{step.d}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
         {/* Bento — Risk architect */}
-        <section className="bg-[#070e1d] px-6 py-24 md:px-12 md:py-32" id="risk-architect">
+        <section className="bg-[#070e1d] px-4 py-16 sm:px-6 sm:py-20 md:px-12 md:py-32" id="risk-architect">
           <div className="mx-auto max-w-[1920px]">
-            <div className="landing-reveal mb-12 flex flex-col items-end justify-between gap-8 md:mb-16 md:flex-row">
+            <div className="landing-reveal mb-10 flex flex-col items-start justify-between gap-6 sm:mb-12 md:mb-16 md:flex-row md:items-end md:gap-8">
               <div className="max-w-2xl">
-                <h2 className="mb-6 font-headline text-3xl font-bold uppercase tracking-tighter text-white md:text-5xl lg:text-6xl">
-                  {BRAND.name} risk stack
+                <h2 className="mb-4 font-headline text-3xl font-bold uppercase tracking-tighter text-white sm:mb-6 sm:text-4xl md:text-5xl lg:text-6xl">
+                  Your commodity dashboard
                 </h2>
-                <p className="text-lg text-[#c1caaf]">
-                  Pricers, Hedging Instruments, and the strategy builder share one pricing spine — so exports, forwards, and option legs stay consistent end to end.
+                <p className="text-base text-[#c1caaf] sm:text-lg">
+                  One place to monitor prices, exposures, and hedges — and answer the simple question: “What happens if the market moves tomorrow?”
                 </p>
               </div>
               <button
                 type="button"
                 onClick={() => navigate("/strategy-builder")}
-                className="landing-btn-industrial whitespace-nowrap border border-[#424a35]/30 bg-[#2e3545] px-8 py-3 font-headline text-sm font-bold uppercase tracking-widest text-white transition-all hover:bg-[#323949]"
+                className="landing-btn-industrial w-full whitespace-nowrap border border-[#424a35]/30 bg-[#2e3545] px-6 py-3 font-headline text-sm font-bold uppercase tracking-widest text-white transition-all hover:bg-[#323949] sm:w-auto sm:px-8"
               >
                 Strategy builder
               </button>
             </div>
 
-            <div className="grid h-auto grid-cols-1 gap-6 md:grid-cols-4 md:grid-rows-2 md:h-[800px]">
-              <div className="landing-reveal landing-glass-card group relative flex flex-col justify-between overflow-hidden p-8 md:col-span-2 md:row-span-2 md:p-10">
+            <div className="grid grid-cols-1 gap-4 sm:gap-6 md:grid-cols-4 md:grid-rows-2">
+              <div className="landing-reveal landing-glass-card group relative flex flex-col justify-between overflow-hidden p-5 sm:p-6 md:col-span-2 md:row-span-2 md:min-h-[560px] md:p-8">
                 <div className="relative z-10">
-                  <div className="landing-floating-ui mb-8 flex h-12 w-12 items-center justify-center rounded-sm landing-industrial-gradient">
+                  <div className="landing-floating-ui mb-4 flex h-10 w-10 items-center justify-center rounded-sm landing-industrial-gradient sm:mb-5 sm:h-11 sm:w-11">
                     <span className="material-symbols-outlined text-[#213600]">calculate</span>
                   </div>
-                  <h4 className="mb-4 font-headline text-2xl font-bold uppercase text-white md:text-4xl">Pricing & hedge engine</h4>
-                  <p className="mb-8 max-w-sm text-[#c1caaf]">
-                    Vanilla and exotic legs, Monte Carlo and closed-form barriers, Greeks and transaction summary — then push structures into your CommoHedge hedging book.
+                  <h4 className="mb-3 font-headline text-xl font-bold uppercase text-white sm:mb-4 sm:text-2xl md:text-4xl">Pricing you can trust</h4>
+                  <p className="mb-4 max-w-lg text-sm text-[#c1caaf] sm:mb-5 sm:text-base">
+                    Price your deals, see the cost of protection, and keep your hedge book consistent — from analysis to execution and reporting.
                   </p>
+                  <ul className="mb-6 grid max-w-lg grid-cols-1 gap-2 text-sm text-[#dce2f7]/90 md:grid-cols-2">
+                    <li className="flex items-start gap-2">
+                      <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-[#aef833]" />
+                      <span>Clear price, MTM, and what changed.</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-[#aef833]" />
+                      <span>One hedge book for all positions.</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-[#aef833]" />
+                      <span>Scenario views for quick decisions.</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-[#aef833]" />
+                      <span>Export-ready outputs for reporting.</span>
+                    </li>
+                  </ul>
                 </div>
                 <div className="relative z-10 mt-auto">
                   <div className="grid grid-cols-2 gap-4">
-                    <div className="rounded-sm border border-[#424a35]/10 bg-[#070e1d]/50 p-6 backdrop-blur">
-                      <p className="mb-2 text-[10px] font-bold uppercase text-[#c1caaf]">Model coverage</p>
+                    <div className="rounded-sm border border-[#424a35]/10 bg-[#070e1d]/50 p-5 backdrop-blur">
+                      <p className="mb-1 text-[10px] font-bold uppercase text-[#c1caaf]">Coverage</p>
                       <AccuracyCounter />
                     </div>
-                    <div className="rounded-sm border border-[#424a35]/10 bg-[#070e1d]/50 p-6 backdrop-blur">
-                      <p className="mb-2 text-[10px] font-bold uppercase text-[#c1caaf]">UI latency target</p>
-                      <p className="font-headline text-3xl font-bold text-white">4ms</p>
+                    <div className="rounded-sm border border-[#424a35]/10 bg-[#070e1d]/50 p-5 backdrop-blur">
+                      <p className="mb-1 text-[10px] font-bold uppercase text-[#c1caaf]">Fast workflows</p>
+                      <p className="font-headline text-3xl font-bold text-white">Instant</p>
+                      <p className="mt-1 text-[10px] font-bold uppercase tracking-widest text-[#8c947b]">low-friction UI</p>
                     </div>
                   </div>
                 </div>
@@ -537,36 +725,51 @@ const LandingPage = () => {
                 </div>
               </div>
 
-              <div className="landing-reveal landing-glass-card group relative overflow-hidden p-8 md:col-span-2" style={{ transitionDelay: "150ms" }}>
-                <div className="mb-6 flex items-start justify-between">
-                  <div>
-                    <h4 className="mb-2 font-headline text-xl font-bold uppercase text-white md:text-2xl">Market & curve layer</h4>
+              <div className="landing-reveal landing-glass-card group relative overflow-hidden p-5 sm:p-6 md:col-span-2 md:min-h-[260px]" style={{ transitionDelay: "150ms" }}>
+                <div className="mb-4 flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <h4 className="mb-2 font-headline text-lg font-bold uppercase text-white sm:text-xl md:text-2xl">Market data, simplified</h4>
                     <p className="text-sm text-[#c1caaf]">
-                      Commodity Market screeners and Rate Explorer — spot, forwards, and discounting stay aligned across modules.
+                      Your key prices and reference curves stay aligned across the app — so every view tells the same story.
                     </p>
                   </div>
-                  <span className="material-symbols-outlined text-[#aef833]">sailing</span>
+                  <span className="material-symbols-outlined shrink-0 text-[#aef833]">sailing</span>
                 </div>
-                <div className="relative h-40 overflow-hidden rounded-sm bg-[#141b2b]">
-                  <div
-                    className="absolute inset-0 opacity-20"
-                    style={{
-                      backgroundImage: "url(https://www.transparenttextures.com/patterns/carbon-fibre.png)",
-                    }}
-                  />
-                  <div className="absolute left-1/3 top-1/2 h-2 w-2 animate-ping rounded-full bg-[#aef833]" />
-                  <div className="absolute left-2/3 top-1/4 h-2 w-2 animate-ping rounded-full bg-[#aef833]" style={{ animationDelay: "1s" }} />
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <span className="text-[10px] font-bold uppercase tracking-widest text-[#8c947b]">Live feeds & curves</span>
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <div className="rounded-sm border border-[#424a35]/15 bg-[#070e1d]/40 p-4">
+                    <p className="mb-2 text-[10px] font-bold uppercase tracking-widest text-[#8c947b]">Included</p>
+                    <ul className="space-y-2 text-sm text-[#dce2f7]/90">
+                      <li className="flex items-center justify-between">
+                        <span>Commodity prices</span>
+                        <span className="text-[#aef833]">Live</span>
+                      </li>
+                      <li className="flex items-center justify-between">
+                        <span>News & calendar</span>
+                        <span className="text-[#aef833]">In workspace</span>
+                      </li>
+                      <li className="flex items-center justify-between">
+                        <span>Charts</span>
+                        <span className="text-[#aef833]">One click</span>
+                      </li>
+                    </ul>
+                  </div>
+                  <div className="overflow-hidden rounded-sm border border-[#424a35]/15 bg-[#141b2b]">
+                    <img
+                      src={LANDING_SCREENSHOTS.exposures}
+                      alt="Dashboard preview"
+                      className="h-full w-full object-cover object-top opacity-90"
+                      loading="lazy"
+                    />
                   </div>
                 </div>
               </div>
 
-              <div className="landing-reveal landing-glass-card flex flex-col justify-between p-8" style={{ transitionDelay: "300ms" }}>
-                <span className="material-symbols-outlined mb-4 text-[#aef833]">analytics</span>
+              <div className="landing-reveal landing-glass-card flex flex-col justify-between p-5 sm:p-6 md:min-h-[260px]" style={{ transitionDelay: "300ms" }}>
+                <span className="material-symbols-outlined mb-3 text-[#aef833] sm:mb-4">analytics</span>
                 <div>
-                  <p className="mb-1 text-[10px] font-bold uppercase text-[#c1caaf]">Exposure snapshot</p>
-                  <p className="font-headline text-3xl font-bold text-white">Unified</p>
+                  <p className="mb-1 text-[10px] font-bold uppercase text-[#c1caaf]">Exposures</p>
+                  <p className="font-headline text-2xl font-bold text-white sm:text-3xl">Clear</p>
+                  <p className="mt-2 text-sm text-[#c1caaf]">See what matters: net, maturity buckets, and top drivers.</p>
                 </div>
                 <div className="mt-4 h-1.5 w-full overflow-hidden rounded-full bg-[#141b2b]">
                   <div className="landing-progress-bar h-full bg-[#aef833]" />
@@ -574,7 +777,7 @@ const LandingPage = () => {
               </div>
 
               <div
-                className="landing-reveal landing-glass-card flex flex-col justify-between border-l-4 border-[#aef833] p-8"
+                className="landing-reveal landing-glass-card flex flex-col justify-between border-l-4 border-[#aef833] p-5 sm:p-6 md:min-h-[260px]"
                 style={{ transitionDelay: "450ms" }}
               >
                 <div className="space-y-4">
@@ -582,9 +785,9 @@ const LandingPage = () => {
                     <span className="text-[#c1caaf]">Desk feed</span>
                     <span className="text-[#aef833]">Active</span>
                   </div>
-                  <p className="border-b border-[#424a35]/10 pb-2 text-xs text-white">Strategy export synced to hedging instruments.</p>
-                  <p className="border-b border-[#424a35]/10 pb-2 text-xs text-white">Vol surface refresh from CommoHedge Pricers.</p>
-                  <p className="text-xs text-white">Stress scenario &quot;Contango shock&quot; loaded.</p>
+                  <p className="border-b border-[#424a35]/10 pb-2 text-xs text-white">Hedges and positions stay consistent across modules.</p>
+                  <p className="border-b border-[#424a35]/10 pb-2 text-xs text-white">Key inputs refresh together — no mismatched numbers.</p>
+                  <p className="text-xs text-white">Scenario views help you prepare for price moves.</p>
                 </div>
                 <span className="material-symbols-outlined text-right text-[#c1caaf]">show_chart</span>
               </div>
@@ -593,28 +796,46 @@ const LandingPage = () => {
         </section>
 
         {/* In-app screenshots */}
-        <section className="bg-[#0c1322] px-6 py-20 md:px-12">
+        <section className="bg-[#0c1322] px-4 py-16 sm:px-6 sm:py-20 md:px-12">
           <div className="mx-auto max-w-[1920px]">
-            <div className="landing-reveal mb-10">
-              <h2 className="font-headline text-3xl font-bold uppercase tracking-tighter text-white md:text-4xl">Inside {BRAND.name}</h2>
-              <p className="mt-2 max-w-xl text-[#c1caaf]">Actual workspace screens — pricing, exposures, and strategy configuration.</p>
+            <div className="landing-reveal mb-10 max-w-3xl sm:mb-14">
+              <p className="mb-3 font-headline text-[10px] font-bold uppercase tracking-[0.3em] text-[#aef833]">
+                Inside the terminal
+              </p>
+              <h2 className="font-headline text-3xl font-bold uppercase tracking-tighter text-white sm:text-4xl md:text-5xl lg:text-6xl">
+                Real screens. <br className="hidden sm:block" /> Real workflows.
+              </h2>
+              <p className="mt-4 max-w-xl text-sm text-[#c1caaf] md:text-base">
+                Actual workspace views — pricing, exposures and strategy configuration. No mock-ups.
+              </p>
             </div>
-            <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
+            <div className="grid grid-cols-1 gap-5 sm:gap-6 md:grid-cols-3">
               {[
-                { title: "Pricers", src: LANDING_SCREENSHOTS.pricers, path: "/pricers" },
-                { title: "Dashboard & exposures", src: LANDING_SCREENSHOTS.exposures, path: "/dashboard" },
-                { title: "Strategy builder", src: LANDING_SCREENSHOTS.strategyBuilder, path: "/strategy-builder" },
-              ].map((s) => (
+                { title: "Pricers", desc: "Forwards, vanillas, exotics — one consistent spine.", src: LANDING_SCREENSHOTS.pricers, path: "/pricers", icon: "calculate" },
+                { title: "Dashboard", desc: "Exposures, hedges and MTM in a single view.", src: LANDING_SCREENSHOTS.exposures, path: "/dashboard", icon: "dashboard" },
+                { title: "Strategy builder", desc: "Compose multi-leg structures and stress-test before execution.", src: LANDING_SCREENSHOTS.strategyBuilder, path: "/strategy-builder", icon: "construction" },
+              ].map((s, i) => (
                 <button
                   key={s.title}
                   type="button"
                   onClick={() => navigate(s.path)}
-                  className="landing-reveal group text-left"
+                  className="landing-reveal group landing-hairline relative overflow-hidden rounded-sm border border-[#424a35]/20 bg-[#141b2b]/40 text-left"
+                  style={{ transitionDelay: `${i * 100}ms` }}
                 >
-                  <div className="overflow-hidden rounded-sm border border-[#424a35]/20">
-                    <img src={s.src} alt={s.title} className="aspect-video w-full object-cover object-top transition-transform duration-500 group-hover:scale-[1.02]" />
+                  <div className="relative overflow-hidden">
+                    <img src={s.src} alt={s.title} className="aspect-[16/10] w-full object-cover object-top transition-transform duration-700 group-hover:scale-[1.04]" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-[#070e1d] via-[#070e1d]/40 to-transparent opacity-90" />
+                    <div className="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-sm border border-[#aef833]/25 bg-[#070e1d]/70 backdrop-blur">
+                      <span className="material-symbols-outlined text-[#aef833]">{s.icon}</span>
+                    </div>
                   </div>
-                  <p className="mt-3 font-headline text-sm font-bold uppercase tracking-widest text-white">{s.title}</p>
+                  <div className="px-5 py-5 sm:px-6 sm:py-6">
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="font-headline text-sm font-bold uppercase tracking-widest text-white sm:text-base">{s.title}</p>
+                      <span className="material-symbols-outlined text-[#aef833] transition-transform group-hover:translate-x-1">arrow_forward</span>
+                    </div>
+                    <p className="mt-2 text-xs text-[#c1caaf] sm:text-sm">{s.desc}</p>
+                  </div>
                 </button>
               ))}
             </div>
@@ -622,32 +843,65 @@ const LandingPage = () => {
         </section>
 
         {/* Testimonials */}
-        <section className="bg-[#070e1d] px-6 py-20 md:px-12" id="testimonials">
-          <div className="mx-auto max-w-[1920px]">
-            <h2 className="landing-reveal mb-10 font-headline text-3xl font-bold uppercase text-white md:text-4xl">Teams using {BRAND.name}</h2>
-            <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
-              {testimonials.map((t, i) => (
-                <div key={i} className="landing-reveal landing-glass-card p-8" style={{ transitionDelay: `${i * 100}ms` }}>
-                  <div className="mb-4 flex">
-                    {[1, 2, 3, 4, 5].map((j) => (
-                      <Star key={j} className="h-4 w-4 fill-[#aef833] text-[#aef833]" />
-                    ))}
+        <section className="relative overflow-hidden bg-[#070e1d] px-4 py-16 sm:px-6 sm:py-20 md:px-12 md:py-28" id="testimonials">
+          <div className="landing-spotlight absolute inset-0 opacity-40" />
+          <div className="relative mx-auto max-w-[1920px]">
+            <div className="landing-reveal mb-10 max-w-2xl sm:mb-14">
+              <p className="mb-3 font-headline text-[10px] font-bold uppercase tracking-[0.3em] text-[#aef833]">
+                What desks say
+              </p>
+              <h2 className="font-headline text-3xl font-bold uppercase tracking-tighter text-white sm:text-4xl md:text-5xl">
+                Built around the people <br className="hidden sm:block" /> who run the book.
+              </h2>
+            </div>
+            <div className="grid grid-cols-1 gap-4 sm:gap-6 md:grid-cols-3">
+              {testimonials.map((t, i) => {
+                const initials = t.name
+                  .split(" ")
+                  .map((s) => s[0])
+                  .join("")
+                  .slice(0, 2)
+                  .toUpperCase();
+                return (
+                  <div
+                    key={i}
+                    className="landing-reveal landing-glass-card landing-hairline relative overflow-hidden rounded-sm p-6 sm:p-8"
+                    style={{ transitionDelay: `${i * 100}ms` }}
+                  >
+                    <span className="pointer-events-none absolute right-5 top-2 font-headline text-7xl font-black leading-none text-[#aef833]/10">&ldquo;</span>
+                    <div className="relative mb-4 flex">
+                      {[1, 2, 3, 4, 5].map((j) => (
+                        <Star key={j} className="h-4 w-4 fill-[#aef833] text-[#aef833]" />
+                      ))}
+                    </div>
+                    <p className="relative mb-6 text-sm font-light leading-relaxed text-[#dce2f7] sm:text-base">&ldquo;{t.text}&rdquo;</p>
+                    <div className="relative flex items-center gap-3 border-t border-[#424a35]/15 pt-4">
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[#aef833] to-[#93db04] font-headline text-xs font-black text-[#213600]">
+                        {initials}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="truncate font-headline text-sm font-bold text-white">{t.name}</p>
+                        <p className="truncate text-[11px] text-[#c1caaf]">{t.role}</p>
+                      </div>
+                    </div>
                   </div>
-                  <p className="mb-6 text-sm font-light italic leading-relaxed text-[#dce2f7]">&quot;{t.text}&quot;</p>
-                  <p className="font-headline font-bold text-white">{t.name}</p>
-                  <p className="text-xs text-[#c1caaf]">{t.role}</p>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         </section>
 
         {/* FAQ */}
-        <section className="bg-[#0c1322] px-6 py-20 md:px-12" id="faq">
+        <section className="bg-[#0c1322] px-4 py-16 sm:px-6 sm:py-20 md:px-12 md:py-28" id="faq">
           <div className="mx-auto max-w-3xl">
-            <h2 className="landing-reveal mb-10 text-center font-headline text-3xl font-bold uppercase text-white md:text-4xl">
-              {BRAND.name} FAQ
-            </h2>
+            <div className="landing-reveal mb-10 text-center sm:mb-14">
+              <p className="mb-3 font-headline text-[10px] font-bold uppercase tracking-[0.3em] text-[#aef833]">
+                FAQ
+              </p>
+              <h2 className="font-headline text-3xl font-bold uppercase tracking-tighter text-white sm:text-4xl md:text-5xl">
+                Quick answers <br className="hidden sm:block" /> for the desk.
+              </h2>
+            </div>
             <div className="space-y-3">
               {faqs.map((faq, i) => (
                 <div key={i} className="landing-reveal landing-glass-card overflow-hidden rounded-sm">
@@ -667,110 +921,164 @@ const LandingPage = () => {
         </section>
 
         {/* CTA */}
-        <section className="relative overflow-hidden bg-[#0c1322] px-6 py-28 md:px-12 md:py-40">
-          <div className="pointer-events-none absolute inset-0 opacity-10">
-            <div className="absolute left-0 top-0 h-full w-full bg-[radial-gradient(circle_at_50%_50%,#aef833_0%,transparent_50%)]" />
+        <section className="relative overflow-hidden bg-[#0c1322] px-4 py-20 sm:px-6 sm:py-24 md:px-12 md:py-32">
+          <div className="pointer-events-none absolute inset-0">
+            <div className="landing-grid absolute inset-0 opacity-40" />
+            <div className="absolute left-1/2 top-1/2 h-[600px] w-[800px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[radial-gradient(circle,#aef833_0%,transparent_60%)] opacity-15" />
           </div>
-          <div className="landing-reveal relative z-10 mx-auto max-w-5xl text-center">
-            <h2 className="mb-10 font-headline text-4xl font-bold uppercase tracking-tighter text-white md:text-6xl lg:text-8xl">
-              Architect your <br /> <span className="text-[#aef833]">edge.</span>
-            </h2>
-            <p className="mx-auto mb-12 max-w-3xl text-lg font-light text-[#c1caaf] md:text-2xl">
-              {BRAND.name} ties pricing, hedging, and scenarios into one terminal — from desk trial to production risk reviews.
-            </p>
-            <div className="flex flex-col justify-center gap-6 sm:flex-row">
-              <button
-                type="button"
-                onClick={() => navigate("/login?mode=signup")}
-                className="landing-btn-industrial landing-industrial-gradient px-10 py-5 font-headline font-bold uppercase tracking-widest text-[#213600] transition-transform hover:scale-105 md:px-12"
-              >
-                Request access
-              </button>
-              <button
-                type="button"
-                onClick={() => navigate("/login")}
-                className="landing-btn-industrial border border-[#424a35] bg-transparent px-10 py-5 font-headline font-bold uppercase tracking-widest text-white transition-all hover:bg-white/5 md:px-12"
-              >
-                Sign in
-              </button>
+          <div className="landing-reveal landing-hairline relative z-10 mx-auto max-w-6xl overflow-hidden rounded-sm border border-[#aef833]/10 bg-gradient-to-br from-[#141b2b]/80 via-[#0c1322]/60 to-[#070e1d]/80 px-6 py-12 backdrop-blur-xl sm:px-10 sm:py-16 md:px-16 md:py-20">
+            <div className="grid grid-cols-1 items-center gap-10 lg:grid-cols-12 lg:gap-12">
+              <div className="lg:col-span-7">
+                <p className="mb-3 font-headline text-[10px] font-bold uppercase tracking-[0.3em] text-[#aef833]">
+                  Get started
+                </p>
+                <h2 className="mb-6 font-headline text-3xl font-bold uppercase leading-[0.95] tracking-tighter text-white sm:text-5xl md:text-6xl lg:text-7xl">
+                  Architect <br /> your <span className="bg-gradient-to-br from-[#aef833] to-[#93db04] bg-clip-text text-transparent">edge.</span>
+                </h2>
+                <p className="max-w-xl text-sm font-light text-[#c1caaf] sm:text-base md:text-lg">
+                  {BRAND.name} ties pricing, hedging and scenarios into one terminal — from desk trial to production risk reviews.
+                </p>
+              </div>
+              <div className="flex flex-col gap-3 lg:col-span-5 lg:items-end">
+                <button
+                  type="button"
+                  onClick={() => navigate("/request-access")}
+                  className="landing-btn-industrial landing-industrial-gradient w-full px-6 py-4 font-headline text-sm font-bold uppercase tracking-widest text-[#213600] shadow-[0_15px_50px_-15px_rgba(174,248,51,0.6)] transition-transform hover:scale-[1.02] sm:px-10 sm:py-5 sm:text-base lg:w-auto"
+                >
+                  Request access
+                </button>
+                <button
+                  type="button"
+                  onClick={() => navigate("/login")}
+                  className="landing-btn-industrial w-full border border-[#424a35]/40 bg-[#141b2b]/40 px-6 py-4 font-headline text-sm font-bold uppercase tracking-widest text-white backdrop-blur transition-all hover:bg-[#1b2333]/60 sm:px-10 sm:py-5 sm:text-base lg:w-auto"
+                >
+                  Sign in
+                </button>
+                <p className="mt-2 text-[11px] uppercase tracking-widest text-[#8c947b]">
+                  No card. No drama. Just access.
+                </p>
+              </div>
             </div>
           </div>
         </section>
       </main>
 
-      <footer className="mt-auto bg-[#070e1d] px-6 py-16 md:px-12 md:py-20" id="contact">
-        <div className="mx-auto grid w-full max-w-[1920px] grid-cols-4 gap-8">
-          <div className="col-span-4 md:col-span-2">
-            <div className="mb-8 font-headline text-4xl font-bold text-white opacity-10">{BRAND.nameWatermark}</div>
-            <p className="mb-10 max-w-sm text-sm text-[#aeb5c5]">
-              {BRAND.name} — options and forwards pricing, hedge books, and strategy analytics for commodity and FX desks. Built for clarity under volatility.
+      <footer className="relative mt-auto overflow-hidden bg-[#070e1d] px-4 py-14 sm:px-6 sm:py-16 md:px-12 md:py-20" id="contact">
+        <div className="absolute inset-x-0 top-0 h-px landing-divider" />
+        <div className="mx-auto grid w-full max-w-[1920px] grid-cols-2 gap-x-8 gap-y-12 sm:grid-cols-4 lg:grid-cols-12">
+          <div className="col-span-2 sm:col-span-4 lg:col-span-5">
+            <div className="mb-3 flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-sm bg-gradient-to-br from-[#aef833] to-[#93db04] font-headline text-sm font-black text-[#213600]">
+                {BRAND.logoMark}
+              </div>
+              <span className="font-headline text-base font-bold uppercase tracking-widest text-white">{BRAND.name}</span>
+            </div>
+            <p className="mb-6 max-w-md text-sm leading-relaxed text-[#aeb5c5] sm:mb-8">
+              {BRAND.tagline}. Commodity pricers, hedge books and strategy analytics built for clarity under volatility.
             </p>
-            <div className="flex space-x-6">
-              <span className="text-[#424a35]">
-                <span className="material-symbols-outlined">public</span>
+            <a
+              href="mailto:commohedge@gmail.com"
+              className="inline-flex items-center gap-2 font-headline text-xs font-bold uppercase tracking-widest text-[#aef833] hover:text-white"
+            >
+              <span className="material-symbols-outlined text-base">mail</span>
+              commohedge@gmail.com
+            </a>
+            <div className="mt-6 flex space-x-3">
+              <span className="flex h-9 w-9 items-center justify-center rounded-sm border border-[#424a35]/30 text-[#8c947b] transition-colors hover:border-[#aef833]/40 hover:text-[#aef833]">
+                <span className="material-symbols-outlined text-base">public</span>
               </span>
-              <span className="text-[#424a35]">
-                <span className="material-symbols-outlined">hub</span>
+              <span className="flex h-9 w-9 items-center justify-center rounded-sm border border-[#424a35]/30 text-[#8c947b] transition-colors hover:border-[#aef833]/40 hover:text-[#aef833]">
+                <span className="material-symbols-outlined text-base">hub</span>
               </span>
-              <span className="text-[#424a35]">
-                <span className="material-symbols-outlined">monitoring</span>
+              <span className="flex h-9 w-9 items-center justify-center rounded-sm border border-[#424a35]/30 text-[#8c947b] transition-colors hover:border-[#aef833]/40 hover:text-[#aef833]">
+                <span className="material-symbols-outlined text-base">monitoring</span>
               </span>
             </div>
           </div>
-          <div className="col-span-2 md:col-span-1">
-            <h5 className="mb-8 font-headline text-[10px] uppercase tracking-widest text-[#aef833]">Platform</h5>
-            <ul className="space-y-4">
+
+          <div className="col-span-1 sm:col-span-1 lg:col-span-2 lg:col-start-7">
+            <h5 className="mb-5 font-headline text-[10px] font-bold uppercase tracking-[0.25em] text-[#aef833]">Platform</h5>
+            <ul className="space-y-3">
               <li>
-                <button type="button" onClick={() => navigate("/pricers")} className="text-[10px] uppercase tracking-widest text-[#424a35] hover:text-[#aef833]">
+                <button type="button" onClick={() => navigate("/pricers")} className="font-headline text-[11px] uppercase tracking-widest text-[#aeb5c5] transition-colors hover:text-white">
                   Pricers
                 </button>
               </li>
               <li>
-                <button type="button" onClick={() => navigate("/dashboard")} className="text-[10px] uppercase tracking-widest text-[#424a35] hover:text-[#aef833]">
-                  Dashboard & exposures
+                <button type="button" onClick={() => navigate("/dashboard")} className="font-headline text-[11px] uppercase tracking-widest text-[#aeb5c5] transition-colors hover:text-white">
+                  Dashboard
                 </button>
               </li>
               <li>
-                <button type="button" onClick={() => navigate("/strategy-builder")} className="text-[10px] uppercase tracking-widest text-[#424a35] hover:text-[#aef833]">
+                <button type="button" onClick={() => navigate("/strategy-builder")} className="font-headline text-[11px] uppercase tracking-widest text-[#aeb5c5] transition-colors hover:text-white">
                   Strategy builder
                 </button>
               </li>
               <li>
-                <button type="button" onClick={() => navigate("/commodity-market")} className="text-[10px] uppercase tracking-widest text-[#424a35] hover:text-[#aef833]">
+                <button type="button" onClick={() => navigate("/commodity-market")} className="font-headline text-[11px] uppercase tracking-widest text-[#aeb5c5] transition-colors hover:text-white">
                   Commodity market
                 </button>
               </li>
             </ul>
           </div>
-          <div className="col-span-2 md:col-span-1">
-            <h5 className="mb-8 font-headline text-[10px] uppercase tracking-widest text-[#aef833]">App</h5>
-            <ul className="space-y-4">
+
+          <div className="col-span-1 sm:col-span-1 lg:col-span-2">
+            <h5 className="mb-5 font-headline text-[10px] font-bold uppercase tracking-[0.25em] text-[#aef833]">Workflow</h5>
+            <ul className="space-y-3">
               <li>
-                <button type="button" onClick={() => navigate("/rate-explorer")} className="text-[10px] uppercase tracking-widest text-[#424a35] hover:text-[#aef833]">
+                <button type="button" onClick={() => navigate("/rate-explorer")} className="font-headline text-[11px] uppercase tracking-widest text-[#aeb5c5] transition-colors hover:text-white">
                   Rate explorer
                 </button>
               </li>
               <li>
-                <button type="button" onClick={() => navigate("/hedge-helper")} className="text-[10px] uppercase tracking-widest text-[#424a35] hover:text-[#aef833]">
+                <button type="button" onClick={() => navigate("/hedge-helper")} className="font-headline text-[11px] uppercase tracking-widest text-[#aeb5c5] transition-colors hover:text-white">
                   Hedge assistant
                 </button>
               </li>
               <li>
-                <a href="#faq" className="text-[10px] uppercase tracking-widest text-[#424a35] hover:text-[#aef833]">
+                <button type="button" onClick={() => navigate("/intel-workspace")} className="font-headline text-[11px] uppercase tracking-widest text-[#aeb5c5] transition-colors hover:text-white">
+                  Intelligence workspace
+                </button>
+              </li>
+              <li>
+                <a href="#faq" className="font-headline text-[11px] uppercase tracking-widest text-[#aeb5c5] transition-colors hover:text-white">
                   FAQ
                 </a>
               </li>
-              <li>
-                <button type="button" onClick={() => navigate("/login")} className="text-[10px] uppercase tracking-widest text-[#424a35] hover:text-[#aef833]">
-                  Login
-                </button>
-              </li>
             </ul>
           </div>
+
+          <div className="col-span-2 sm:col-span-2 lg:col-span-3">
+            <h5 className="mb-5 font-headline text-[10px] font-bold uppercase tracking-[0.25em] text-[#aef833]">Get started</h5>
+            <p className="mb-4 text-sm text-[#aeb5c5]">
+              Two minutes is enough to see the terminal in action.
+            </p>
+            <button
+              type="button"
+              onClick={() => navigate("/request-access")}
+              className="landing-btn-industrial landing-industrial-gradient w-full px-5 py-3 font-headline text-xs font-bold uppercase tracking-widest text-[#213600] transition-transform hover:scale-[1.02]"
+            >
+              Request access
+            </button>
+            <button
+              type="button"
+              onClick={() => navigate("/login")}
+              className="landing-btn-industrial mt-2 w-full border border-[#424a35]/40 bg-transparent px-5 py-3 font-headline text-xs font-bold uppercase tracking-widest text-white transition-all hover:bg-white/5"
+            >
+              Sign in
+            </button>
+          </div>
         </div>
-        <div className="mx-auto mt-16 flex max-w-[1920px] flex-col items-start justify-between gap-4 border-t border-[#424a35]/10 pt-8 md:flex-row md:items-center">
-          <p className="text-[10px] uppercase tracking-widest text-[#424a35]">{BRAND.copyrightLine}</p>
-          <p className="text-[10px] uppercase tracking-widest text-[#424a35]">Commodity · FX · Strategy</p>
+
+        <div className="pointer-events-none absolute -bottom-4 left-0 right-0 select-none overflow-hidden">
+          <p className="break-all text-center font-headline text-[14vw] font-black uppercase leading-none tracking-tighter text-white opacity-[0.04] sm:text-[12vw]">
+            {BRAND.nameWatermark}
+          </p>
+        </div>
+
+        <div className="relative mx-auto mt-12 flex max-w-[1920px] flex-col items-start justify-between gap-3 border-t border-[#424a35]/15 pt-6 sm:mt-16 sm:gap-4 sm:pt-8 md:flex-row md:items-center">
+          <p className="font-headline text-[10px] uppercase tracking-widest text-[#8c947b]">{BRAND.copyrightLine}</p>
+          <p className="font-headline text-[10px] uppercase tracking-widest text-[#8c947b]">Commodity · Risk · Strategy</p>
         </div>
       </footer>
     </div>

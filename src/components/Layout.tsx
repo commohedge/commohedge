@@ -69,35 +69,40 @@ export function Layout({ children, title, breadcrumbs }: LayoutProps) {
   return (
     <SidebarProvider>
       <AppSidebar />
-      <SidebarInset>
-        <header className="flex h-16 shrink-0 items-center gap-2 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-          <div className="flex items-center gap-2 px-4">
+      <SidebarInset className="min-w-0">
+        <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center gap-2 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 md:h-16">
+          <div className="flex w-full min-w-0 items-center gap-2 px-2 sm:px-4">
             <SidebarToggleButton />
-            <Separator orientation="vertical" className="mr-2 h-4" />
+            <Separator orientation="vertical" className="mr-1 hidden h-4 sm:mr-2 sm:block" />
             {breadcrumbs && (
-              <Breadcrumb>
+              <Breadcrumb className="min-w-0">
                 <BreadcrumbList>
-                  {breadcrumbs.map((breadcrumb, index) => (
-                    <React.Fragment key={index}>
-                      <BreadcrumbItem className="hidden md:block">
-                        {breadcrumb.href ? (
-                          <BreadcrumbLink href={breadcrumb.href}>
-                            {breadcrumb.label}
-                          </BreadcrumbLink>
-                        ) : (
-                          <BreadcrumbPage>{breadcrumb.label}</BreadcrumbPage>
-                        )}
-                      </BreadcrumbItem>
-                      {index < breadcrumbs.length - 1 && (
-                        <BreadcrumbSeparator className="hidden md:block" />
-                      )}
-                    </React.Fragment>
-                  ))}
+                  {breadcrumbs.map((breadcrumb, index) => {
+                    const isLast = index === breadcrumbs.length - 1;
+                    return (
+                      <React.Fragment key={index}>
+                        <BreadcrumbItem
+                          className={isLast ? "min-w-0 truncate" : "hidden md:block"}
+                        >
+                          {breadcrumb.href ? (
+                            <BreadcrumbLink href={breadcrumb.href} className="truncate">
+                              {breadcrumb.label}
+                            </BreadcrumbLink>
+                          ) : (
+                            <BreadcrumbPage className="truncate text-sm font-semibold sm:text-base">
+                              {breadcrumb.label}
+                            </BreadcrumbPage>
+                          )}
+                        </BreadcrumbItem>
+                        {!isLast && <BreadcrumbSeparator className="hidden md:block" />}
+                      </React.Fragment>
+                    );
+                  })}
                 </BreadcrumbList>
               </Breadcrumb>
             )}
             {title && !breadcrumbs && (
-              <h1 className="text-lg font-semibold text-foreground">{title}</h1>
+              <h1 className="truncate text-base font-semibold text-foreground sm:text-lg">{title}</h1>
             )}
             <div className="flex-1" />
             <div className="hidden lg:flex items-center gap-2 text-sm text-muted-foreground">
@@ -115,7 +120,7 @@ export function Layout({ children, title, breadcrumbs }: LayoutProps) {
           </div>
         </header>
         <ScrollArea variant="content" orientation="both" className="flex-1">
-          <div className="flex flex-1 flex-col gap-4 p-4 pt-6">
+          <div className="flex min-w-0 flex-1 flex-col gap-3 p-3 pt-4 sm:gap-4 sm:p-4 sm:pt-6">
             {children}
           </div>
         </ScrollArea>

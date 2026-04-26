@@ -147,11 +147,11 @@ const SupabaseLogin: React.FC = () => {
         />
       </div>
 
-      <div className="relative mx-auto flex w-full max-w-md flex-col items-stretch p-6 pt-10">
+      <div className="relative mx-auto flex w-full max-w-md flex-col items-stretch px-4 pb-10 pt-6 sm:px-6 sm:pt-10">
         <Button
           variant="ghost"
           onClick={() => navigate("/")}
-          className="mb-6 -ml-2 w-fit font-headline text-xs font-bold uppercase tracking-wider text-[#c1caaf] hover:bg-white/5 hover:text-white"
+          className="mb-5 -ml-2 w-fit font-headline text-xs font-bold uppercase tracking-wider text-[#c1caaf] hover:bg-white/5 hover:text-white sm:mb-6"
         >
           <ArrowLeft className="mr-2 h-4 w-4" />
           Back to home

@@ -2,7 +2,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
+import { BrowserRouter as Router, Routes, Route, useLocation } from "react-router-dom";
 import { ThemeProvider } from "./hooks/ThemeProvider";
 import { useSmoothScroll, useMomentumScroll } from "./hooks/useSmoothScroll";
 import { useZoom } from "./hooks/useZoom";
@@ -37,9 +37,11 @@ import RateExplorer from "./pages/RateExplorer";
 import HedgeHelper from "./pages/HedgeHelper";
 import TickerPeekPro from "./pages/TickerPeekPro";
 import IntelWorkspace from "./pages/IntelWorkspace";
+import IntelPanelPage from "./pages/IntelPanelPage";
 import WorldMap from "./pages/WorldMap";
 import CommodityNews from "./pages/CommodityNews";
 import LandingPage from "./pages/LandingPage";
+import RequestAccess from "./pages/RequestAccess";
 import SupabaseLogin from "./pages/SupabaseLogin";
 import AuthCallback from "./pages/AuthCallback";
 import NotFound from "./pages/NotFound";
@@ -49,6 +51,16 @@ import ProtectedRoute from "./components/ProtectedRoute";
 import { ThemeToggle } from "./components/ui/theme-toggle";
 
 const queryClient = new QueryClient();
+
+function ThemeToggleDock() {
+  const location = useLocation();
+  if (location.pathname === "/") return null;
+  return (
+    <div className="fixed top-4 right-4 z-50">
+      <ThemeToggle />
+    </div>
+  );
+}
 
 const App = () => {
   // Initialiser les hooks de scroll fluide
@@ -70,13 +82,12 @@ const App = () => {
         <TooltipProvider>
           <Toaster />
           <Sonner />
-          <div className="fixed top-4 right-4 z-50">
-            <ThemeToggle />
-          </div>
           <Router>
+          <ThemeToggleDock />
           <Routes>
             {/* Landing Page - Page par défaut */}
             <Route path="/" element={<LandingPage />} />
+            <Route path="/request-access" element={<RequestAccess />} />
             
             {/* Authentication */}
             <Route path="/login" element={<SupabaseLogin />} />
@@ -97,6 +108,7 @@ const App = () => {
             <Route path="/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
             <Route path="/commodity-market" element={<ProtectedRoute><CommodityMarket /></ProtectedRoute>} />
             <Route path="/intel-workspace" element={<ProtectedRoute><IntelWorkspace /></ProtectedRoute>} />
+            <Route path="/intel-workspace/panel/:panelId" element={<ProtectedRoute><IntelPanelPage /></ProtectedRoute>} />
             <Route path="/world-map" element={<ProtectedRoute><WorldMap /></ProtectedRoute>} />
             <Route path="/commodity-news" element={<ProtectedRoute><CommodityNews /></ProtectedRoute>} />
             <Route path="/market-news" element={<ProtectedRoute><MarketNews /></ProtectedRoute>} />

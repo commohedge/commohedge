@@ -422,6 +422,14 @@ const HedgingInstruments = () => {
   const { toast } = useToast();
   const [selectedTab, setSelectedTab] = useState("all");
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [showExportColumns, setShowExportColumns] = useState<boolean>(() => {
+    try {
+      const v = localStorage.getItem("hedgingInstruments_showExportColumns");
+      return v ? JSON.parse(v) === true : false;
+    } catch {
+      return false;
+    }
+  });
   
   // ── Interest Rates from Rate Explorer ──
   const {
@@ -2138,7 +2146,9 @@ const HedgingInstruments = () => {
     portfolios,
   ]);
 
-  const HEDGING_TABLE_COL_COUNT = 21;
+  // When export columns are shown, we double these groups: TTM, Spot, Vol, Rate, Forward, Strike.
+  // Base table has 21 columns; export view adds +6 columns.
+  const HEDGING_TABLE_COL_COUNT = showExportColumns ? 27 : 21;
 
   type HedgingTableDisplayItem =
     | { kind: "group"; key: string; title: string }
@@ -2584,6 +2594,22 @@ const HedgingInstruments = () => {
       ? calculateTimeToMaturity(instrument.maturity, exportStartSnap)
       : instrument.exportTimeToMaturity ?? 0;
     const exportDteSnap = daysToMaturityFromYearsAct36525(exportTtmSnap);
+    const exportSpotSnap =
+      instrument.exportSpotPrice != null && Number.isFinite(instrument.exportSpotPrice) ? instrument.exportSpotPrice : null;
+    const exportVolSnap =
+      instrument.exportVolatility != null && Number.isFinite(instrument.exportVolatility) ? instrument.exportVolatility : null;
+    const exportRateSnap =
+      instrument.exportDomesticRate != null && Number.isFinite(instrument.exportDomesticRate) ? instrument.exportDomesticRate : null;
+    const exportForwardSnap =
+      instrument.exportForwardPrice != null && Number.isFinite(instrument.exportForwardPrice) ? instrument.exportForwardPrice : null;
+    const exportStrikeSnap =
+      instrument.exportStrike != null && Number.isFinite(instrument.exportStrike)
+        ? instrument.exportStrike
+        : instrument.originalComponent && exportSpotSnap != null
+          ? (instrument.originalComponent.strikeType === "percent"
+              ? exportSpotSnap * (instrument.originalComponent.strike / 100)
+              : instrument.originalComponent.strike)
+          : null;
     const detailSnapshot: HedgingInstrumentDetailSnapshot = {
       valuationDate,
       todayPrice,
@@ -2644,24 +2670,96 @@ const HedgingInstruments = () => {
         >
           {mtmStr}
         </TableCell>
-        <TableCell className="text-center font-mono text-xs border-r">
-          {timeToMaturity === 0 ? (
-            <span className="text-destructive">Expired</span>
-          ) : (
-            <span>
-              {timeToMaturity.toFixed(2)}y · {dteDisplay}d
-            </span>
-          )}
-        </TableCell>
-        <TableCell className="text-right font-mono text-xs border-r">{spotDisplay.toFixed(4)}</TableCell>
-        <TableCell className="text-right font-mono text-xs border-r">
-          {volPctRow != null ? `${volPctRow.toFixed(1)}%` : "—"}
-        </TableCell>
-        <TableCell className="text-right font-mono text-xs border-r">{ratePctRow.toFixed(2)}%</TableCell>
-        <TableCell className="text-right font-mono text-xs border-r">{forwardVal.toFixed(4)}</TableCell>
-        <TableCell className="text-right font-mono text-xs border-r">
-          {instrument.strike != null ? instrument.strike.toFixed(4) : "N/A"}
-        </TableCell>
+        {showExportColumns ? (
+          <>
+            {/* TTM - Export */}
+            <TableCell className="text-center font-mono text-xs border-r text-blue-600">
+              {exportTtmSnap > 0 || instrument.exportTimeToMaturity != null ? (
+                <span>
+                  {exportTtmSnap.toFixed(2)}y · {exportDteSnap.toFixed(0)}d
+                </span>
+              ) : (
+                "—"
+              )}
+            </TableCell>
+            {/* TTM - Current */}
+            <TableCell className="text-center font-mono text-xs border-r text-green-700 dark:text-green-400">
+              {timeToMaturity === 0 ? (
+                <span className="text-destructive">Expired</span>
+              ) : (
+                <span>
+                  {timeToMaturity.toFixed(2)}y · {dteDisplay}d
+                </span>
+              )}
+            </TableCell>
+
+            {/* Spot - Export */}
+            <TableCell className="text-right font-mono text-xs border-r text-blue-600">
+              {exportSpotSnap != null ? exportSpotSnap.toFixed(4) : "—"}
+            </TableCell>
+            {/* Spot - Current */}
+            <TableCell className="text-right font-mono text-xs border-r text-green-700 dark:text-green-400">
+              {spotDisplay.toFixed(4)}
+            </TableCell>
+
+            {/* Vol - Export */}
+            <TableCell className="text-right font-mono text-xs border-r text-blue-600">
+              {exportVolSnap != null ? `${exportVolSnap.toFixed(1)}%` : "—"}
+            </TableCell>
+            {/* Vol - Current */}
+            <TableCell className="text-right font-mono text-xs border-r text-green-700 dark:text-green-400">
+              {volPctRow != null ? `${volPctRow.toFixed(1)}%` : "—"}
+            </TableCell>
+
+            {/* Rate - Export */}
+            <TableCell className="text-right font-mono text-xs border-r text-blue-600">
+              {exportRateSnap != null ? `${exportRateSnap.toFixed(2)}%` : "—"}
+            </TableCell>
+            {/* Rate - Current */}
+            <TableCell className="text-right font-mono text-xs border-r text-green-700 dark:text-green-400">
+              {ratePctRow.toFixed(2)}%
+            </TableCell>
+
+            {/* Forward - Export */}
+            <TableCell className="text-right font-mono text-xs border-r text-blue-600">
+              {exportForwardSnap != null ? exportForwardSnap.toFixed(4) : "—"}
+            </TableCell>
+            {/* Forward - Current */}
+            <TableCell className="text-right font-mono text-xs border-r text-green-700 dark:text-green-400">
+              {forwardVal.toFixed(4)}
+            </TableCell>
+
+            {/* Strike - Export */}
+            <TableCell className="text-right font-mono text-xs border-r text-blue-600">
+              {exportStrikeSnap != null ? exportStrikeSnap.toFixed(4) : "—"}
+            </TableCell>
+            {/* Strike - Current */}
+            <TableCell className="text-right font-mono text-xs border-r text-green-700 dark:text-green-400">
+              {instrument.strike != null ? instrument.strike.toFixed(4) : "N/A"}
+            </TableCell>
+          </>
+        ) : (
+          <>
+            <TableCell className="text-center font-mono text-xs border-r">
+              {timeToMaturity === 0 ? (
+                <span className="text-destructive">Expired</span>
+              ) : (
+                <span>
+                  {timeToMaturity.toFixed(2)}y · {dteDisplay}d
+                </span>
+              )}
+            </TableCell>
+            <TableCell className="text-right font-mono text-xs border-r">{spotDisplay.toFixed(4)}</TableCell>
+            <TableCell className="text-right font-mono text-xs border-r">
+              {volPctRow != null ? `${volPctRow.toFixed(1)}%` : "—"}
+            </TableCell>
+            <TableCell className="text-right font-mono text-xs border-r">{ratePctRow.toFixed(2)}%</TableCell>
+            <TableCell className="text-right font-mono text-xs border-r">{forwardVal.toFixed(4)}</TableCell>
+            <TableCell className="text-right font-mono text-xs border-r">
+              {instrument.strike != null ? instrument.strike.toFixed(4) : "N/A"}
+            </TableCell>
+          </>
+        )}
         <TableCell className="text-right font-mono text-xs border-r">
           {instrument.barrier != null ? instrument.barrier.toFixed(2) : "—"}
         </TableCell>
@@ -3055,6 +3153,23 @@ const HedgingInstruments = () => {
               </CardDescription>
             </div>
             <div className="flex gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setShowExportColumns((p) => {
+                    const next = !p;
+                    try {
+                      localStorage.setItem("hedgingInstruments_showExportColumns", JSON.stringify(next));
+                    } catch {}
+                    return next;
+                  });
+                }}
+                title="Toggle export vs current columns"
+              >
+                <Download className="h-4 w-4 mr-2" />
+                {showExportColumns ? "Hide Export" : "Show Export"}
+              </Button>
             <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
               <DialogTrigger asChild>
                 <Button>
@@ -3969,29 +4084,73 @@ const HedgingInstruments = () => {
                   <div className="overflow-x-auto" style={{ maxHeight: 'calc(100vh - 250px)', minHeight: '600px', overflowY: 'auto' }}>
                     <Table className="min-w-full border-collapse">
                      <TableHeader className="bg-muted/50 dark:bg-muted/80 sticky top-0 z-10">
-                       <TableRow className="border-b-2 border-border">
-                         <TableHead className="bg-muted/50 dark:bg-muted/80 font-semibold text-center border-r w-[88px] sticky left-0 z-[1] shadow-sm">ID</TableHead>
-                         <TableHead className="font-semibold text-center border-r min-w-[100px]">Type</TableHead>
-                         <TableHead className="font-semibold text-center border-r w-[96px]">Commodity</TableHead>
-                         <TableHead className="font-semibold text-center border-r w-[72px]">Qty %</TableHead>
-                         <TableHead className="font-semibold text-center border-r w-[88px]">Unit</TableHead>
-                         <TableHead className="font-semibold text-center border-r w-[88px]">Today</TableHead>
-                         <TableHead className="font-semibold text-center border-r w-[88px]">MTM</TableHead>
-                         <TableHead className="font-semibold text-center border-r w-[100px]">TTM</TableHead>
-                         <TableHead className="font-semibold text-center border-r w-[88px]">Spot</TableHead>
-                         <TableHead className="font-semibold text-center border-r w-[72px]">Vol</TableHead>
-                         <TableHead className="font-semibold text-center border-r w-[72px]">Rate</TableHead>
-                         <TableHead className="font-semibold text-center border-r w-[88px]">Forward</TableHead>
-                         <TableHead className="font-semibold text-center border-r w-[88px]">Strike</TableHead>
-                         <TableHead className="font-semibold text-center border-r w-[72px]">Bar 1</TableHead>
-                         <TableHead className="font-semibold text-center border-r w-[72px]">Bar 2</TableHead>
-                         <TableHead className="font-semibold text-center border-r w-[64px]">Rebate</TableHead>
-                         <TableHead className="font-semibold text-center border-r w-[88px]">Notional</TableHead>
-                         <TableHead className="font-semibold text-center border-r w-[96px]">Premium</TableHead>
-                         <TableHead className="font-semibold text-center border-r w-[96px]">Maturity</TableHead>
-                         <TableHead className="font-semibold text-center border-r w-[80px]">Status</TableHead>
-                         <TableHead className="font-semibold text-center w-[100px]">Actions</TableHead>
-                    </TableRow>
+                       {showExportColumns ? (
+                         <>
+                           <TableRow className="border-b-2 border-border">
+                             <TableHead rowSpan={2} className="bg-muted/50 dark:bg-muted/80 font-semibold text-center border-r w-[88px] sticky left-0 z-[1] shadow-sm">
+                               ID
+                             </TableHead>
+                             <TableHead rowSpan={2} className="font-semibold text-center border-r min-w-[100px]">Type</TableHead>
+                             <TableHead rowSpan={2} className="font-semibold text-center border-r w-[96px]">Commodity</TableHead>
+                             <TableHead rowSpan={2} className="font-semibold text-center border-r w-[72px]">Qty %</TableHead>
+                             <TableHead rowSpan={2} className="font-semibold text-center border-r w-[88px]">Unit</TableHead>
+                             <TableHead rowSpan={2} className="font-semibold text-center border-r w-[88px]">Today</TableHead>
+                             <TableHead rowSpan={2} className="font-semibold text-center border-r w-[88px]">MTM</TableHead>
+                             <TableHead colSpan={2} className="font-semibold text-center border-r border-b">TTM</TableHead>
+                             <TableHead colSpan={2} className="font-semibold text-center border-r border-b">Spot</TableHead>
+                             <TableHead colSpan={2} className="font-semibold text-center border-r border-b">Vol</TableHead>
+                             <TableHead colSpan={2} className="font-semibold text-center border-r border-b">Rate</TableHead>
+                             <TableHead colSpan={2} className="font-semibold text-center border-r border-b">Forward</TableHead>
+                             <TableHead colSpan={2} className="font-semibold text-center border-r border-b">Strike</TableHead>
+                             <TableHead rowSpan={2} className="font-semibold text-center border-r w-[72px]">Bar 1</TableHead>
+                             <TableHead rowSpan={2} className="font-semibold text-center border-r w-[72px]">Bar 2</TableHead>
+                             <TableHead rowSpan={2} className="font-semibold text-center border-r w-[64px]">Rebate</TableHead>
+                             <TableHead rowSpan={2} className="font-semibold text-center border-r w-[88px]">Notional</TableHead>
+                             <TableHead rowSpan={2} className="font-semibold text-center border-r w-[96px]">Premium</TableHead>
+                             <TableHead rowSpan={2} className="font-semibold text-center border-r w-[96px]">Maturity</TableHead>
+                             <TableHead rowSpan={2} className="font-semibold text-center border-r w-[80px]">Status</TableHead>
+                             <TableHead rowSpan={2} className="font-semibold text-center w-[100px]">Actions</TableHead>
+                           </TableRow>
+                           <TableRow className="border-b-2 border-border">
+                             <TableHead className="text-xs text-blue-600 text-center border-r">Export</TableHead>
+                             <TableHead className="text-xs text-green-700 dark:text-green-400 text-center border-r">Current</TableHead>
+                             <TableHead className="text-xs text-blue-600 text-center border-r">Export</TableHead>
+                             <TableHead className="text-xs text-green-700 dark:text-green-400 text-center border-r">Current</TableHead>
+                             <TableHead className="text-xs text-blue-600 text-center border-r">Export</TableHead>
+                             <TableHead className="text-xs text-green-700 dark:text-green-400 text-center border-r">Current</TableHead>
+                             <TableHead className="text-xs text-blue-600 text-center border-r">Export</TableHead>
+                             <TableHead className="text-xs text-green-700 dark:text-green-400 text-center border-r">Current</TableHead>
+                             <TableHead className="text-xs text-blue-600 text-center border-r">Export</TableHead>
+                             <TableHead className="text-xs text-green-700 dark:text-green-400 text-center border-r">Current</TableHead>
+                             <TableHead className="text-xs text-blue-600 text-center border-r">Export</TableHead>
+                             <TableHead className="text-xs text-green-700 dark:text-green-400 text-center border-r">Current</TableHead>
+                           </TableRow>
+                         </>
+                       ) : (
+                         <TableRow className="border-b-2 border-border">
+                           <TableHead className="bg-muted/50 dark:bg-muted/80 font-semibold text-center border-r w-[88px] sticky left-0 z-[1] shadow-sm">ID</TableHead>
+                           <TableHead className="font-semibold text-center border-r min-w-[100px]">Type</TableHead>
+                           <TableHead className="font-semibold text-center border-r w-[96px]">Commodity</TableHead>
+                           <TableHead className="font-semibold text-center border-r w-[72px]">Qty %</TableHead>
+                           <TableHead className="font-semibold text-center border-r w-[88px]">Unit</TableHead>
+                           <TableHead className="font-semibold text-center border-r w-[88px]">Today</TableHead>
+                           <TableHead className="font-semibold text-center border-r w-[88px]">MTM</TableHead>
+                           <TableHead className="font-semibold text-center border-r w-[100px]">TTM</TableHead>
+                           <TableHead className="font-semibold text-center border-r w-[88px]">Spot</TableHead>
+                           <TableHead className="font-semibold text-center border-r w-[72px]">Vol</TableHead>
+                           <TableHead className="font-semibold text-center border-r w-[72px]">Rate</TableHead>
+                           <TableHead className="font-semibold text-center border-r w-[88px]">Forward</TableHead>
+                           <TableHead className="font-semibold text-center border-r w-[88px]">Strike</TableHead>
+                           <TableHead className="font-semibold text-center border-r w-[72px]">Bar 1</TableHead>
+                           <TableHead className="font-semibold text-center border-r w-[72px]">Bar 2</TableHead>
+                           <TableHead className="font-semibold text-center border-r w-[64px]">Rebate</TableHead>
+                           <TableHead className="font-semibold text-center border-r w-[88px]">Notional</TableHead>
+                           <TableHead className="font-semibold text-center border-r w-[96px]">Premium</TableHead>
+                           <TableHead className="font-semibold text-center border-r w-[96px]">Maturity</TableHead>
+                           <TableHead className="font-semibold text-center border-r w-[80px]">Status</TableHead>
+                           <TableHead className="font-semibold text-center w-[100px]">Actions</TableHead>
+                         </TableRow>
+                       )}
                   </TableHeader>
                   <TableBody>
                     {hedgingTableDisplayItems.map((row) => {

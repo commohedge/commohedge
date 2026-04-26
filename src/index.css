@@ -116,21 +116,49 @@
     @apply border-border;
   }
 
+  html, body {
+    min-height: 100%;
+  }
+
+  html {
+    /* Avoid iOS auto text-size adjustment on rotation */
+    -webkit-text-size-adjust: 100%;
+  }
+
   body {
     @apply bg-background text-foreground;
     font-feature-settings: "rlig" 1, "calt" 1;
     font-family: var(--font-sans);
     scroll-behavior: smooth;
     -webkit-overflow-scrolling: touch;
-    /* Allow horizontal scrolling when content overflows */
-    overflow-x: auto;
+    /* Prevent the whole page from scrolling sideways when a single
+       child overflows. Internal scroll containers (tables, charts,
+       ScrollArea) keep their own horizontal scroll. */
+    overflow-x: hidden;
     overflow-y: auto;
   }
+
+  /* Prevent iOS Safari from auto-zooming inputs whose font-size is < 16px */
+  @media (max-width: 767px) {
+    input,
+    select,
+    textarea {
+      font-size: 16px;
+    }
+  }
+
+  /* Helpers for iOS safe-areas (notch / home indicator) */
+  .safe-pt { padding-top: env(safe-area-inset-top); }
+  .safe-pb { padding-bottom: env(safe-area-inset-bottom); }
+  .safe-pl { padding-left: env(safe-area-inset-left); }
+  .safe-pr { padding-right: env(safe-area-inset-right); }
 
   h1, h2, h3, h4, h5, h6 {
     font-weight: 600;
     line-height: 1.2;
     letter-spacing: -0.02em;
+    /* Avoid huge words breaking the layout on narrow screens */
+    overflow-wrap: anywhere;
   }
   
   h1 { font-size: 2.25rem; }

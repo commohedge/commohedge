@@ -46,6 +46,8 @@ import { LogOut, User } from "lucide-react";
 import { SyncIndicator } from "./SyncIndicator";
 import { BRAND } from "@/constants/branding";
 import "@/styles/sidebar-zoom.css";
+import { INTEL_PINS_UPDATED_EVENT, readIntelPins, removeIntelPin, type IntelPinnedPanel } from "@/intel/pins";
+import { PinOff } from "lucide-react";
 
 type MarketDataNavItem = {
   title: string;
@@ -83,24 +85,6 @@ const marketDataItems: MarketDataNavItem[] = [
     url: "/rate-explorer",
     icon: Percent,
     description: "Interest rate futures, IRS & yield curve bootstrapping"
-  },
-  {
-    title: "Market News",
-    url: "/market-news",
-    icon: Newspaper,
-    description: "Latest commodity market news and insights"
-  },
-  {
-    title: "Economic Calendar",
-    url: "/economic-calendar",
-    icon: Calendar,
-    description: "Track economic events impacting commodity markets"
-  },
-  {
-    title: "Advanced Chart",
-    url: "/advanced-chart",
-    icon: LineChart,
-    description: "Interactive trading chart with technical analysis"
   },
   {
     title: "Hedge Assistant",
@@ -204,12 +188,23 @@ export function AppSidebar() {
   const logo = getCompanyLogo();
   // Utilise le cache mémoire pour le nom dès le premier render
   const [companyName, setCompanyName] = useState(getCompanyNameSync());
+  const [intelPins, setIntelPins] = useState<IntelPinnedPanel[]>(() => readIntelPins());
   
   useEffect(() => {
     const unsubscribe = companySettingsEmitter.subscribe(() => {
       setCompanyName(getCompanyNameSync());
     });
     return unsubscribe;
+  }, []);
+
+  useEffect(() => {
+    const refresh = () => setIntelPins(readIntelPins());
+    window.addEventListener("storage", refresh);
+    window.addEventListener(INTEL_PINS_UPDATED_EVENT, refresh as EventListener);
+    return () => {
+      window.removeEventListener("storage", refresh);
+      window.removeEventListener(INTEL_PINS_UPDATED_EVENT, refresh as EventListener);
+    };
   }, []);
   
   // Découpe le nom pour l'affichage
@@ -271,6 +266,48 @@ export function AppSidebar() {
         </SidebarGroup>
 
         <SidebarSeparator className="my-4" />
+
+        {/* Pinned panels */}
+        {intelPins.length ? (
+          <>
+            <SidebarGroup>
+              <SidebarGroupLabel className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-2 mb-2 sidebar-group-label">
+                Pinned panels
+              </SidebarGroupLabel>
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  {intelPins.map((p) => (
+                    <SidebarMenuItem key={p.id}>
+                      <SidebarMenuButton
+                        asChild
+                        isActive={isActive(`/intel-workspace/panel/${p.id}`)}
+                        className="group relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all hover:bg-accent hover:text-accent-foreground sidebar-menu-button"
+                      >
+                        <Link to={`/intel-workspace/panel/${p.id}`} className="flex w-full items-center gap-3">
+                          <LayoutGrid className="h-4 w-4 shrink-0 sidebar-icon" />
+                          <span className="flex-1 truncate">{p.title}</span>
+                          <button
+                            type="button"
+                            className="ml-auto inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-white/5 hover:text-foreground"
+                            title="Unpin"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              removeIntelPin(p.id);
+                            }}
+                          >
+                            <PinOff className="h-4 w-4" />
+                          </button>
+                        </Link>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  ))}
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
+            <SidebarSeparator className="my-4" />
+          </>
+        ) : null}
 
         {/* Market Data & News */}
         <SidebarGroup>
