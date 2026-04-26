@@ -2223,21 +2223,21 @@ const Pricers = () => {
           </div>
 
           {/* Résultats */}
-          <div className="xl:col-span-3 space-y-8">
+          <div className="xl:col-span-3 space-y-5">
             {/* Résultats de pricing */}
             {pricingResults.length > 0 && (
               <Card className="border-0 shadow-lg">
-                <CardHeader className="pb-4">
-                  <CardTitle className="flex items-center gap-3 text-xl">
+                <CardHeader className="pb-3">
+                  <CardTitle className="flex items-center gap-3 text-lg">
                     <CheckCircle className="w-6 h-6 text-green-600" />
                     Pricing Results
                   </CardTitle>
                 </CardHeader>
-                <CardContent className="pt-2">
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <CardContent className="pt-0">
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                     {pricingResults.map((result, index) => (
-                      <Card key={index} className="p-6 border-0 shadow-md">
-                        <div className="flex items-center justify-between mb-3">
+                      <Card key={index} className="border-0 shadow-md">
+                        <div className="flex items-center justify-between px-4 pt-4">
                           <Badge className={getMethodColor(result.method)}>
                             <div className="flex items-center gap-1">
                               {getMethodIcon(result.method)}
@@ -2246,46 +2246,38 @@ const Pricers = () => {
                           </Badge>
                         </div>
                         
-                        <div className="space-y-2">
-                          <div className="flex justify-between">
-                            <span className="text-sm text-muted-foreground">Prix:</span>
-                            <span className="font-mono font-bold text-lg">
+                        <div className="px-4 pb-4 pt-3 space-y-2">
+                          <div className="flex items-baseline justify-between gap-3">
+                            <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Price</span>
+                            <span className="font-mono font-bold text-base">
                               {formatPrice(result.price)}
                             </span>
                           </div>
 
                           {result.greeks && (
                             <div className="pt-2 border-t">
-                              <div className="text-xs font-medium text-muted-foreground mb-2">Analytical Greeks:</div>
-                              <div className="grid grid-cols-2 gap-2 text-xs">
+                              <div className="text-[11px] font-medium text-muted-foreground mb-2">Greeks (analytical)</div>
+                              <div className="grid grid-cols-2 gap-x-3 gap-y-2 text-xs">
                                 <div className={`${getGreekColor(result.greeks.delta, 'delta')}`}>
-                                  <span className="font-medium">Δ (Delta):</span><br/>
-                                  {formatGreek(result.greeks.delta)}
+                                  <span className="font-medium">Δ</span>{" "}
+                                  <span className="font-mono">{formatGreek(result.greeks.delta)}</span>
                                 </div>
                                 <div className={`${getGreekColor(result.greeks.gamma, 'gamma')}`}>
-                                  <span className="font-medium">Γ (Gamma):</span><br/>
-                                  {formatGreek(result.greeks.gamma)}
+                                  <span className="font-medium">Γ</span>{" "}
+                                  <span className="font-mono">{formatGreek(result.greeks.gamma)}</span>
                                 </div>
                                 <div className={`${getGreekColor(result.greeks.theta, 'theta')}`}>
-                                  <span className="font-medium">Θ (Theta):</span><br/>
-                                  {formatGreek(result.greeks.theta)}
+                                  <span className="font-medium">Θ</span>{" "}
+                                  <span className="font-mono">{formatGreek(result.greeks.theta)}</span>
                                 </div>
                                 <div className={`${getGreekColor(result.greeks.vega, 'vega')}`}>
-                                  <span className="font-medium">Vega:</span><br/>
-                                  {formatGreek(result.greeks.vega)}
+                                  <span className="font-medium">Vega</span>{" "}
+                                  <span className="font-mono">{formatGreek(result.greeks.vega)}</span>
                                 </div>
                                 <div className={`${getGreekColor(result.greeks.rho, 'rho')}`}>
-                                  <span className="font-medium">ρ (Rho):</span><br/>
-                                  {formatGreek(result.greeks.rho)}
+                                  <span className="font-medium">ρ</span>{" "}
+                                  <span className="font-mono">{formatGreek(result.greeks.rho)}</span>
                                 </div>
-                              </div>
-                              <div className="text-xs text-muted-foreground mt-2">
-                                <strong>Interpretation:</strong><br/>
-                                Δ: Sensitivity to underlying price<br/>
-                                Γ: Delta sensitivity to price<br/>
-                                Θ: Time decay<br/>
-                                Vega: Sensitivity to volatility<br/>
-                                ρ: Sensitivity to interest rates
                               </div>
                             </div>
                           )}
@@ -2299,71 +2291,71 @@ const Pricers = () => {
 
             {/* Résumé de la transaction */}
             <Card className="border-0 shadow-lg">
-              <CardHeader className="pb-4">
-                <CardTitle className="text-xl">Transaction Summary</CardTitle>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-lg">Transaction Summary</CardTitle>
               </CardHeader>
-              <CardContent className="pt-2">
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-6 text-sm">
-                  <div className="p-4 bg-muted/30 rounded-lg">
-                    <span className="font-semibold text-sm text-muted-foreground">Volume</span><br/>
-                    <span className="text-lg font-semibold">{volume.toLocaleString()}</span>
+              <CardContent className="pt-0">
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 text-sm">
+                  <div className="rounded-lg border border-border/60 bg-muted/20 px-3 py-2.5">
+                    <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Volume</div>
+                    <div className="mt-0.5 text-base font-semibold tabular-nums">{volume.toLocaleString()}</div>
                   </div>
-                  <div className="p-4 bg-muted/30 rounded-lg">
-                    <span className="font-semibold text-sm text-muted-foreground">Spot Price</span><br/>
-                    <span className="text-lg font-semibold">{spot}</span>
+                  <div className="rounded-lg border border-border/60 bg-muted/20 px-3 py-2.5">
+                    <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Spot</div>
+                    <div className="mt-0.5 text-base font-semibold tabular-nums">{spot}</div>
                   </div>
                   {(selectedInstrument !== 'forward' && selectedInstrument !== 'swap') && (
-                    <div className="p-4 bg-muted/30 rounded-lg">
-                      <span className="font-semibold text-sm text-muted-foreground">Underlying Price</span><br/>
-                      <span className="text-lg font-semibold">
+                    <div className="rounded-lg border border-border/60 bg-muted/20 px-3 py-2.5">
+                      <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Underlying</div>
+                      <div className="mt-0.5 text-base font-semibold tabular-nums">
                         {underlyingPriceType === 'forward' 
                           ? `${calculateCommodityForwardPrice(spot, getRiskFreeRate(), 0, 0, pricingInputs.timeToMaturity).toFixed(4)} (Forward)`
                           : `${spot} (Spot)`
                         }
-                      </span>
+                      </div>
                     </div>
                   )}
-                  <div className="p-4 bg-muted/30 rounded-lg">
-                    <span className="font-semibold text-sm text-muted-foreground">Absolute Strike</span><br/>
-                    <span className="text-lg font-semibold">{strikeAbs.toFixed(4)}</span>
+                  <div className="rounded-lg border border-border/60 bg-muted/20 px-3 py-2.5">
+                    <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Strike</div>
+                    <div className="mt-0.5 text-base font-semibold tabular-nums">{strikeAbs.toFixed(4)}</div>
                   </div>
                   {/* ✅ Afficher les barrières selon le type d'option */}
                   {(selectedInstrument.includes('knockout') || selectedInstrument.includes('knockin') || selectedInstrument.includes('touch') || selectedInstrument.includes('binary')) && (
                     <>
                       {/* ✅ Barrier 1 - toujours affiché pour les options avec barrières */}
-                      <div className="p-4 bg-muted/30 rounded-lg">
-                        <span className="font-semibold text-sm text-muted-foreground">Barrier 1</span><br/>
-                        <span className="text-lg font-semibold">{barrierAbs ? barrierAbs.toFixed(4) : '-'}</span>
+                      <div className="rounded-lg border border-border/60 bg-muted/20 px-3 py-2.5">
+                        <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Barrier 1</div>
+                        <div className="mt-0.5 text-base font-semibold tabular-nums">{barrierAbs ? barrierAbs.toFixed(4) : '-'}</div>
                       </div>
                       
                       {/* ✅ Barrier 2 - seulement pour les options double barrière */}
                       {selectedInstrument.includes('double') && (
-                        <div className="p-4 bg-muted/30 rounded-lg">
-                          <span className="font-semibold text-sm text-muted-foreground">Barrier 2</span><br/>
-                          <span className="text-lg font-semibold">{secondBarrierAbs ? secondBarrierAbs.toFixed(4) : '-'}</span>
+                        <div className="rounded-lg border border-border/60 bg-muted/20 px-3 py-2.5">
+                          <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Barrier 2</div>
+                          <div className="mt-0.5 text-base font-semibold tabular-nums">{secondBarrierAbs ? secondBarrierAbs.toFixed(4) : '-'}</div>
                         </div>
                       )}
                     </>
                   )}
-                  <div className="p-4 bg-muted/30 rounded-lg">
-                    <span className="font-semibold text-sm text-muted-foreground">Risk-free Rate</span><br/>
-                    <span className="text-lg font-semibold">{pricingInputs.interestRate}%</span>
+                  <div className="rounded-lg border border-border/60 bg-muted/20 px-3 py-2.5">
+                    <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Rate</div>
+                    <div className="mt-0.5 text-base font-semibold tabular-nums">{pricingInputs.interestRate}%</div>
                   </div>
-                  <div className="p-4 bg-muted/30 rounded-lg">
-                    <span className="font-semibold text-sm text-muted-foreground">Storage Cost</span><br/>
-                    <span className="text-lg font-semibold">{(pricingInputs.storageCost || 0).toFixed(2)}%</span>
+                  <div className="rounded-lg border border-border/60 bg-muted/20 px-3 py-2.5">
+                    <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Storage</div>
+                    <div className="mt-0.5 text-base font-semibold tabular-nums">{(pricingInputs.storageCost || 0).toFixed(2)}%</div>
                   </div>
-                  <div className="p-4 bg-muted/30 rounded-lg">
-                    <span className="font-semibold text-sm text-muted-foreground">Convenience Yield</span><br/>
-                    <span className="text-lg font-semibold">{(pricingInputs.convenienceYield || 0).toFixed(2)}%</span>
+                  <div className="rounded-lg border border-border/60 bg-muted/20 px-3 py-2.5">
+                    <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Yield</div>
+                    <div className="mt-0.5 text-base font-semibold tabular-nums">{(pricingInputs.convenienceYield || 0).toFixed(2)}%</div>
                   </div>
-                  <div className="p-4 bg-muted/30 rounded-lg">
-                    <span className="font-semibold text-sm text-muted-foreground">Volatility</span><br/>
-                    <span className="text-lg font-semibold">{strategyComponent.volatility}%</span>
+                  <div className="rounded-lg border border-border/60 bg-muted/20 px-3 py-2.5">
+                    <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Vol</div>
+                    <div className="mt-0.5 text-base font-semibold tabular-nums">{strategyComponent.volatility}%</div>
                   </div>
-                  <div className="p-4 bg-muted/30 rounded-lg">
-                    <span className="font-semibold text-sm text-muted-foreground">Maturity</span><br/>
-                    <span className="text-lg font-semibold">{pricingInputs.timeToMaturity.toFixed(2)} years</span>
+                  <div className="rounded-lg border border-border/60 bg-muted/20 px-3 py-2.5">
+                    <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Maturity</div>
+                    <div className="mt-0.5 text-base font-semibold tabular-nums">{pricingInputs.timeToMaturity.toFixed(2)}y</div>
                   </div>
                 </div>
               </CardContent>

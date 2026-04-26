@@ -19,9 +19,12 @@ const TERMINAL_MEDIA = {
 } as const;
 
 const LANDING_SCREENSHOTS = {
-  pricers: "/landing-page/{643F46F8-1E4F-42EC-80D5-6F11AFC3C863}.png",
-  exposures: "/landing-page/{907F8717-005A-4D82-A8EB-1297751D649D}.png",
-  strategyBuilder: "/landing-page/{D85B4F5E-E1E0-46D1-859F-6225E4FEEC9B}.png",
+  pricers: "/landing-page/{BD890DA4-B338-426F-AF12-226DB77D343E}.png",
+  exposures: "/landing-page/{F1A55C30-CD9B-40E8-9A47-A6EDC89E953B}.png",
+  strategyBuilder: "/landing-page/{C1E340B5-B17B-400D-848A-51DCD5A9E18C}.png",
+  hedgingInstruments: "/landing-page/{C2D43F25-4D48-4D40-A313-FFFCD731F493}.png",
+  dataTerminalFutures: "/landing-page/{EB2283AC-646C-48BA-A8BE-1C2323DC58F4}.png",
+  dataTerminalVolSurface: "/landing-page/image.png",
 } as const;
 
 type LandingTickerItem = { label: string; value: string; change: string; up: boolean };
@@ -817,9 +820,48 @@ const LandingPage = () => {
             </div>
             <div className="grid grid-cols-1 gap-5 sm:gap-6 md:grid-cols-3">
               {[
-                { title: "Pricers", desc: "Forwards, vanillas, exotics — one consistent spine.", src: LANDING_SCREENSHOTS.pricers, path: "/pricers", icon: "calculate" },
-                { title: "Dashboard", desc: "Exposures, hedges and MTM in a single view.", src: LANDING_SCREENSHOTS.exposures, path: "/dashboard", icon: "dashboard" },
-                { title: "Strategy builder", desc: "Compose multi-leg structures and stress-test before execution.", src: LANDING_SCREENSHOTS.strategyBuilder, path: "/strategy-builder", icon: "construction" },
+                {
+                  title: "Commodity pricers",
+                  desc: "Price vanillas and exotics with a compact summary and payoff chart — consistent inputs across the app.",
+                  src: LANDING_SCREENSHOTS.pricers,
+                  path: "/pricers",
+                  icon: "calculate",
+                },
+                {
+                  title: "Strategy builder",
+                  desc: "Define hedging windows, position type, and model settings — with optional Data Terminal spot & IV sourcing.",
+                  src: LANDING_SCREENSHOTS.strategyBuilder,
+                  path: "/strategy-builder",
+                  icon: "construction",
+                },
+                {
+                  title: "Exposures dashboard",
+                  desc: "Roll up subsidiary exposures, hedge ratios, and maturity buckets — with views by currency and maturity.",
+                  src: LANDING_SCREENSHOTS.exposures,
+                  path: "/exposures",
+                  icon: "dashboard",
+                },
+                {
+                  title: "Hedging instruments",
+                  desc: "Manage forwards, options and swaps in one table — filters, status, and export-ready columns for reporting.",
+                  src: LANDING_SCREENSHOTS.hedgingInstruments,
+                  path: "/hedging",
+                  icon: "shield",
+                },
+                {
+                  title: "Data Terminal — futures curve",
+                  desc: "Browse futures contracts, search by maturity and refresh market snapshots — used to build the forward curve.",
+                  src: LANDING_SCREENSHOTS.dataTerminalFutures,
+                  path: "/ticker-peek-pro",
+                  icon: "query_stats",
+                },
+                {
+                  title: "Data Terminal — vol surface 3D",
+                  desc: "Explore the implied vol surface in 3D with strike/DTE interpolation — built for quick volatility reads.",
+                  src: LANDING_SCREENSHOTS.dataTerminalVolSurface,
+                  path: "/ticker-peek-pro",
+                  icon: "surface",
+                },
               ].map((s, i) => (
                 <button
                   key={s.title}
