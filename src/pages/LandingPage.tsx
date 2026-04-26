@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import LandingNav from "@/components/LandingNav";
-import { ChevronDown, ChevronUp, Star } from "lucide-react";
+import { ChevronDown, ChevronUp, Facebook, Linkedin, Star } from "lucide-react";
 import { BRAND } from "@/constants/branding";
 import "@/styles/landing-terminal.css";
 import { Commodity, CommodityCategory, fetchCommoditiesData, refreshCommoditiesData } from "@/services/commodityApi";
@@ -25,6 +25,12 @@ const LANDING_SCREENSHOTS = {
 } as const;
 
 type LandingTickerItem = { label: string; value: string; change: string; up: boolean };
+
+const XIcon = ({ className }: { className?: string }) => (
+  <svg viewBox="0 0 24 24" aria-hidden className={className} fill="currentColor">
+    <path d="M18.901 2H21.86l-6.46 7.388L23 22h-6.172l-4.83-6.284L6.5 22H1.5l6.91-7.913L1 2h6.33l4.37 5.72L18.901 2Zm-1.08 18.16h1.64L7.21 3.74H5.45l12.37 16.42Z" />
+  </svg>
+);
 
 const FALLBACK_TICKER_ITEMS: LandingTickerItem[] = [
   { label: "WTI", value: "—", change: "—", up: true },
@@ -316,7 +322,7 @@ const LandingPage = () => {
     },
     {
       q: "Can I use live commodity and rates data?",
-      a: `Yes. ${BRAND.name} connects to real or curated commodity feeds, Rate Explorer yield curves, and optional Ticker Peek Pro symbols — alongside manual inputs where you need them.`,
+      a: `Yes. ${BRAND.name} connects to real or curated commodity feeds, Rate Explorer yield curves, and optional Data Terminal symbols — alongside manual inputs where you need them.`,
     },
   ];
 
@@ -353,13 +359,13 @@ const LandingPage = () => {
               ref={heroImgRef}
               id="landing-hero-img"
               alt="CommoHedge — container ship at sea, global commodity trade lanes"
-              className="landing-hero-img landing-floating-vessel h-full w-full scale-110 object-cover opacity-60 md:opacity-70"
+              className="landing-hero-img landing-floating-vessel h-full w-full scale-110 object-cover opacity-95 md:opacity-125"
               src={TERMINAL_MEDIA.heroShip}
             />
-            <div className="absolute inset-0 bg-gradient-to-b from-[#0c1322]/55 via-[#0c1322]/35 to-[#0c1322]" />
-            <div className="absolute inset-0 bg-gradient-to-r from-[#0c1322] via-[#0c1322]/55 to-[#0c1322]/15 md:to-transparent" />
-            <div className="landing-grid absolute inset-0 opacity-30" />
-            <div className="landing-spotlight absolute inset-0 opacity-70" />
+            <div className="absolute inset-0 bg-gradient-to-b from-[#0c1322]/35 via-[#0c1322]/18 to-[#0c1322]/85" />
+            <div className="absolute inset-0 bg-gradient-to-r from-[#0c1322]/85 via-[#0c1322]/35 to-transparent" />
+            <div className="landing-grid absolute inset-0 opacity-18" />
+            <div className="landing-spotlight absolute inset-0 opacity-45" />
           </div>
 
           <div className="relative z-10 mx-auto grid w-full max-w-[1920px] grid-cols-1 items-center gap-10 lg:grid-cols-12 lg:gap-12">
@@ -983,15 +989,29 @@ const LandingPage = () => {
               <span className="material-symbols-outlined text-base">mail</span>
               commohedge@gmail.com
             </a>
-            <div className="mt-6 flex space-x-3">
-              <span className="flex h-9 w-9 items-center justify-center rounded-sm border border-[#424a35]/30 text-[#8c947b] transition-colors hover:border-[#aef833]/40 hover:text-[#aef833]">
-                <span className="material-symbols-outlined text-base">public</span>
+            <div className="mt-6 flex items-center gap-3">
+              <a
+                href="https://www.linkedin.com/company/commohedge"
+                target="_blank"
+                rel="noreferrer"
+                aria-label="CommoHedge on LinkedIn"
+                className="flex h-9 w-9 items-center justify-center rounded-sm border border-[#424a35]/30 text-[#8c947b] transition-colors hover:border-[#aef833]/40 hover:text-[#aef833]"
+              >
+                <Linkedin className="h-4 w-4" />
+              </a>
+              <span
+                aria-label="CommoHedge on Facebook (coming soon)"
+                className="flex h-9 w-9 cursor-not-allowed items-center justify-center rounded-sm border border-[#424a35]/20 text-[#8c947b]/60"
+                title="Facebook link pending"
+              >
+                <Facebook className="h-4 w-4" />
               </span>
-              <span className="flex h-9 w-9 items-center justify-center rounded-sm border border-[#424a35]/30 text-[#8c947b] transition-colors hover:border-[#aef833]/40 hover:text-[#aef833]">
-                <span className="material-symbols-outlined text-base">hub</span>
-              </span>
-              <span className="flex h-9 w-9 items-center justify-center rounded-sm border border-[#424a35]/30 text-[#8c947b] transition-colors hover:border-[#aef833]/40 hover:text-[#aef833]">
-                <span className="material-symbols-outlined text-base">monitoring</span>
+              <span
+                aria-label="CommoHedge on X (coming soon)"
+                className="flex h-9 w-9 cursor-not-allowed items-center justify-center rounded-sm border border-[#424a35]/20 text-[#8c947b]/60"
+                title="X link pending"
+              >
+                <XIcon className="h-4 w-4" />
               </span>
             </div>
           </div>

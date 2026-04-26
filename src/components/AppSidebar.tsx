@@ -93,7 +93,7 @@ const marketDataItems: MarketDataNavItem[] = [
     description: "Assistant hedging FX et matières premières"
   },
   {
-    title: "Ticker Peek Pro",
+    title: "Data Terminal",
     url: "/ticker-peek-pro",
     icon: BarChart3,
     description: "Commodities terminal: futures, options, volatility & Vol Surface 3D (Barchart)"

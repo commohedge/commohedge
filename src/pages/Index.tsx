@@ -956,7 +956,7 @@ const Index = () => {
         if (!isNaN(cashPrice) && cashPrice > 0) {
           setParams(prev => ({ ...prev, spotPrice: cashPrice }));
           setInitialSpotPrice(cashPrice);
-          toast({ title: "Ticker Peek Pro — Cash Price", description: `${symbol}: ${cashPrice.toFixed(2)}` });
+          toast({ title: "Data Terminal — Cash Price", description: `${symbol}: ${cashPrice.toFixed(2)}` });
         }
       } else {
         setTppFutures([]);
@@ -5387,7 +5387,7 @@ const Index = () => {
                       }}
                     />
                     <label className="text-sm font-medium text-foreground cursor-pointer">
-                      Use Data from Ticker Peek Pro
+                      Use Data from Data Terminal
                     </label>
                   </div>
                   {useTickerPeekPro && (
@@ -5400,7 +5400,7 @@ const Index = () => {
                   <p className="text-xs text-muted-foreground">Real-time prices from Commodity Market. Prices update when you select a commodity.</p>
                 )}
                 {useTickerPeekPro && (
-                  <p className="text-xs text-muted-foreground">Cash price from Ticker Peek Pro futures and IV surface for volatility — same source as Pricers.</p>
+                  <p className="text-xs text-muted-foreground">Cash price from Data Terminal futures and IV surface for volatility — same source as Pricers.</p>
                 )}
               </div>
 

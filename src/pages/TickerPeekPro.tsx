@@ -143,7 +143,7 @@ const TickerPeekPro = () => {
   };
 
   return (
-    <Layout title="Ticker Peek Pro">
+    <Layout title="Data Terminal">
       <div className="min-h-screen bg-background">
         <DashboardHeader breadcrumbs={breadcrumbs} onBreadcrumbClick={handleBreadcrumbClick} />
         <main className="container mx-auto px-4 py-6 max-w-[1600px]">

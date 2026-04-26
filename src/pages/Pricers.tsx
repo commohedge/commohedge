@@ -301,7 +301,7 @@ const Pricers = () => {
             return { ...prev, spotPrice: spot };
           });
           toast({
-            title: "Ticker Peek Pro",
+            title: "Data Terminal",
             description: `Spot = interpolated futures price at maturity (${futuresResult.data.length} contracts)`,
           });
         } else {
@@ -311,7 +311,7 @@ const Pricers = () => {
           const cashPrice = parseFloat(cashContract.last.replace(/,/g, ''));
           if (!isNaN(cashPrice) && cashPrice > 0) {
             setPricingInputs(prev => ({ ...prev, spotPrice: cashPrice }));
-            toast({ title: "Ticker Peek Pro — Cash Price", description: `${symbol}: ${cashPrice.toFixed(2)}` });
+            toast({ title: "Data Terminal — Cash Price", description: `${symbol}: ${cashPrice.toFixed(2)}` });
           }
         }
       }
@@ -1550,7 +1550,7 @@ const Pricers = () => {
                           localStorage.setItem('pricersUseRealData', 'false');
                         }
                       }}>
-                        Use Data from Ticker Peek Pro
+                        Use Data from Data Terminal
                       </label>
                     </div>
                     {useTickerPeekPro && (

@@ -107,7 +107,7 @@ export function CurrencySelector({ selectedCurrency, onSelect, onLoadFutures, on
           <>
             <button
               onClick={onLoadFutures}
-              className="flex items-center gap-2 px-4 py-1.5 rounded-md bg-accent/10 text-accent hover:bg-accent/20 text-sm font-medium transition-colors border border-accent/20"
+              className="flex items-center gap-2 px-4 py-1.5 rounded-md bg-accent/20 text-accent-foreground hover:bg-accent/30 text-sm font-medium transition-colors border border-accent/30"
             >
               <BarChart3 className="w-3.5 h-3.5" />
               Futures

@@ -611,7 +611,7 @@ const HedgingInstruments = () => {
           setAddFormSpotPrice(spot);
           setAddFormRate(spot); // default strike = spot
           toast({
-            title: "Ticker Peek Pro",
+            title: "Data Terminal",
             description: `Spot price loaded: ${result.spotPrice.toFixed(2)} (${result.futuresCount} contracts)`,
           });
         }
@@ -1765,7 +1765,7 @@ const HedgingInstruments = () => {
         const tried = commodities.map((c) => getTppSymbolForCommodity(c) || c).join(", ");
         toast({
           title: "Futures curve refresh",
-          description: `No curve data for symbols (${tried}). Open Ticker Peek Pro and load data for these commodities, then try again.`,
+          description: `No curve data for symbols (${tried}). Open Data Terminal and load data for these commodities, then try again.`,
           variant: "destructive",
         });
       }
@@ -3210,7 +3210,7 @@ const HedgingInstruments = () => {
                             setUseTppData(next);
                             localStorage.setItem('hedgingUseTickerPeekPro', JSON.stringify(next));
                           }}>
-                            Use Data from Ticker Peek Pro
+                            Use Data from Data Terminal
                           </label>
                         </div>
                         {useTppData && (

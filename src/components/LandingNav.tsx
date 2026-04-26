@@ -4,11 +4,13 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { BRAND } from "@/constants/branding";
 
 const navLinks: { name: string; href: string; external?: boolean }[] = [
-  { name: "Markets", href: "/commodity-market", external: true },
-  { name: "Pricers", href: "/pricers", external: true },
+  { name: "Overview", href: "#top" },
+  { name: "Sectors", href: "#verticals" },
   { name: "Platform", href: "#risk-architect" },
-  { name: "Strategy", href: "/strategy-builder", external: true },
+  { name: "How it works", href: "#how-it-works" },
+  { name: "Testimonials", href: "#testimonials" },
   { name: "FAQ", href: "#faq" },
+  { name: "Contact", href: "#contact" },
 ];
 
 const LandingNav = () => {

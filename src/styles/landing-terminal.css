@@ -95,6 +95,11 @@
   transition: transform 1.2s cubic-bezier(0.2, 0.8, 0.2, 1), filter 1.2s ease;
 }
 
+/* Make the freight photo read better under overlays */
+.landing-terminal-root #landing-hero-img {
+  filter: brightness(1.12) contrast(1.06) saturate(1.05);
+}
+
 .landing-terminal-root .landing-tilt-card {
   transition: transform 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) !important;
   transform-style: preserve-3d;
