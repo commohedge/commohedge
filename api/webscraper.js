@@ -4,6 +4,26 @@ import chromium from '@sparticuz/chromium';
 // Configuration pour l'environnement serverless
 const isDev = !process.env.AWS_REGION;
 
+// Sécurité : seuls les domaines réellement utilisés par l'application sont autorisés.
+// Empêche l'utilisation de cette fonction comme proxy ouvert (SSRF).
+const ALLOWED_HOSTS = ['tradingview.com', 'shipandbunker.com'];
+
+function isAllowedUrl(rawUrl) {
+  let parsed;
+  try {
+    parsed = new URL(rawUrl);
+  } catch {
+    return false;
+  }
+  if (parsed.protocol !== 'https:') {
+    return false;
+  }
+  const hostname = parsed.hostname.toLowerCase();
+  return ALLOWED_HOSTS.some(
+    (allowed) => hostname === allowed || hostname.endsWith(`.${allowed}`)
+  );
+}
+
 async function getBrowser() {
   return puppeteer.launch({
     args: [
@@ -44,6 +64,14 @@ export default async function handler(req, res) {
   
   if (!url) {
     return res.status(400).json({ error: 'URL parameter is required' });
+  }
+
+  const targetUrlRaw = decodeURIComponent(url);
+  if (!isAllowedUrl(targetUrlRaw)) {
+    return res.status(403).json({
+      error: 'URL not allowed',
+      message: 'Only https URLs on approved market-data domains can be scraped.'
+    });
   }
 
   let browser = null;

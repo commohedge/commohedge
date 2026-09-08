@@ -78,3 +78,6 @@ stage
 stage.pub
 id_rsa*
 *.ppk
+
+# Supabase CLI local temp
+supabase/.temp/
