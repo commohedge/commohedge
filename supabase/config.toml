@@ -1,37 +1,62 @@
-# Rate Explorer Edge Functions Configuration
-# Note: These functions need to be deployed to Supabase project 
-# The project uses Firecrawl API for web scraping
+# Edge Functions Configuration
+#
+# SÉCURITÉ (2026-09-08) : verify_jwt = true partout sauf pour les fonctions
+# appelées par le frontend avec la clé publishable (sb_publishable_...), qui
+# n'est pas un JWT et ne passe donc pas la vérification :
+#   - request-access        (formulaire public de demande d'accès)
+#   - hedge-assistant-chat  (chat, appelé avec la clé publishable)
+#   - hormuz-tracker / ais-sse / ais-mmsi-sse (fetch direct avec clé publishable)
+#
+# Les fonctions scrape-* appelées par l'app vivent sur d'autres projets
+# (wrlwmvggedkqhmdzgmbo pour Rate Explorer, exspgdhlzbolngavwlii pour Ticker
+# Peek Pro) et leurs clients utilisent des anon keys legacy (JWT) → verify_jwt
+# peut y être activé sans rien casser.
 
 [functions.scrape-rates]
-verify_jwt = false
+verify_jwt = true
 
 [functions.scrape-irs]
-verify_jwt = false
+verify_jwt = true
 
 [functions.scrape-bonds]
-verify_jwt = false
+verify_jwt = true
 
 [functions.forex-chat]
-verify_jwt = false
+verify_jwt = true
 
 [functions.scrape-currencies]
-verify_jwt = false
+verify_jwt = true
 
 [functions.scrape-futures]
-verify_jwt = false
+verify_jwt = true
 
 [functions.scrape-options]
-verify_jwt = false
+verify_jwt = true
 
 [functions.scrape-volatility]
-verify_jwt = false
+verify_jwt = true
 
 [functions.scrape-vol-surface]
-verify_jwt = false
+verify_jwt = true
 
+# Formulaire public : doit rester accessible sans authentification.
+# TODO: ajouter un CAPTCHA / rate limiting côté fonction.
 [functions.request-access]
 verify_jwt = false
 
 [functions.admin-users]
 verify_jwt = true
 
+# Appelées par le frontend avec la clé publishable (pas un JWT) → doivent
+# rester verify_jwt = false pour fonctionner.
+[functions.hedge-assistant-chat]
+verify_jwt = false
+
+[functions.hormuz-tracker]
+verify_jwt = false
+
+[functions.ais-sse]
+verify_jwt = false
+
+[functions.ais-mmsi-sse]
+verify_jwt = false

@@ -169,19 +169,49 @@ ALTER TABLE saved_scenarios ENABLE ROW LEVEL SECURITY;
 ALTER TABLE risk_matrices ENABLE ROW LEVEL SECURITY;
 ALTER TABLE hedging_instruments ENABLE ROW LEVEL SECURITY;
 
--- Politiques pour permettre l'accès public (pour l'instant)
--- Vous pouvez les modifier plus tard pour ajouter l'authentification
-CREATE POLICY "Allow all operations on forex_strategies" ON forex_strategies
-    FOR ALL USING (true);
+-- Politiques sécurisées : chaque utilisateur authentifié n'accède qu'à ses propres données.
+-- (Anciennement "Allow all operations ... USING (true)" — supprimé pour raison de sécurité.
+--  Voir secure-rls-policies.sql pour migrer une base existante.)
 
-CREATE POLICY "Allow all operations on saved_scenarios" ON saved_scenarios
-    FOR ALL USING (true);
+-- forex_strategies
+CREATE POLICY "Users can view their own forex strategies" ON forex_strategies
+    FOR SELECT TO authenticated USING (user_id = auth.uid());
+CREATE POLICY "Users can create their own forex strategies" ON forex_strategies
+    FOR INSERT TO authenticated WITH CHECK (user_id = auth.uid());
+CREATE POLICY "Users can update their own forex strategies" ON forex_strategies
+    FOR UPDATE TO authenticated USING (user_id = auth.uid()) WITH CHECK (user_id = auth.uid());
+CREATE POLICY "Users can delete their own forex strategies" ON forex_strategies
+    FOR DELETE TO authenticated USING (user_id = auth.uid());
 
-CREATE POLICY "Allow all operations on risk_matrices" ON risk_matrices
-    FOR ALL USING (true);
+-- saved_scenarios
+CREATE POLICY "Users can view their own scenarios" ON saved_scenarios
+    FOR SELECT TO authenticated USING (user_id = auth.uid());
+CREATE POLICY "Users can create their own scenarios" ON saved_scenarios
+    FOR INSERT TO authenticated WITH CHECK (user_id = auth.uid());
+CREATE POLICY "Users can update their own scenarios" ON saved_scenarios
+    FOR UPDATE TO authenticated USING (user_id = auth.uid()) WITH CHECK (user_id = auth.uid());
+CREATE POLICY "Users can delete their own scenarios" ON saved_scenarios
+    FOR DELETE TO authenticated USING (user_id = auth.uid());
 
-CREATE POLICY "Allow all operations on hedging_instruments" ON hedging_instruments
-    FOR ALL USING (true);
+-- risk_matrices
+CREATE POLICY "Users can view their own risk matrices" ON risk_matrices
+    FOR SELECT TO authenticated USING (user_id = auth.uid());
+CREATE POLICY "Users can create their own risk matrices" ON risk_matrices
+    FOR INSERT TO authenticated WITH CHECK (user_id = auth.uid());
+CREATE POLICY "Users can update their own risk matrices" ON risk_matrices
+    FOR UPDATE TO authenticated USING (user_id = auth.uid()) WITH CHECK (user_id = auth.uid());
+CREATE POLICY "Users can delete their own risk matrices" ON risk_matrices
+    FOR DELETE TO authenticated USING (user_id = auth.uid());
+
+-- hedging_instruments
+CREATE POLICY "Users can view their own hedging instruments" ON hedging_instruments
+    FOR SELECT TO authenticated USING (user_id = auth.uid());
+CREATE POLICY "Users can create their own hedging instruments" ON hedging_instruments
+    FOR INSERT TO authenticated WITH CHECK (user_id = auth.uid());
+CREATE POLICY "Users can update their own hedging instruments" ON hedging_instruments
+    FOR UPDATE TO authenticated USING (user_id = auth.uid()) WITH CHECK (user_id = auth.uid());
+CREATE POLICY "Users can delete their own hedging instruments" ON hedging_instruments
+    FOR DELETE TO authenticated USING (user_id = auth.uid());
 
 -- Données d'exemple (optionnel)
 INSERT INTO forex_strategies (
