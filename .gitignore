@@ -72,3 +72,9 @@ Desktop.ini
 
 # Markdown (requested)
 *.md
+
+# SSH keys (security)
+stage
+stage.pub
+id_rsa*
+*.ppk
