@@ -17,4 +17,8 @@ export const BRAND = {
   copyrightLine: "© 2026 CommoHedge. All rights reserved.",
   /** Filigrane footer (caps, style Stitch) */
   nameWatermark: "COMMOHEDGE",
+  social: {
+    linkedin: "https://www.linkedin.com/company/commohedge/",
+    x: "https://x.com/CommoHedge",
+  },
 } as const;

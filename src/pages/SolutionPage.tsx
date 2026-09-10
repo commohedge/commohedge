@@ -175,7 +175,29 @@ const SolutionPage: React.FC = () => {
             />
             <span className="font-headline text-sm font-bold uppercase tracking-widest text-white">{BRAND.name}</span>
           </Link>
-          <p className="font-headline text-[10px] uppercase tracking-widest text-[#8c947b]">{BRAND.copyrightLine}</p>
+          <div className="flex items-center gap-3">
+            <a
+              href={BRAND.social.linkedin}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="CommoHedge on LinkedIn"
+              className="font-headline text-[10px] uppercase tracking-widest text-[#8c947b] hover:text-[#aef833]"
+            >
+              LinkedIn
+            </a>
+            <span className="text-[#424a35]">·</span>
+            <a
+              href={BRAND.social.x}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="CommoHedge on X"
+              className="font-headline text-[10px] uppercase tracking-widest text-[#8c947b] hover:text-[#aef833]"
+            >
+              X
+            </a>
+            <span className="text-[#424a35]">·</span>
+            <p className="font-headline text-[10px] uppercase tracking-widest text-[#8c947b]">{BRAND.copyrightLine}</p>
+          </div>
         </div>
       </footer>
     </div>

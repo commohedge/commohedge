@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback } from "react";
 import { Link } from "react-router-dom";
 import LandingNav from "@/components/LandingNav";
-import { ChevronDown, ChevronUp, Facebook, Linkedin, Star } from "lucide-react";
+import { ChevronDown, ChevronUp, Linkedin, Star } from "lucide-react";
 import { BRAND } from "@/constants/branding";
 import { BrandLogo } from "@/components/BrandLogo";
 import { LANDING_FAQS, buildFaqJsonLd } from "@/seo/site-seo";
@@ -1046,28 +1046,23 @@ const LandingPage = () => {
             </a>
             <div className="mt-6 flex items-center gap-3">
               <a
-                href="https://www.linkedin.com/company/commohedge"
+                href={BRAND.social.linkedin}
                 target="_blank"
-                rel="noreferrer"
+                rel="noopener noreferrer"
                 aria-label="CommoHedge on LinkedIn"
                 className="flex h-9 w-9 items-center justify-center rounded-sm border border-[#424a35]/30 text-[#8c947b] transition-colors hover:border-[#aef833]/40 hover:text-[#aef833]"
               >
                 <Linkedin className="h-4 w-4" />
               </a>
-              <span
-                aria-label="CommoHedge on Facebook (coming soon)"
-                className="flex h-9 w-9 cursor-not-allowed items-center justify-center rounded-sm border border-[#424a35]/20 text-[#8c947b]/60"
-                title="Facebook link pending"
-              >
-                <Facebook className="h-4 w-4" />
-              </span>
-              <span
-                aria-label="CommoHedge on X (coming soon)"
-                className="flex h-9 w-9 cursor-not-allowed items-center justify-center rounded-sm border border-[#424a35]/20 text-[#8c947b]/60"
-                title="X link pending"
+              <a
+                href={BRAND.social.x}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="CommoHedge on X"
+                className="flex h-9 w-9 items-center justify-center rounded-sm border border-[#424a35]/30 text-[#8c947b] transition-colors hover:border-[#aef833]/40 hover:text-[#aef833]"
               >
                 <XIcon className="h-4 w-4" />
-              </span>
+              </a>
             </div>
           </div>
 
