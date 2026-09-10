@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { ArrowLeft, Mail, Send } from "lucide-react";
 import { BRAND } from "@/constants/branding";
@@ -43,32 +43,6 @@ const RequestAccess: React.FC = () => {
   const [submitError, setSubmitError] = useState<string>("");
   const [submitOk, setSubmitOk] = useState<boolean>(false);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
-
-  useEffect(() => {
-    const prevTitle = document.title;
-    document.title = `Request access | ${BRAND.name}`;
-    const desc = document.querySelector('meta[name="description"]');
-    const prevDesc = desc?.getAttribute("content") ?? "";
-    desc?.setAttribute(
-      "content",
-      `Request access to ${BRAND.name} — commodity & FX hedging terminal for pricing, exposures and strategy workflows.`
-    );
-    const robots = document.querySelector('meta[name="robots"]');
-    robots?.setAttribute("content", "index, follow");
-    let canonical = document.querySelector('link[rel="canonical"]') as HTMLLinkElement | null;
-    if (!canonical) {
-      canonical = document.createElement("link");
-      canonical.rel = "canonical";
-      document.head.appendChild(canonical);
-    }
-    const prevCanonical = canonical.href;
-    canonical.href = "https://www.commohedge.com/request-access";
-    return () => {
-      document.title = prevTitle;
-      if (desc) desc.setAttribute("content", prevDesc);
-      if (canonical) canonical.href = prevCanonical || "https://www.commohedge.com/";
-    };
-  }, []);
 
   const productOptions = useMemo(
     () => [

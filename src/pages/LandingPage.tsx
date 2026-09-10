@@ -4,6 +4,7 @@ import LandingNav from "@/components/LandingNav";
 import { ChevronDown, ChevronUp, Facebook, Linkedin, Star } from "lucide-react";
 import { BRAND } from "@/constants/branding";
 import { BrandLogo } from "@/components/BrandLogo";
+import { LANDING_FAQS, buildFaqJsonLd } from "@/seo/site-seo";
 import "@/styles/landing-terminal.css";
 import { Commodity, CommodityCategory, fetchCommoditiesData, refreshCommoditiesData } from "@/services/commodityApi";
 
@@ -314,20 +315,22 @@ const LandingPage = () => {
     e.currentTarget.style.transform = "perspective(1000px) rotateX(0deg) rotateY(0deg) scale3d(1, 1, 1)";
   }, []);
 
-  const faqs = [
-    {
-      q: `What instruments does ${BRAND.name} price?`,
-      a: "Forwards, vanilla and exotic options, swaps, barriers, and touch-style structures — using Black-Scholes / Black-76, closed-form barriers, and Monte Carlo where appropriate.",
-    },
-    {
-      q: "How do hedging and exposures work?",
-      a: "Track subsidiary exposures, hedge ratios, and instrument lines, then export strategy components from the strategy builder into Hedging Instruments for MTM-aligned monitoring.",
-    },
-    {
-      q: "Can I use live commodity and rates data?",
-      a: `Yes. ${BRAND.name} connects to real or curated commodity feeds, Rate Explorer yield curves, and optional Data Terminal symbols — alongside manual inputs where you need them.`,
-    },
-  ];
+  useEffect(() => {
+    const scriptId = "commohedge-faq-jsonld";
+    let script = document.getElementById(scriptId) as HTMLScriptElement | null;
+    if (!script) {
+      script = document.createElement("script");
+      script.id = scriptId;
+      script.type = "application/ld+json";
+      document.head.appendChild(script);
+    }
+    script.textContent = JSON.stringify(buildFaqJsonLd());
+    return () => {
+      document.getElementById(scriptId)?.remove();
+    };
+  }, []);
+
+  const faqs = LANDING_FAQS;
 
   const testimonials = [
     {
@@ -380,7 +383,14 @@ const LandingPage = () => {
                 </span>
               </div>
               <h1 className="mb-6 font-headline text-[2.5rem] font-bold uppercase leading-[0.95] tracking-tighter text-white sm:mb-8 sm:text-7xl sm:leading-[0.88] md:text-8xl lg:text-[7.5rem] xl:text-[9rem]">
-                {BRAND.heroLine1} <br /> <span className="bg-gradient-to-br from-[#aef833] to-[#93db04] bg-clip-text text-transparent">{BRAND.heroLine2}</span>
+                {BRAND.heroLine1} <br />{" "}
+                <span className="bg-gradient-to-br from-[#aef833] to-[#93db04] bg-clip-text text-transparent">
+                  {BRAND.heroLine2}
+                </span>
+                <span className="sr-only">
+                  {" "}
+                  — Commodity and FX hedging terminal for pricing, exposures and risk management
+                </span>
               </h1>
               <p className="mb-8 max-w-2xl text-base font-light leading-relaxed text-[#c1caaf] sm:mb-10 sm:text-lg md:text-xl">
                 <span className="font-medium text-[#dce2f7]">{BRAND.name}</span> unifies commodity pricing, exposures and hedging into one institutional-grade terminal — from daily desk monitoring to board-ready risk reviews, with a single consistent pricing spine.
@@ -550,14 +560,14 @@ const LandingPage = () => {
                   title: "Oil & energy",
                   desc: "Crude, distillates and refined hedges. Black-76, barriers and Asians wired to your forward curves.",
                   img: TERMINAL_MEDIA.oilEnergy,
-                  path: "/pricers",
+                  path: "/solutions/oil-energy",
                   icon: "oil_barrel",
                 },
                 {
                   title: "Metals & mining",
                   desc: "Base and precious metals — vol surfaces, forwards and group-wide exposure roll-up across subsidiaries.",
                   img: TERMINAL_MEDIA.metals,
-                  path: "/commodity-market",
+                  path: "/solutions/metals-mining",
                   delay: "150ms",
                   icon: "diamond",
                 },
@@ -565,7 +575,7 @@ const LandingPage = () => {
                   title: "Agriculture",
                   desc: "Grains and softs — strategy builder, stress paths and hedge-ratio views before you press the trade.",
                   img: TERMINAL_MEDIA.agriculture,
-                  path: "/strategy-builder",
+                  path: "/solutions/agriculture",
                   delay: "300ms",
                   icon: "eco",
                 },
@@ -595,7 +605,7 @@ const LandingPage = () => {
                       to={v.path}
                       className="pointer-events-auto inline-flex items-center font-headline text-xs font-bold uppercase tracking-widest text-white group/link"
                     >
-                      Open in {BRAND.name}
+                      Explore desk
                       <span className="material-symbols-outlined ml-2 text-[#aef833] transition-transform group-hover/link:translate-x-2">trending_flat</span>
                     </Link>
                   </div>
@@ -687,7 +697,7 @@ const LandingPage = () => {
                   <div className="landing-floating-ui mb-4 flex h-10 w-10 items-center justify-center rounded-sm landing-industrial-gradient sm:mb-5 sm:h-11 sm:w-11">
                     <span className="material-symbols-outlined text-[#213600]">calculate</span>
                   </div>
-                  <h4 className="mb-3 font-headline text-xl font-bold uppercase text-white sm:mb-4 sm:text-2xl md:text-4xl">Pricing you can trust</h4>
+                  <h3 className="mb-3 font-headline text-xl font-bold uppercase text-white sm:mb-4 sm:text-2xl md:text-4xl">Pricing you can trust</h3>
                   <p className="mb-4 max-w-lg text-sm text-[#c1caaf] sm:mb-5 sm:text-base">
                     Price your deals, see the cost of protection, and keep your hedge book consistent — from analysis to execution and reporting.
                   </p>
@@ -733,7 +743,7 @@ const LandingPage = () => {
               <div className="landing-reveal landing-glass-card group relative overflow-hidden p-5 sm:p-6 md:col-span-2 md:min-h-[260px]" style={{ transitionDelay: "150ms" }}>
                 <div className="mb-4 flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <h4 className="mb-2 font-headline text-lg font-bold uppercase text-white sm:text-xl md:text-2xl">Market data, simplified</h4>
+                    <h3 className="mb-2 font-headline text-lg font-bold uppercase text-white sm:text-xl md:text-2xl">Market data, simplified</h3>
                     <p className="text-sm text-[#c1caaf]">
                       Your key prices and reference curves stay aligned across the app — so every view tells the same story.
                     </p>

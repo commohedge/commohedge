@@ -7,9 +7,10 @@ import { BrandLogo } from "@/components/BrandLogo";
 const navLinks: { name: string; href: string }[] = [
   { name: "Overview", href: "/#top" },
   { name: "Sectors", href: "/#verticals" },
+  { name: "Oil", href: "/solutions/oil-energy" },
+  { name: "Metals", href: "/solutions/metals-mining" },
+  { name: "Agri", href: "/solutions/agriculture" },
   { name: "Platform", href: "/#risk-architect" },
-  { name: "How it works", href: "/#how-it-works" },
-  { name: "Testimonials", href: "/#testimonials" },
   { name: "FAQ", href: "/#faq" },
   { name: "Contact", href: "/#contact" },
 ];

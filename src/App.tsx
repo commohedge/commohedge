@@ -42,10 +42,12 @@ import WorldMap from "./pages/WorldMap";
 import CommodityNews from "./pages/CommodityNews";
 import LandingPage from "./pages/LandingPage";
 import RequestAccess from "./pages/RequestAccess";
+import SolutionPage from "./pages/SolutionPage";
 import SupabaseLogin from "./pages/SupabaseLogin";
 import AuthCallback from "./pages/AuthCallback";
 import NotFound from "./pages/NotFound";
 import ProtectedRoute from "./components/ProtectedRoute";
+import { SeoManager } from "./components/SeoManager";
 
 // Theme toggle component
 import { ThemeToggle } from "./components/ui/theme-toggle";
@@ -83,11 +85,13 @@ const App = () => {
           <Toaster />
           <Sonner />
           <Router>
+          <SeoManager />
           <ThemeToggleDock />
           <Routes>
             {/* Landing Page - Page par défaut */}
             <Route path="/" element={<LandingPage />} />
             <Route path="/request-access" element={<RequestAccess />} />
+            <Route path="/solutions/:slug" element={<SolutionPage />} />
             
             {/* Authentication */}
             <Route path="/login" element={<SupabaseLogin />} />
