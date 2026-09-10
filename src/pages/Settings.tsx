@@ -1044,7 +1044,7 @@ const Settings = () => {
                           Include in PDF
                         </Label>
                       </div>
-                      {(pendingLogo !== null || logo !== "/fx-hedging-logo.png" || logoMarkedForRemoval) && (
+                      {(pendingLogo !== null || logo !== "/commohedge-logo.png" || logoMarkedForRemoval) && (
                         <div className="flex gap-2">
                           {!logoMarkedForRemoval && (
                             <Button

@@ -9,11 +9,46 @@
   "buildCommand": "npm run build",
   "rewrites": [
     {
-      "source": "/(.*)",
+      "source": "/((?!api/|assets/|landing-page/|robots\\.txt|sitemap\\.xml|og-image\\.png|favicon\\.ico|favicon-.*\\.png|apple-touch-icon\\.png|icon-.*\\.png|commohedge-logo.*\\.png|logo\\.png|theme-init\\.js|_redirects).*)",
       "destination": "/index.html"
     }
   ],
   "headers": [
+    {
+      "source": "/robots.txt",
+      "headers": [
+        {
+          "key": "Content-Type",
+          "value": "text/plain; charset=utf-8"
+        },
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=86400"
+        }
+      ]
+    },
+    {
+      "source": "/sitemap.xml",
+      "headers": [
+        {
+          "key": "Content-Type",
+          "value": "application/xml; charset=utf-8"
+        },
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=86400"
+        }
+      ]
+    },
+    {
+      "source": "/og-image.png",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=604800"
+        }
+      ]
+    },
     {
       "source": "/(.*)",
       "headers": [

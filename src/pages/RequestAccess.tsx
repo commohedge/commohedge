@@ -1,7 +1,8 @@
-import React, { useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import React, { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { ArrowLeft, Mail, Send } from "lucide-react";
 import { BRAND } from "@/constants/branding";
+import { BrandLogo } from "@/components/BrandLogo";
 import { supabase } from "@/lib/supabase";
 import "@/styles/landing-terminal.css";
 
@@ -38,11 +39,36 @@ const DEFAULT_STATE: FormState = {
 };
 
 const RequestAccess: React.FC = () => {
-  const navigate = useNavigate();
   const [state, setState] = useState<FormState>(DEFAULT_STATE);
   const [submitError, setSubmitError] = useState<string>("");
   const [submitOk, setSubmitOk] = useState<boolean>(false);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+
+  useEffect(() => {
+    const prevTitle = document.title;
+    document.title = `Request access | ${BRAND.name}`;
+    const desc = document.querySelector('meta[name="description"]');
+    const prevDesc = desc?.getAttribute("content") ?? "";
+    desc?.setAttribute(
+      "content",
+      `Request access to ${BRAND.name} — commodity & FX hedging terminal for pricing, exposures and strategy workflows.`
+    );
+    const robots = document.querySelector('meta[name="robots"]');
+    robots?.setAttribute("content", "index, follow");
+    let canonical = document.querySelector('link[rel="canonical"]') as HTMLLinkElement | null;
+    if (!canonical) {
+      canonical = document.createElement("link");
+      canonical.rel = "canonical";
+      document.head.appendChild(canonical);
+    }
+    const prevCanonical = canonical.href;
+    canonical.href = "https://www.commohedge.com/request-access";
+    return () => {
+      document.title = prevTitle;
+      if (desc) desc.setAttribute("content", prevDesc);
+      if (canonical) canonical.href = prevCanonical || "https://www.commohedge.com/";
+    };
+  }, []);
 
   const productOptions = useMemo(
     () => [
@@ -102,24 +128,22 @@ const RequestAccess: React.FC = () => {
       </div>
 
       <div className="relative mx-auto w-full max-w-3xl px-4 pb-10 pt-6 sm:px-6 sm:pt-10">
-        <button
-          type="button"
-          onClick={() => navigate("/")}
+        <Link
+          to="/"
           className="mb-5 inline-flex w-fit items-center font-headline text-xs font-bold uppercase tracking-wider text-[#c1caaf] hover:text-white sm:mb-6"
         >
           <ArrowLeft className="mr-2 h-4 w-4" />
           Back to home
-        </button>
+        </Link>
 
         <div className="landing-glass-card overflow-hidden rounded-sm border border-[#424a35]/25 bg-[#141b2b]/70 shadow-2xl backdrop-blur-xl">
           <div className="border-b border-[#424a35]/15 p-5 sm:p-6 md:p-8">
             <div className="flex items-start gap-3 sm:items-center sm:gap-4">
-              <div
-                className="flex h-12 w-12 shrink-0 items-center justify-center rounded-sm bg-gradient-to-br from-[#aef833] to-[#93db04] shadow-lg shadow-[#aef833]/20 sm:h-14 sm:w-14"
-                aria-hidden
-              >
-                <span className="font-headline text-lg font-black text-[#213600] sm:text-xl">{BRAND.logoMark}</span>
-              </div>
+              <BrandLogo
+                variant="dark"
+                decorative
+                className="h-12 w-12 shrink-0 rounded-sm bg-gradient-to-br from-[#aef833] to-[#93db04] p-2.5 shadow-lg shadow-[#aef833]/20 sm:h-14 sm:w-14 sm:p-3"
+              />
               <div className="min-w-0">
                 <h1 className="font-headline text-xl font-bold tracking-tight text-white sm:text-2xl md:text-3xl">Request access</h1>
                 <p className="mt-1 text-sm text-[#c1caaf]">

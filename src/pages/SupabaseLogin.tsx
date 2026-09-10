@@ -9,6 +9,7 @@ import { Alert, AlertDescription } from "../components/ui/alert";
 import { useToast } from "../hooks/use-toast";
 import { useSupabaseAuth } from "../hooks/useSupabaseAuth";
 import { BRAND } from "@/constants/branding";
+import { BrandLogo } from "@/components/BrandLogo";
 import "@/styles/landing-terminal.css";
 import { Mail, Lock, Eye, EyeOff, Chrome, Apple, ArrowLeft, Loader2, CheckCircle, AlertCircle } from "lucide-react";
 
@@ -160,12 +161,11 @@ const SupabaseLogin: React.FC = () => {
         <Card className="landing-glass-card border border-[#424a35]/25 bg-[#141b2b]/70 shadow-2xl backdrop-blur-xl">
           <CardHeader className="space-y-4 text-center">
             <div className="flex justify-center">
-              <div
-                className="flex h-16 w-16 items-center justify-center rounded-sm bg-gradient-to-br from-[#aef833] to-[#93db04] shadow-lg shadow-[#aef833]/20"
-                aria-hidden
-              >
-                <span className="font-headline text-2xl font-black text-[#213600]">{BRAND.logoMark}</span>
-              </div>
+              <BrandLogo
+                variant="dark"
+                decorative
+                className="h-16 w-16 rounded-sm bg-gradient-to-br from-[#aef833] to-[#93db04] p-3 shadow-lg shadow-[#aef833]/20"
+              />
             </div>
 
             <div>

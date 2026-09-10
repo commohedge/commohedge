@@ -1,20 +1,26 @@
 import React, { useMemo, useRef, useState, useEffect } from "react";
 import { Menu, X } from "lucide-react";
-import { useNavigate, useLocation } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { BRAND } from "@/constants/branding";
+import { BrandLogo } from "@/components/BrandLogo";
 
-const navLinks: { name: string; href: string; external?: boolean }[] = [
-  { name: "Overview", href: "#top" },
-  { name: "Sectors", href: "#verticals" },
-  { name: "Platform", href: "#risk-architect" },
-  { name: "How it works", href: "#how-it-works" },
-  { name: "Testimonials", href: "#testimonials" },
-  { name: "FAQ", href: "#faq" },
-  { name: "Contact", href: "#contact" },
+const navLinks: { name: string; href: string }[] = [
+  { name: "Overview", href: "/#top" },
+  { name: "Sectors", href: "/#verticals" },
+  { name: "Platform", href: "/#risk-architect" },
+  { name: "How it works", href: "/#how-it-works" },
+  { name: "Testimonials", href: "/#testimonials" },
+  { name: "FAQ", href: "/#faq" },
+  { name: "Contact", href: "/#contact" },
 ];
 
+const scrollToHash = (hash: string) => {
+  if (!hash.startsWith("#")) return;
+  const el = document.querySelector(hash);
+  if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+};
+
 const LandingNav = () => {
-  const navigate = useNavigate();
   const location = useLocation();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isProductsOpen, setIsProductsOpen] = useState(false);
@@ -34,19 +40,13 @@ const LandingNav = () => {
     setIsProductsOpen(false);
   }, [location.pathname]);
 
-  const go = (href: string, external?: boolean) => {
-    setIsMobileMenuOpen(false);
-    if (external) {
-      navigate(href);
-      return;
-    }
-    if (href.startsWith("#")) {
-      const el = document.querySelector(href);
-      if (el) {
-        el.scrollIntoView({ behavior: "smooth", block: "start" });
-      }
-    }
-  };
+  useEffect(() => {
+    if (location.pathname !== "/") return;
+    if (!location.hash) return;
+    // Wait a tick so the landing DOM is ready after route changes
+    const id = window.setTimeout(() => scrollToHash(location.hash), 0);
+    return () => window.clearTimeout(id);
+  }, [location.pathname, location.hash]);
 
   useEffect(() => {
     const onPointerDown = (e: PointerEvent) => {
@@ -58,32 +58,38 @@ const LandingNav = () => {
     return () => window.removeEventListener("pointerdown", onPointerDown);
   }, []);
 
+  const onHashNavClick = (e: React.MouseEvent<HTMLAnchorElement>, href: string) => {
+    const hash = href.includes("#") ? `#${href.split("#")[1]}` : "";
+    if (!hash) return;
+    if (location.pathname === "/") {
+      e.preventDefault();
+      scrollToHash(hash);
+      window.history.replaceState(null, "", hash);
+    }
+    setIsMobileMenuOpen(false);
+  };
+
   return (
     <nav className="fixed left-1/2 top-0 z-50 flex w-full max-w-[1920px] -translate-x-1/2 items-center justify-between border-b border-[#424a35]/20 bg-[#0c1322]/80 px-4 py-3 backdrop-blur-xl sm:px-6 sm:py-4 md:px-12 md:py-5">
-      <button
-        type="button"
-        onClick={() => navigate("/")}
-        className="flex min-w-0 items-center gap-2 text-left sm:gap-3"
-      >
-        <span
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-sm bg-gradient-to-br from-[#aef833] to-[#93db04] shadow-md shadow-[#aef833]/25 sm:h-10 sm:w-10"
-          aria-hidden
-        >
-          <span className="font-headline text-sm font-black text-[#213600]">{BRAND.logoMark}</span>
-        </span>
+      <Link to="/" className="flex min-w-0 items-center gap-2 text-left sm:gap-3">
+        <BrandLogo
+          variant="dark"
+          decorative
+          className="h-9 w-9 shrink-0 rounded-sm bg-gradient-to-br from-[#aef833] to-[#93db04] p-1.5 shadow-md shadow-[#aef833]/25 sm:h-10 sm:w-10 sm:p-2"
+        />
         <span className="truncate font-headline text-lg font-black tracking-tight text-white sm:text-xl md:text-2xl">{BRAND.name}</span>
-      </button>
+      </Link>
 
       <div className="hidden items-center space-x-10 md:flex">
         {navLinks.map((link) => (
-          <button
+          <a
             key={link.name}
-            type="button"
-            onClick={() => go(link.href, link.external)}
+            href={link.href}
+            onClick={(e) => onHashNavClick(e, link.href)}
             className="font-headline text-sm font-bold uppercase tracking-tight text-[#dce2f7] transition-colors hover:text-white"
           >
             {link.name}
-          </button>
+          </a>
         ))}
 
         <div className="relative" ref={productsWrapRef}>
@@ -120,20 +126,18 @@ const LandingNav = () => {
       </div>
 
       <div className="hidden items-center space-x-6 md:flex">
-        <button
-          type="button"
-          onClick={() => navigate("/login")}
+        <Link
+          to="/login"
           className="font-headline text-sm font-bold uppercase tracking-tight text-[#dce2f7] transition-colors hover:text-white"
         >
           Client login
-        </button>
-        <button
-          type="button"
-          onClick={() => navigate("/login?mode=signup")}
+        </Link>
+        <Link
+          to="/login?mode=signup"
           className="landing-btn-industrial bg-[#aef833] px-6 py-2 font-headline text-sm font-bold uppercase tracking-tight text-[#213600] transition-all duration-200 hover:scale-95"
         >
           Launch terminal
-        </button>
+        </Link>
       </div>
 
       <button
@@ -150,14 +154,14 @@ const LandingNav = () => {
         <div className="absolute left-0 right-0 top-full max-h-[calc(100svh-3.5rem)] overflow-y-auto border-b border-[#424a35]/30 bg-[#0c1322] px-4 py-5 shadow-2xl shadow-black/40 backdrop-blur-xl sm:px-6 md:hidden">
           <div className="flex flex-col gap-2">
             {navLinks.map((link) => (
-              <button
+              <a
                 key={link.name}
-                type="button"
-                onClick={() => go(link.href, link.external)}
+                href={link.href}
+                onClick={(e) => onHashNavClick(e, link.href)}
                 className="rounded-sm border border-transparent px-3 py-3 text-left font-headline text-[13px] font-bold uppercase tracking-[0.18em] text-white hover:border-[#424a35]/30 hover:bg-white/5"
               >
                 {link.name}
-              </button>
+              </a>
             ))}
 
             <div className="mt-2 rounded-sm border border-[#424a35]/20 bg-[#070e1d]/40 p-3">
@@ -182,26 +186,20 @@ const LandingNav = () => {
             </div>
 
             <div className="mt-3 flex flex-col gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  setIsMobileMenuOpen(false);
-                  navigate("/login");
-                }}
+              <Link
+                to="/login"
+                onClick={() => setIsMobileMenuOpen(false)}
                 className="rounded-sm border border-[#424a35]/35 bg-[#141b2b]/60 px-3 py-3 text-center font-headline text-[13px] font-bold uppercase tracking-[0.18em] text-white"
               >
                 Client login
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setIsMobileMenuOpen(false);
-                  navigate("/login?mode=signup");
-                }}
+              </Link>
+              <Link
+                to="/login?mode=signup"
+                onClick={() => setIsMobileMenuOpen(false)}
                 className="landing-btn-industrial bg-[#aef833] py-3 text-center font-headline text-[13px] font-black uppercase tracking-[0.18em] text-[#213600]"
               >
                 Launch terminal
-              </button>
+              </Link>
             </div>
           </div>
         </div>

@@ -34,7 +34,7 @@ const defaultSettings: AppSettings = {
   hedgingInstruments: {}
 };
 
-const DEFAULT_LOGO = "/ocp-logo.png";
+const DEFAULT_LOGO = "/commohedge-logo.png";
 
 // --- LOGO CACHE (singleton, module scope) ---
 let logoCache: string | null = null;

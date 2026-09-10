@@ -1,8 +1,9 @@
 import React, { useEffect, useRef, useState, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import LandingNav from "@/components/LandingNav";
 import { ChevronDown, ChevronUp, Facebook, Linkedin, Star } from "lucide-react";
 import { BRAND } from "@/constants/branding";
+import { BrandLogo } from "@/components/BrandLogo";
 import "@/styles/landing-terminal.css";
 import { Commodity, CommodityCategory, fetchCommoditiesData, refreshCommoditiesData } from "@/services/commodityApi";
 
@@ -210,7 +211,6 @@ function AccuracyCounter() {
 }
 
 const LandingPage = () => {
-  const navigate = useNavigate();
   const heroImgRef = useRef<HTMLImageElement>(null);
   const [openFaq, setOpenFaq] = useState<number | null>(null);
   const [tickerItems, setTickerItems] = useState<LandingTickerItem[]>(FALLBACK_TICKER_ITEMS);
@@ -386,21 +386,19 @@ const LandingPage = () => {
                 <span className="font-medium text-[#dce2f7]">{BRAND.name}</span> unifies commodity pricing, exposures and hedging into one institutional-grade terminal — from daily desk monitoring to board-ready risk reviews, with a single consistent pricing spine.
               </p>
               <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:gap-4">
-                <button
-                  type="button"
-                  onClick={() => navigate("/request-access")}
+                <Link
+                  to="/request-access"
                   className="group landing-btn-industrial landing-industrial-gradient flex w-full items-center justify-center px-6 py-3.5 font-headline text-sm font-bold uppercase tracking-widest text-[#213600] shadow-[0_10px_40px_-10px_rgba(174,248,51,0.5)] transition-all hover:brightness-110 sm:w-auto sm:px-8 sm:py-4 sm:text-base md:px-10"
                 >
                   Request access
                   <span className="material-symbols-outlined ml-2 transition-transform group-hover:translate-x-1">arrow_forward</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => navigate("/login")}
+                </Link>
+                <Link
+                  to="/login"
                   className="landing-btn-industrial w-full border border-[#424a35]/40 bg-[#141b2b]/40 px-6 py-3.5 text-center font-headline text-sm font-bold uppercase tracking-widest text-white backdrop-blur transition-all hover:bg-[#1b2333]/60 sm:w-auto sm:px-8 sm:py-4 sm:text-base md:px-10"
                 >
                   Sign in
-                </button>
+                </Link>
               </div>
 
               <div className="mt-10 flex flex-wrap gap-x-8 gap-y-4 border-t border-[#424a35]/20 pt-6 sm:mt-12 sm:gap-x-10 sm:pt-8">
@@ -593,14 +591,13 @@ const LandingPage = () => {
                   <div className="pointer-events-none absolute bottom-0 left-0 w-full p-5 sm:p-8 md:p-10">
                     <h3 className="mb-3 font-headline text-2xl font-bold uppercase text-white sm:mb-4 sm:text-3xl md:text-4xl">{v.title}</h3>
                     <p className="mb-5 max-w-xs text-sm leading-relaxed text-[#c1caaf]">{v.desc}</p>
-                    <button
-                      type="button"
-                      onClick={() => navigate(v.path)}
+                    <Link
+                      to={v.path}
                       className="pointer-events-auto inline-flex items-center font-headline text-xs font-bold uppercase tracking-widest text-white group/link"
                     >
                       Open in {BRAND.name}
                       <span className="material-symbols-outlined ml-2 text-[#aef833] transition-transform group-hover/link:translate-x-2">trending_flat</span>
-                    </button>
+                    </Link>
                   </div>
                 </div>
               ))}
@@ -676,13 +673,12 @@ const LandingPage = () => {
                   One place to monitor prices, exposures, and hedges — and answer the simple question: “What happens if the market moves tomorrow?”
                 </p>
               </div>
-              <button
-                type="button"
-                onClick={() => navigate("/strategy-builder")}
-                className="landing-btn-industrial w-full whitespace-nowrap border border-[#424a35]/30 bg-[#2e3545] px-6 py-3 font-headline text-sm font-bold uppercase tracking-widest text-white transition-all hover:bg-[#323949] sm:w-auto sm:px-8"
+              <Link
+                to="/strategy-builder"
+                className="landing-btn-industrial w-full whitespace-nowrap border border-[#424a35]/30 bg-[#2e3545] px-6 py-3 text-center font-headline text-sm font-bold uppercase tracking-widest text-white transition-all hover:bg-[#323949] sm:w-auto sm:px-8"
               >
                 Strategy builder
-              </button>
+              </Link>
             </div>
 
             <div className="grid grid-cols-1 gap-4 sm:gap-6 md:grid-cols-4 md:grid-rows-2">
@@ -863,10 +859,9 @@ const LandingPage = () => {
                   icon: "surface",
                 },
               ].map((s, i) => (
-                <button
+                <Link
                   key={s.title}
-                  type="button"
-                  onClick={() => navigate(s.path)}
+                  to={s.path}
                   className="landing-reveal group landing-hairline relative overflow-hidden rounded-sm border border-[#424a35]/20 bg-[#141b2b]/40 text-left"
                   style={{ transitionDelay: `${i * 100}ms` }}
                 >
@@ -884,7 +879,7 @@ const LandingPage = () => {
                     </div>
                     <p className="mt-2 text-xs text-[#c1caaf] sm:text-sm">{s.desc}</p>
                   </div>
-                </button>
+                </Link>
               ))}
             </div>
           </div>
@@ -951,19 +946,27 @@ const LandingPage = () => {
               </h2>
             </div>
             <div className="space-y-3">
-              {faqs.map((faq, i) => (
-                <div key={i} className="landing-reveal landing-glass-card overflow-hidden rounded-sm">
-                  <button
-                    type="button"
-                    className="flex w-full items-center justify-between p-5 text-left"
-                    onClick={() => setOpenFaq(openFaq === i ? null : i)}
-                  >
-                    <span className="pr-4 font-headline text-sm font-bold text-white md:text-base">{faq.q}</span>
-                    {openFaq === i ? <ChevronUp className="h-5 w-5 shrink-0 text-[#aef833]" /> : <ChevronDown className="h-5 w-5 shrink-0 text-[#c1caaf]" />}
-                  </button>
-                  {openFaq === i && <p className="border-t border-[#424a35]/10 px-5 pb-5 pt-0 text-sm leading-relaxed text-[#c1caaf]">{faq.a}</p>}
-                </div>
-              ))}
+              {faqs.map((faq, i) => {
+                const isOpen = openFaq === i;
+                return (
+                  <div key={i} className="landing-reveal landing-glass-card overflow-hidden rounded-sm">
+                    <button
+                      type="button"
+                      className="flex w-full items-center justify-between p-5 text-left"
+                      aria-expanded={isOpen}
+                      onClick={() => setOpenFaq(isOpen ? null : i)}
+                    >
+                      <span className="pr-4 font-headline text-sm font-bold text-white md:text-base">{faq.q}</span>
+                      {isOpen ? <ChevronUp className="h-5 w-5 shrink-0 text-[#aef833]" /> : <ChevronDown className="h-5 w-5 shrink-0 text-[#c1caaf]" />}
+                    </button>
+                    <p
+                      className={`border-t border-[#424a35]/10 px-5 pb-5 pt-0 text-sm leading-relaxed text-[#c1caaf] ${isOpen ? "" : "sr-only"}`}
+                    >
+                      {faq.a}
+                    </p>
+                  </div>
+                );
+              })}
             </div>
           </div>
         </section>
@@ -988,20 +991,18 @@ const LandingPage = () => {
                 </p>
               </div>
               <div className="flex flex-col gap-3 lg:col-span-5 lg:items-end">
-                <button
-                  type="button"
-                  onClick={() => navigate("/request-access")}
-                  className="landing-btn-industrial landing-industrial-gradient w-full px-6 py-4 font-headline text-sm font-bold uppercase tracking-widest text-[#213600] shadow-[0_15px_50px_-15px_rgba(174,248,51,0.6)] transition-transform hover:scale-[1.02] sm:px-10 sm:py-5 sm:text-base lg:w-auto"
+                <Link
+                  to="/request-access"
+                  className="landing-btn-industrial landing-industrial-gradient w-full px-6 py-4 text-center font-headline text-sm font-bold uppercase tracking-widest text-[#213600] shadow-[0_15px_50px_-15px_rgba(174,248,51,0.6)] transition-transform hover:scale-[1.02] sm:px-10 sm:py-5 sm:text-base lg:w-auto"
                 >
                   Request access
-                </button>
-                <button
-                  type="button"
-                  onClick={() => navigate("/login")}
-                  className="landing-btn-industrial w-full border border-[#424a35]/40 bg-[#141b2b]/40 px-6 py-4 font-headline text-sm font-bold uppercase tracking-widest text-white backdrop-blur transition-all hover:bg-[#1b2333]/60 sm:px-10 sm:py-5 sm:text-base lg:w-auto"
+                </Link>
+                <Link
+                  to="/login"
+                  className="landing-btn-industrial w-full border border-[#424a35]/40 bg-[#141b2b]/40 px-6 py-4 text-center font-headline text-sm font-bold uppercase tracking-widest text-white backdrop-blur transition-all hover:bg-[#1b2333]/60 sm:px-10 sm:py-5 sm:text-base lg:w-auto"
                 >
                   Sign in
-                </button>
+                </Link>
                 <p className="mt-2 text-[11px] uppercase tracking-widest text-[#8c947b]">
                   No card. No drama. Just access.
                 </p>
@@ -1016,9 +1017,11 @@ const LandingPage = () => {
         <div className="mx-auto grid w-full max-w-[1920px] grid-cols-2 gap-x-8 gap-y-12 sm:grid-cols-4 lg:grid-cols-12">
           <div className="col-span-2 sm:col-span-4 lg:col-span-5">
             <div className="mb-3 flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-sm bg-gradient-to-br from-[#aef833] to-[#93db04] font-headline text-sm font-black text-[#213600]">
-                {BRAND.logoMark}
-              </div>
+              <BrandLogo
+                variant="dark"
+                decorative
+                className="h-10 w-10 rounded-sm bg-gradient-to-br from-[#aef833] to-[#93db04] p-2"
+              />
               <span className="font-headline text-base font-bold uppercase tracking-widest text-white">{BRAND.name}</span>
             </div>
             <p className="mb-6 max-w-md text-sm leading-relaxed text-[#aeb5c5] sm:mb-8">
@@ -1059,51 +1062,51 @@ const LandingPage = () => {
           </div>
 
           <div className="col-span-1 sm:col-span-1 lg:col-span-2 lg:col-start-7">
-            <h5 className="mb-5 font-headline text-[10px] font-bold uppercase tracking-[0.25em] text-[#aef833]">Platform</h5>
+            <p className="mb-5 font-headline text-[10px] font-bold uppercase tracking-[0.25em] text-[#aef833]">Platform</p>
             <ul className="space-y-3">
               <li>
-                <button type="button" onClick={() => navigate("/pricers")} className="font-headline text-[11px] uppercase tracking-widest text-[#aeb5c5] transition-colors hover:text-white">
+                <Link to="/pricers" className="font-headline text-[11px] uppercase tracking-widest text-[#aeb5c5] transition-colors hover:text-white">
                   Pricers
-                </button>
+                </Link>
               </li>
               <li>
-                <button type="button" onClick={() => navigate("/dashboard")} className="font-headline text-[11px] uppercase tracking-widest text-[#aeb5c5] transition-colors hover:text-white">
+                <Link to="/dashboard" className="font-headline text-[11px] uppercase tracking-widest text-[#aeb5c5] transition-colors hover:text-white">
                   Dashboard
-                </button>
+                </Link>
               </li>
               <li>
-                <button type="button" onClick={() => navigate("/strategy-builder")} className="font-headline text-[11px] uppercase tracking-widest text-[#aeb5c5] transition-colors hover:text-white">
+                <Link to="/strategy-builder" className="font-headline text-[11px] uppercase tracking-widest text-[#aeb5c5] transition-colors hover:text-white">
                   Strategy builder
-                </button>
+                </Link>
               </li>
               <li>
-                <button type="button" onClick={() => navigate("/commodity-market")} className="font-headline text-[11px] uppercase tracking-widest text-[#aeb5c5] transition-colors hover:text-white">
+                <Link to="/commodity-market" className="font-headline text-[11px] uppercase tracking-widest text-[#aeb5c5] transition-colors hover:text-white">
                   Commodity market
-                </button>
+                </Link>
               </li>
             </ul>
           </div>
 
           <div className="col-span-1 sm:col-span-1 lg:col-span-2">
-            <h5 className="mb-5 font-headline text-[10px] font-bold uppercase tracking-[0.25em] text-[#aef833]">Workflow</h5>
+            <p className="mb-5 font-headline text-[10px] font-bold uppercase tracking-[0.25em] text-[#aef833]">Workflow</p>
             <ul className="space-y-3">
               <li>
-                <button type="button" onClick={() => navigate("/rate-explorer")} className="font-headline text-[11px] uppercase tracking-widest text-[#aeb5c5] transition-colors hover:text-white">
+                <Link to="/rate-explorer" className="font-headline text-[11px] uppercase tracking-widest text-[#aeb5c5] transition-colors hover:text-white">
                   Rate explorer
-                </button>
+                </Link>
               </li>
               <li>
-                <button type="button" onClick={() => navigate("/hedge-helper")} className="font-headline text-[11px] uppercase tracking-widest text-[#aeb5c5] transition-colors hover:text-white">
+                <Link to="/hedge-helper" className="font-headline text-[11px] uppercase tracking-widest text-[#aeb5c5] transition-colors hover:text-white">
                   Hedge assistant
-                </button>
+                </Link>
               </li>
               <li>
-                <button type="button" onClick={() => navigate("/intel-workspace")} className="font-headline text-[11px] uppercase tracking-widest text-[#aeb5c5] transition-colors hover:text-white">
+                <Link to="/intel-workspace" className="font-headline text-[11px] uppercase tracking-widest text-[#aeb5c5] transition-colors hover:text-white">
                   Intelligence workspace
-                </button>
+                </Link>
               </li>
               <li>
-                <a href="#faq" className="font-headline text-[11px] uppercase tracking-widest text-[#aeb5c5] transition-colors hover:text-white">
+                <a href="/#faq" className="font-headline text-[11px] uppercase tracking-widest text-[#aeb5c5] transition-colors hover:text-white">
                   FAQ
                 </a>
               </li>
@@ -1111,24 +1114,22 @@ const LandingPage = () => {
           </div>
 
           <div className="col-span-2 sm:col-span-2 lg:col-span-3">
-            <h5 className="mb-5 font-headline text-[10px] font-bold uppercase tracking-[0.25em] text-[#aef833]">Get started</h5>
+            <p className="mb-5 font-headline text-[10px] font-bold uppercase tracking-[0.25em] text-[#aef833]">Get started</p>
             <p className="mb-4 text-sm text-[#aeb5c5]">
               Two minutes is enough to see the terminal in action.
             </p>
-            <button
-              type="button"
-              onClick={() => navigate("/request-access")}
-              className="landing-btn-industrial landing-industrial-gradient w-full px-5 py-3 font-headline text-xs font-bold uppercase tracking-widest text-[#213600] transition-transform hover:scale-[1.02]"
+            <Link
+              to="/request-access"
+              className="landing-btn-industrial landing-industrial-gradient block w-full px-5 py-3 text-center font-headline text-xs font-bold uppercase tracking-widest text-[#213600] transition-transform hover:scale-[1.02]"
             >
               Request access
-            </button>
-            <button
-              type="button"
-              onClick={() => navigate("/login")}
-              className="landing-btn-industrial mt-2 w-full border border-[#424a35]/40 bg-transparent px-5 py-3 font-headline text-xs font-bold uppercase tracking-widest text-white transition-all hover:bg-white/5"
+            </Link>
+            <Link
+              to="/login"
+              className="landing-btn-industrial mt-2 block w-full border border-[#424a35]/40 bg-transparent px-5 py-3 text-center font-headline text-xs font-bold uppercase tracking-widest text-white transition-all hover:bg-white/5"
             >
               Sign in
-            </button>
+            </Link>
           </div>
         </div>
 

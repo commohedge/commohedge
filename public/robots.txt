@@ -1,0 +1,34 @@
+# https://www.commohedge.com/robots.txt
+User-agent: *
+Allow: /
+Allow: /request-access
+
+Disallow: /login
+Disallow: /supabase-login
+Disallow: /auth/
+Disallow: /dashboard
+Disallow: /exposures
+Disallow: /hedging
+Disallow: /risk-analysis
+Disallow: /strategy-builder
+Disallow: /pricers
+Disallow: /positions
+Disallow: /reports
+Disallow: /commodity-market
+Disallow: /intel-workspace
+Disallow: /world-map
+Disallow: /commodity-news
+Disallow: /market-news
+Disallow: /economic-calendar
+Disallow: /advanced-chart
+Disallow: /users
+Disallow: /database-sync
+Disallow: /settings
+Disallow: /regression-analysis
+Disallow: /rate-explorer
+Disallow: /hedge-helper
+Disallow: /ticker-peek-pro
+Disallow: /saved
+Disallow: /api/
+
+Sitemap: https://www.commohedge.com/sitemap.xml

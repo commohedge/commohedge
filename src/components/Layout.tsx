@@ -106,12 +106,16 @@ export function Layout({ children, title, breadcrumbs }: LayoutProps) {
             )}
             <div className="flex-1" />
             <div className="hidden lg:flex items-center gap-2 text-sm text-muted-foreground">
-              <img 
-                src={logo}
-                alt="Company Logo" 
-                className="h-6 w-6 object-contain opacity-70"
-                onError={(e) => e.currentTarget.style.display = 'none'}
-              />
+              <span className="flex h-7 w-7 items-center justify-center overflow-hidden rounded-md bg-[#0c1322]">
+                <img 
+                  src={logo}
+                  alt="Company Logo" 
+                  className="h-5 w-5 object-contain"
+                  onError={(e) => {
+                    e.currentTarget.src = "/commohedge-logo.png";
+                  }}
+                />
+              </span>
               <span className="font-medium">
                 <span className="text-primary">{primaryName}</span>
                 {secondaryName && <span className="text-muted-foreground"> &nbsp;| {secondaryName}</span>}

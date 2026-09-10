@@ -220,17 +220,15 @@ export function AppSidebar() {
     <Sidebar className="border-r border-border/40 bg-gradient-to-b from-background to-background/95 sidebar-zoom-adaptive">
       <SidebarHeader className="p-6 border-b border-border/40 sidebar-header">
         <div className="flex items-center space-x-3">
-          <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-primary/10 border border-primary/20">
+          <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-lg border border-primary/20 bg-[#0c1322]">
             <img 
               src={logo}
-              alt="Company Logo" 
+              alt={`${BRAND.name} logo`}
               className="h-10 w-10 object-contain sidebar-logo"
               onError={(e) => {
-                e.currentTarget.style.display = 'none';
-                e.currentTarget.nextElementSibling?.classList.remove('hidden');
+                e.currentTarget.src = BRAND.logoSrc;
               }}
             />
-            <Globe className="h-6 w-6 text-primary hidden" />
           </div>
           <div className="flex-1">
             <div className="text-lg font-bold text-primary">

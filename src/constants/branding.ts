@@ -7,7 +7,13 @@ export const BRAND = {
   /** Aligné sur la sidebar : split sur " - " (primary / secondary) */
   nameWithTagline: "CommoHedge - Commodity hedging & intelligence terminal",
   tagline: "Commodity hedging & intelligence terminal",
+  /** @deprecated Prefer BrandLogo / logoSrc — kept for text fallbacks */
   logoMark: "CH",
+  /** White mark on transparent — dark UI */
+  logoSrc: "/commohedge-logo.png",
+  /** Black mark on transparent — light / lime UI */
+  logoDarkSrc: "/commohedge-logo-dark.png",
+  faviconSrc: "/favicon.ico",
   copyrightLine: "© 2026 CommoHedge. All rights reserved.",
   /** Filigrane footer (caps, style Stitch) */
   nameWatermark: "COMMOHEDGE",
