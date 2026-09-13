@@ -9,16 +9,12 @@ import { BLOG_ARTICLES } from "@/seo/blog-articles";
 import "@/styles/landing-terminal.css";
 import { Commodity, CommodityCategory, fetchCommoditiesData, refreshCommoditiesData } from "@/services/commodityApi";
 
-/** Hero & vertical imagery - same AIDA assets as Stitch reference */
+/** Hero & vertical imagery - self-hosted WebP for LCP / crawl reliability */
 const TERMINAL_MEDIA = {
-  heroShip:
-    "https://lh3.googleusercontent.com/aida-public/AB6AXuCuEhC50BEWuEWOPEu1BudGrvrwxoqvYnHL1HtvEDz36nq2XPCXUBbRmTI-EBpqO441jpY5RSAU4wqkDIKi70EUEpd5wC9KtFfGAjS9Dp_9Ic9pFTRMNPEnuNltgI6oQhFnHYQbb9zqMvEOa6vHAWIrERZoNAdD6wVG9nw3l1j-dtOV-Wwow8YZmEDU0IxsHHkohB4BrMiG_RbWRSfPok6ihz-8ouiSd53LLYdwZQRrxpIhBUtVeG0zNzhsywK25PZS2O-8YczYI5w",
-  oilEnergy:
-    "https://lh3.googleusercontent.com/aida-public/AB6AXuCrAQq5e66aCxl8rdzPpHC0hJC0X4P5iEVwr6HXfGIx_Iqo7elg3rNukPHdp88nekfwDbejuZ21lvdJiO1afk2VROAeL4pkWH9ItVPV61NP8uuIsDGUZEqTc6G-JyYWwhzVjt4KwFGfhJN66Ity_SRX4qdvUbNKposso9V_nVo26--aVRLr2qKe6EAbuB3AnR67yuSE-WuRP5LRxrY_2aQYLaqhjJCDxtmttz59qCVvbhdHxuCGVrWLOdze3EdS9rn1xaw2Bd1__f0",
-  metals:
-    "https://lh3.googleusercontent.com/aida-public/AB6AXuDeVagyv05ckksEg4sK3D8EeI074iSx6deq8hWEf_agdj7uQezgnYCSXYhdTZ6BoZPvzdYi6DPBOo-oR_s4Gvhb9-a9W8aC-77zx8w4sLLOidmQ00JL9Kqb6yO5ch2BTvEbsGrLuj1cpycjmHTRaMHhRZgknzA-kzlJ_Z1CuWo3IJyQZTFYbCBVY_qLOPiWz1uayWHtGQBabMG86XsWlBbZTAA3NNmFNvgnJ6V93YM35Meigl9JxdDAKwQ7vldUJDKoIW1G4XSxtdo",
-  agriculture:
-    "https://lh3.googleusercontent.com/aida-public/AB6AXuBTWMBAAzH1ePz3k71pr1G20fga_tUi8hJ25KKlWg7bZRkkzp07YXQ9xeCX2IDkDbPwCkyooI6UbmQxAKehXU72hmNDYZpUMx5TNZzHjvEiUFTH4rpn9FXMH6kEJzO3NDiFCIkbhQKrxDcT0q_PrZlCe2POHL20WgIZQyd_Ahli1wZcidHA3n3qh9XwJzEqnhJkOAs0nXjl2gJ3L1wPEAdS1yf36SGBenLzrpa8wDPLH2E4Qg87O9436KmPajwM0TEa97-nWy1BdNs",
+  heroShip: "/landing-media/hero-ship.webp",
+  oilEnergy: "/landing-media/oil-energy.webp",
+  metals: "/landing-media/metals.webp",
+  agriculture: "/landing-media/agriculture.webp",
 } as const;
 
 const LANDING_SCREENSHOTS = {
@@ -368,6 +364,10 @@ const LandingPage = () => {
               alt="CommoHedge - container ship at sea, global commodity trade lanes"
               className="landing-hero-img landing-floating-vessel h-full w-full scale-110 object-cover opacity-95 md:opacity-125"
               src={TERMINAL_MEDIA.heroShip}
+              width={1920}
+              height={1080}
+              fetchPriority="high"
+              decoding="async"
             />
             <div className="absolute inset-0 bg-gradient-to-b from-[#0c1322]/35 via-[#0c1322]/18 to-[#0c1322]/85" />
             <div className="absolute inset-0 bg-gradient-to-r from-[#0c1322]/85 via-[#0c1322]/35 to-transparent" />
@@ -383,14 +383,15 @@ const LandingPage = () => {
                   Pricing & hedging terminal · Live
                 </span>
               </div>
-              <h1 className="mb-6 font-headline text-[2.5rem] font-bold uppercase leading-[0.95] tracking-tighter text-white sm:mb-8 sm:text-7xl sm:leading-[0.88] md:text-8xl lg:text-[7.5rem] xl:text-[9rem]">
-                {BRAND.heroLine1} <br />{" "}
-                <span className="bg-gradient-to-br from-[#aef833] to-[#93db04] bg-clip-text text-transparent">
-                  {BRAND.heroLine2}
+              <h1 className="mb-6 text-white">
+                <span className="block font-headline text-[2.5rem] font-bold uppercase leading-[0.95] tracking-tighter sm:text-7xl sm:leading-[0.88] md:text-8xl lg:text-[7.5rem] xl:text-[9rem]">
+                  {BRAND.heroLine1} <br />{" "}
+                  <span className="bg-gradient-to-br from-[#aef833] to-[#93db04] bg-clip-text text-transparent">
+                    {BRAND.heroLine2}
+                  </span>
                 </span>
-                <span className="sr-only">
-                  {" "}
-                  - Commodity and FX hedging terminal for pricing, exposures and risk management
+                <span className="mt-4 block max-w-2xl font-headline text-base font-medium normal-case leading-snug tracking-normal text-[#dce2f7] sm:mt-5 sm:text-lg md:text-xl">
+                  Commodity &amp; FX hedging terminal for pricing, exposures and risk management
                 </span>
               </h1>
               <p className="mb-8 max-w-2xl text-base font-light leading-relaxed text-[#c1caaf] sm:mb-10 sm:text-lg md:text-xl">
@@ -685,10 +686,10 @@ const LandingPage = () => {
                 </p>
               </div>
               <Link
-                to="/strategy-builder"
+                to="/blog/forwards-swaps-options-commodity-hedge-book"
                 className="landing-btn-industrial w-full whitespace-nowrap border border-[#424a35]/30 bg-[#2e3545] px-6 py-3 text-center font-headline text-sm font-bold uppercase tracking-widest text-white transition-all hover:bg-[#323949] sm:w-auto sm:px-8"
               >
-                Strategy builder
+                Hedge instruments guide
               </Link>
             </div>
 
@@ -831,42 +832,42 @@ const LandingPage = () => {
                   title: "Commodity pricers",
                   desc: "Price vanillas and exotics with a compact summary and payoff chart - consistent inputs across the app.",
                   src: LANDING_SCREENSHOTS.pricers,
-                  path: "/pricers",
+                  path: "/solutions/oil-energy",
                   icon: "calculate",
                 },
                 {
                   title: "Strategy builder",
                   desc: "Define hedging windows, position type, and model settings - with optional Data Terminal spot & IV sourcing.",
                   src: LANDING_SCREENSHOTS.strategyBuilder,
-                  path: "/strategy-builder",
+                  path: "/blog/forwards-swaps-options-commodity-hedge-book",
                   icon: "construction",
                 },
                 {
                   title: "Exposures dashboard",
                   desc: "Roll up subsidiary exposures, hedge ratios, and maturity buckets - with views by currency and maturity.",
                   src: LANDING_SCREENSHOTS.exposures,
-                  path: "/exposures",
+                  path: "/blog/building-commodity-hedge-policy",
                   icon: "dashboard",
                 },
                 {
                   title: "Hedging instruments",
                   desc: "Manage forwards, options and swaps in one table - filters, status, and export-ready columns for reporting.",
                   src: LANDING_SCREENSHOTS.hedgingInstruments,
-                  path: "/hedging",
+                  path: "/blog/choose-commodity-hedging-software",
                   icon: "shield",
                 },
                 {
                   title: "Data Terminal - futures curve",
                   desc: "Browse futures contracts, search by maturity and refresh market snapshots - used to build the forward curve.",
                   src: LANDING_SCREENSHOTS.dataTerminalFutures,
-                  path: "/ticker-peek-pro",
+                  path: "/solutions/metals-mining",
                   icon: "query_stats",
                 },
                 {
                   title: "Data Terminal - vol surface 3D",
                   desc: "Explore the implied vol surface in 3D with strike/DTE interpolation - built for quick volatility reads.",
                   src: LANDING_SCREENSHOTS.dataTerminalVolSurface,
-                  path: "/ticker-peek-pro",
+                  path: "/solutions/agriculture",
                   icon: "surface",
                 },
               ].map((s, i) => (
@@ -1111,52 +1112,47 @@ const LandingPage = () => {
           </div>
 
           <div className="col-span-1 sm:col-span-1 lg:col-span-2 lg:col-start-7">
-            <p className="mb-5 font-headline text-[10px] font-bold uppercase tracking-[0.25em] text-[#aef833]">Platform</p>
+            <p className="mb-5 font-headline text-[10px] font-bold uppercase tracking-[0.25em] text-[#aef833]">Solutions</p>
             <ul className="space-y-3">
               <li>
-                <Link to="/pricers" className="font-headline text-[11px] uppercase tracking-widest text-[#aeb5c5] transition-colors hover:text-white">
-                  Pricers
+                <Link to="/solutions/oil-energy" className="font-headline text-[11px] uppercase tracking-widest text-[#aeb5c5] transition-colors hover:text-white">
+                  Oil &amp; energy
                 </Link>
               </li>
               <li>
-                <Link to="/dashboard" className="font-headline text-[11px] uppercase tracking-widest text-[#aeb5c5] transition-colors hover:text-white">
-                  Dashboard
+                <Link to="/solutions/metals-mining" className="font-headline text-[11px] uppercase tracking-widest text-[#aeb5c5] transition-colors hover:text-white">
+                  Metals &amp; mining
                 </Link>
               </li>
               <li>
-                <Link to="/strategy-builder" className="font-headline text-[11px] uppercase tracking-widest text-[#aeb5c5] transition-colors hover:text-white">
-                  Strategy builder
+                <Link to="/solutions/agriculture" className="font-headline text-[11px] uppercase tracking-widest text-[#aeb5c5] transition-colors hover:text-white">
+                  Agriculture
                 </Link>
               </li>
               <li>
-                <Link to="/commodity-market" className="font-headline text-[11px] uppercase tracking-widest text-[#aeb5c5] transition-colors hover:text-white">
-                  Commodity market
+                <Link to="/request-access" className="font-headline text-[11px] uppercase tracking-widest text-[#aeb5c5] transition-colors hover:text-white">
+                  Request access
                 </Link>
               </li>
             </ul>
           </div>
 
           <div className="col-span-1 sm:col-span-1 lg:col-span-2">
-            <p className="mb-5 font-headline text-[10px] font-bold uppercase tracking-[0.25em] text-[#aef833]">Workflow</p>
+            <p className="mb-5 font-headline text-[10px] font-bold uppercase tracking-[0.25em] text-[#aef833]">Explore</p>
             <ul className="space-y-3">
-              <li>
-                <Link to="/rate-explorer" className="font-headline text-[11px] uppercase tracking-widest text-[#aeb5c5] transition-colors hover:text-white">
-                  Rate explorer
-                </Link>
-              </li>
-              <li>
-                <Link to="/hedge-helper" className="font-headline text-[11px] uppercase tracking-widest text-[#aeb5c5] transition-colors hover:text-white">
-                  Hedge assistant
-                </Link>
-              </li>
-              <li>
-                <Link to="/intel-workspace" className="font-headline text-[11px] uppercase tracking-widest text-[#aeb5c5] transition-colors hover:text-white">
-                  Intelligence workspace
-                </Link>
-              </li>
               <li>
                 <Link to="/blog" className="font-headline text-[11px] uppercase tracking-widest text-[#aeb5c5] transition-colors hover:text-white">
                   Insights
+                </Link>
+              </li>
+              <li>
+                <Link to="/blog/why-commodity-hedging-matters-treasury-2026" className="font-headline text-[11px] uppercase tracking-widest text-[#aeb5c5] transition-colors hover:text-white">
+                  Why hedge commodities
+                </Link>
+              </li>
+              <li>
+                <Link to="/blog/choose-commodity-hedging-software" className="font-headline text-[11px] uppercase tracking-widest text-[#aeb5c5] transition-colors hover:text-white">
+                  Buyer&apos;s guide
                 </Link>
               </li>
               <li>

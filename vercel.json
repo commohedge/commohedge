@@ -9,7 +9,7 @@
   "buildCommand": "npm run build",
   "rewrites": [
     {
-      "source": "/((?!api/|assets/|landing-page/|solutions/|request-access/|blog/|robots\\.txt|sitemap\\.xml|og-image\\.png|favicon\\.ico|favicon-.*\\.png|apple-touch-icon\\.png|icon-.*\\.png|commohedge-logo.*\\.png|logo\\.png|theme-init\\.js|_redirects).*)",
+      "source": "/((?!api/|assets/|landing-page/|landing-media/|solutions/|request-access/|blog/|robots\\.txt|sitemap\\.xml|og-image\\.png|favicon\\.ico|favicon-.*\\.png|apple-touch-icon\\.png|icon-.*\\.png|commohedge-logo.*\\.png|logo\\.png|theme-init\\.js|_redirects).*)",
       "destination": "/index.html"
     }
   ],
@@ -46,6 +46,15 @@
         {
           "key": "Cache-Control",
           "value": "public, max-age=604800"
+        }
+      ]
+    },
+    {
+      "source": "/landing-media/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=604800, immutable"
         }
       ]
     },
