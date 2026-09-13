@@ -7,6 +7,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { SITE_ORIGIN, listIndexableSeoPages, type PageSeo } from "../src/seo/site-seo.ts";
 import { SOLUTION_PAGES } from "../src/seo/solutions.ts";
+import { BLOG_ARTICLES, BLOG_INDEX_SEO } from "../src/seo/blog-articles.ts";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const dist = path.resolve(__dirname, "../dist");
@@ -133,6 +134,37 @@ function noscriptFor(seo: PageSeo): string {
 </noscript>`;
   }
 
+  const article = BLOG_ARTICLES.find((a) => a.path === seo.path);
+  if (article) {
+    const sections = article.sections
+      .map(
+        (s) =>
+          `<h2>${escapeHtml(s.heading)}</h2>${s.paragraphs.map((p) => `<p>${escapeHtml(p)}</p>`).join("")}`,
+      )
+      .join("");
+    return `<noscript>
+  <article>
+    <h1>${escapeHtml(article.h1)}</h1>
+    <p>${escapeHtml(article.lead)}</p>
+    ${sections}
+    <p><a href="${SITE_ORIGIN}/blog">All insights</a> · <a href="${SITE_ORIGIN}/request-access">Request access</a></p>
+  </article>
+</noscript>`;
+  }
+
+  if (seo.path === BLOG_INDEX_SEO.path) {
+    const links = BLOG_ARTICLES.map(
+      (a) => `<li><a href="${SITE_ORIGIN}${a.path}">${escapeHtml(a.h1)}</a></li>`,
+    ).join("");
+    return `<noscript>
+  <article>
+    <h1>Commodity hedging insights</h1>
+    <p>${escapeHtml(BLOG_INDEX_SEO.description)}</p>
+    <ul>${links}</ul>
+  </article>
+</noscript>`;
+  }
+
   if (seo.path === "/request-access") {
     return `<noscript>
   <article>
@@ -180,7 +212,14 @@ function writeSitemap(pages: PageSeo[]) {
   const urls = pages
     .map((p) => {
       const loc = `${SITE_ORIGIN}${p.path === "/" ? "/" : p.path}`;
-      const priority = p.path === "/" ? "1.0" : p.path.startsWith("/solutions/") ? "0.9" : "0.8";
+      const priority =
+        p.path === "/"
+          ? "1.0"
+          : p.path.startsWith("/solutions/")
+            ? "0.9"
+            : p.path.startsWith("/blog")
+              ? "0.85"
+              : "0.8";
       return `  <url>\n    <loc>${loc}</loc>\n    <changefreq>weekly</changefreq>\n    <priority>${priority}</priority>\n  </url>`;
     })
     .join("\n");

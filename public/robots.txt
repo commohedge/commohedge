@@ -3,6 +3,8 @@ User-agent: *
 Allow: /
 Allow: /request-access
 Allow: /solutions/
+Allow: /blog
+Allow: /blog/
 
 Disallow: /login
 Disallow: /supabase-login

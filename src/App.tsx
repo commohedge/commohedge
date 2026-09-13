@@ -43,6 +43,8 @@ import CommodityNews from "./pages/CommodityNews";
 import LandingPage from "./pages/LandingPage";
 import RequestAccess from "./pages/RequestAccess";
 import SolutionPage from "./pages/SolutionPage";
+import BlogIndex from "./pages/BlogIndex";
+import BlogArticle from "./pages/BlogArticle";
 import SupabaseLogin from "./pages/SupabaseLogin";
 import AuthCallback from "./pages/AuthCallback";
 import NotFound from "./pages/NotFound";
@@ -92,6 +94,8 @@ const App = () => {
             <Route path="/" element={<LandingPage />} />
             <Route path="/request-access" element={<RequestAccess />} />
             <Route path="/solutions/:slug" element={<SolutionPage />} />
+            <Route path="/blog" element={<BlogIndex />} />
+            <Route path="/blog/:slug" element={<BlogArticle />} />
             
             {/* Authentication */}
             <Route path="/login" element={<SupabaseLogin />} />

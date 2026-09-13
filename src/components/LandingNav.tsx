@@ -10,7 +10,7 @@ const navLinks: { name: string; href: string }[] = [
   { name: "Oil", href: "/solutions/oil-energy" },
   { name: "Metals", href: "/solutions/metals-mining" },
   { name: "Agri", href: "/solutions/agriculture" },
-  { name: "Platform", href: "/#risk-architect" },
+  { name: "Insights", href: "/blog" },
   { name: "FAQ", href: "/#faq" },
   { name: "Contact", href: "/#contact" },
 ];

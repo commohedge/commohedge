@@ -5,10 +5,11 @@ import { ChevronDown, ChevronUp, Linkedin, Star } from "lucide-react";
 import { BRAND } from "@/constants/branding";
 import { BrandLogo } from "@/components/BrandLogo";
 import { LANDING_FAQS, buildFaqJsonLd } from "@/seo/site-seo";
+import { BLOG_ARTICLES } from "@/seo/blog-articles";
 import "@/styles/landing-terminal.css";
 import { Commodity, CommodityCategory, fetchCommoditiesData, refreshCommoditiesData } from "@/services/commodityApi";
 
-/** Hero & vertical imagery — same AIDA assets as Stitch reference */
+/** Hero & vertical imagery - same AIDA assets as Stitch reference */
 const TERMINAL_MEDIA = {
   heroShip:
     "https://lh3.googleusercontent.com/aida-public/AB6AXuCuEhC50BEWuEWOPEu1BudGrvrwxoqvYnHL1HtvEDz36nq2XPCXUBbRmTI-EBpqO441jpY5RSAU4wqkDIKi70EUEpd5wC9KtFfGAjS9Dp_9Ic9pFTRMNPEnuNltgI6oQhFnHYQbb9zqMvEOa6vHAWIrERZoNAdD6wVG9nw3l1j-dtOV-Wwow8YZmEDU0IxsHHkohB4BrMiG_RbWRSfPok6ihz-8ouiSd53LLYdwZQRrxpIhBUtVeG0zNzhsywK25PZS2O-8YczYI5w",
@@ -38,16 +39,16 @@ const XIcon = ({ className }: { className?: string }) => (
 );
 
 const FALLBACK_TICKER_ITEMS: LandingTickerItem[] = [
-  { label: "WTI", value: "—", change: "—", up: true },
-  { label: "Brent", value: "—", change: "—", up: true },
-  { label: "Baltic (freight)", value: "—", change: "—", up: true },
-  { label: "VLSFO Singapore", value: "—", change: "—", up: true },
-  { label: "Iron ore", value: "—", change: "—", up: true },
+  { label: "WTI", value: "-", change: "-", up: true },
+  { label: "Brent", value: "-", change: "-", up: true },
+  { label: "Baltic (freight)", value: "-", change: "-", up: true },
+  { label: "VLSFO Singapore", value: "-", change: "-", up: true },
+  { label: "Iron ore", value: "-", change: "-", up: true },
 ];
 
 function formatLandingValue(c: Commodity): string {
   const price = Number.isFinite(c.price) ? c.price : NaN;
-  if (!Number.isFinite(price)) return "—";
+  if (!Number.isFinite(price)) return "-";
 
   const ccy = (c.currency || "").toUpperCase();
   const n = price.toLocaleString("en-US", { maximumFractionDigits: 2, minimumFractionDigits: 2 });
@@ -57,7 +58,7 @@ function formatLandingValue(c: Commodity): string {
 
 function formatLandingChange(c: Commodity): { text: string; up: boolean } {
   const pct = Number.isFinite(c.percentChange) ? c.percentChange : NaN;
-  if (!Number.isFinite(pct)) return { text: "—", up: true };
+  if (!Number.isFinite(pct)) return { text: "-", up: true };
   const up = pct >= 0;
   const abs = Math.abs(pct).toFixed(2);
   return { text: `${up ? "+" : "-"}${abs}%`, up };
@@ -364,7 +365,7 @@ const LandingPage = () => {
             <img
               ref={heroImgRef}
               id="landing-hero-img"
-              alt="CommoHedge — container ship at sea, global commodity trade lanes"
+              alt="CommoHedge - container ship at sea, global commodity trade lanes"
               className="landing-hero-img landing-floating-vessel h-full w-full scale-110 object-cover opacity-95 md:opacity-125"
               src={TERMINAL_MEDIA.heroShip}
             />
@@ -389,11 +390,11 @@ const LandingPage = () => {
                 </span>
                 <span className="sr-only">
                   {" "}
-                  — Commodity and FX hedging terminal for pricing, exposures and risk management
+                  - Commodity and FX hedging terminal for pricing, exposures and risk management
                 </span>
               </h1>
               <p className="mb-8 max-w-2xl text-base font-light leading-relaxed text-[#c1caaf] sm:mb-10 sm:text-lg md:text-xl">
-                <span className="font-medium text-[#dce2f7]">{BRAND.name}</span> unifies commodity pricing, exposures and hedging into one institutional-grade terminal — from daily desk monitoring to board-ready risk reviews, with a single consistent pricing spine.
+                <span className="font-medium text-[#dce2f7]">{BRAND.name}</span> unifies commodity pricing, exposures and hedging into one institutional-grade terminal - from daily desk monitoring to board-ready risk reviews, with a single consistent pricing spine.
               </p>
               <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:gap-4">
                 <Link
@@ -511,7 +512,7 @@ const LandingPage = () => {
           </div>
         </div>
 
-        {/* Trusted by — proof band */}
+        {/* Trusted by - proof band */}
         <section className="border-b border-[#424a35]/10 bg-[#070e1d] px-4 py-12 sm:px-6 md:px-12 md:py-14">
           <div className="mx-auto max-w-[1920px]">
             <p className="landing-reveal mb-8 text-center font-headline text-[10px] font-bold uppercase tracking-[0.3em] text-[#8c947b] sm:mb-10">
@@ -551,7 +552,7 @@ const LandingPage = () => {
                 One terminal,<br /> three core desks.
               </h2>
               <p className="max-w-xl text-sm text-[#c1caaf] md:text-base">
-                Oil, metals and agriculture — each module loads the right pricers, curves and strategy templates so your desk gets to work in seconds.
+                Oil, metals and agriculture - each module loads the right pricers, curves and strategy templates so your desk gets to work in seconds.
               </p>
             </div>
             <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
@@ -565,7 +566,7 @@ const LandingPage = () => {
                 },
                 {
                   title: "Metals & mining",
-                  desc: "Base and precious metals — vol surfaces, forwards and group-wide exposure roll-up across subsidiaries.",
+                  desc: "Base and precious metals - vol surfaces, forwards and group-wide exposure roll-up across subsidiaries.",
                   img: TERMINAL_MEDIA.metals,
                   path: "/solutions/metals-mining",
                   delay: "150ms",
@@ -573,7 +574,7 @@ const LandingPage = () => {
                 },
                 {
                   title: "Agriculture",
-                  desc: "Grains and softs — strategy builder, stress paths and hedge-ratio views before you press the trade.",
+                  desc: "Grains and softs - strategy builder, stress paths and hedge-ratio views before you press the trade.",
                   img: TERMINAL_MEDIA.agriculture,
                   path: "/solutions/agriculture",
                   delay: "300ms",
@@ -627,7 +628,7 @@ const LandingPage = () => {
                 From price feed <br className="hidden sm:block" /> to board pack.
               </h2>
               <p className="mx-auto mt-5 max-w-xl text-sm text-[#c1caaf] md:text-base">
-                A single workflow your team can run end-to-end — without spreadsheets falling out of sync.
+                A single workflow your team can run end-to-end - without spreadsheets falling out of sync.
               </p>
             </div>
 
@@ -642,13 +643,13 @@ const LandingPage = () => {
                 {
                   n: "02",
                   t: "Price & build",
-                  d: "Forwards, vanillas, barriers, swaps, Asians. Strategy builder and scenarios share the same pricing spine — every module agrees.",
+                  d: "Forwards, vanillas, barriers, swaps, Asians. Strategy builder and scenarios share the same pricing spine - every module agrees.",
                   icon: "construction",
                 },
                 {
                   n: "03",
                   t: "Monitor & report",
-                  d: "MTM, hedge ratios, exposure roll-up, and board-ready exports — kept consistent across desk, treasury and committee.",
+                  d: "MTM, hedge ratios, exposure roll-up, and board-ready exports - kept consistent across desk, treasury and committee.",
                   icon: "monitoring",
                 },
               ].map((step, i) => (
@@ -671,7 +672,7 @@ const LandingPage = () => {
           </div>
         </section>
 
-        {/* Bento — Risk architect */}
+        {/* Bento - Risk architect */}
         <section className="bg-[#070e1d] px-4 py-16 sm:px-6 sm:py-20 md:px-12 md:py-32" id="risk-architect">
           <div className="mx-auto max-w-[1920px]">
             <div className="landing-reveal mb-10 flex flex-col items-start justify-between gap-6 sm:mb-12 md:mb-16 md:flex-row md:items-end md:gap-8">
@@ -680,7 +681,7 @@ const LandingPage = () => {
                   Your commodity dashboard
                 </h2>
                 <p className="text-base text-[#c1caaf] sm:text-lg">
-                  One place to monitor prices, exposures, and hedges — and answer the simple question: “What happens if the market moves tomorrow?”
+                  One place to monitor prices, exposures, and hedges - and answer the simple question: "What happens if the market moves tomorrow?"
                 </p>
               </div>
               <Link
@@ -699,7 +700,7 @@ const LandingPage = () => {
                   </div>
                   <h3 className="mb-3 font-headline text-xl font-bold uppercase text-white sm:mb-4 sm:text-2xl md:text-4xl">Pricing you can trust</h3>
                   <p className="mb-4 max-w-lg text-sm text-[#c1caaf] sm:mb-5 sm:text-base">
-                    Price your deals, see the cost of protection, and keep your hedge book consistent — from analysis to execution and reporting.
+                    Price your deals, see the cost of protection, and keep your hedge book consistent - from analysis to execution and reporting.
                   </p>
                   <ul className="mb-6 grid max-w-lg grid-cols-1 gap-2 text-sm text-[#dce2f7]/90 md:grid-cols-2">
                     <li className="flex items-start gap-2">
@@ -745,7 +746,7 @@ const LandingPage = () => {
                   <div className="min-w-0">
                     <h3 className="mb-2 font-headline text-lg font-bold uppercase text-white sm:text-xl md:text-2xl">Market data, simplified</h3>
                     <p className="text-sm text-[#c1caaf]">
-                      Your key prices and reference curves stay aligned across the app — so every view tells the same story.
+                      Your key prices and reference curves stay aligned across the app - so every view tells the same story.
                     </p>
                   </div>
                   <span className="material-symbols-outlined shrink-0 text-[#aef833]">sailing</span>
@@ -801,7 +802,7 @@ const LandingPage = () => {
                     <span className="text-[#aef833]">Active</span>
                   </div>
                   <p className="border-b border-[#424a35]/10 pb-2 text-xs text-white">Hedges and positions stay consistent across modules.</p>
-                  <p className="border-b border-[#424a35]/10 pb-2 text-xs text-white">Key inputs refresh together — no mismatched numbers.</p>
+                  <p className="border-b border-[#424a35]/10 pb-2 text-xs text-white">Key inputs refresh together - no mismatched numbers.</p>
                   <p className="text-xs text-white">Scenario views help you prepare for price moves.</p>
                 </div>
                 <span className="material-symbols-outlined text-right text-[#c1caaf]">show_chart</span>
@@ -821,49 +822,49 @@ const LandingPage = () => {
                 Real screens. <br className="hidden sm:block" /> Real workflows.
               </h2>
               <p className="mt-4 max-w-xl text-sm text-[#c1caaf] md:text-base">
-                Actual workspace views — pricing, exposures and strategy configuration. No mock-ups.
+                Actual workspace views - pricing, exposures and strategy configuration. No mock-ups.
               </p>
             </div>
             <div className="grid grid-cols-1 gap-5 sm:gap-6 md:grid-cols-3">
               {[
                 {
                   title: "Commodity pricers",
-                  desc: "Price vanillas and exotics with a compact summary and payoff chart — consistent inputs across the app.",
+                  desc: "Price vanillas and exotics with a compact summary and payoff chart - consistent inputs across the app.",
                   src: LANDING_SCREENSHOTS.pricers,
                   path: "/pricers",
                   icon: "calculate",
                 },
                 {
                   title: "Strategy builder",
-                  desc: "Define hedging windows, position type, and model settings — with optional Data Terminal spot & IV sourcing.",
+                  desc: "Define hedging windows, position type, and model settings - with optional Data Terminal spot & IV sourcing.",
                   src: LANDING_SCREENSHOTS.strategyBuilder,
                   path: "/strategy-builder",
                   icon: "construction",
                 },
                 {
                   title: "Exposures dashboard",
-                  desc: "Roll up subsidiary exposures, hedge ratios, and maturity buckets — with views by currency and maturity.",
+                  desc: "Roll up subsidiary exposures, hedge ratios, and maturity buckets - with views by currency and maturity.",
                   src: LANDING_SCREENSHOTS.exposures,
                   path: "/exposures",
                   icon: "dashboard",
                 },
                 {
                   title: "Hedging instruments",
-                  desc: "Manage forwards, options and swaps in one table — filters, status, and export-ready columns for reporting.",
+                  desc: "Manage forwards, options and swaps in one table - filters, status, and export-ready columns for reporting.",
                   src: LANDING_SCREENSHOTS.hedgingInstruments,
                   path: "/hedging",
                   icon: "shield",
                 },
                 {
-                  title: "Data Terminal — futures curve",
-                  desc: "Browse futures contracts, search by maturity and refresh market snapshots — used to build the forward curve.",
+                  title: "Data Terminal - futures curve",
+                  desc: "Browse futures contracts, search by maturity and refresh market snapshots - used to build the forward curve.",
                   src: LANDING_SCREENSHOTS.dataTerminalFutures,
                   path: "/ticker-peek-pro",
                   icon: "query_stats",
                 },
                 {
-                  title: "Data Terminal — vol surface 3D",
-                  desc: "Explore the implied vol surface in 3D with strike/DTE interpolation — built for quick volatility reads.",
+                  title: "Data Terminal - vol surface 3D",
+                  desc: "Explore the implied vol surface in 3D with strike/DTE interpolation - built for quick volatility reads.",
                   src: LANDING_SCREENSHOTS.dataTerminalVolSurface,
                   path: "/ticker-peek-pro",
                   icon: "surface",
@@ -944,6 +945,49 @@ const LandingPage = () => {
           </div>
         </section>
 
+        {/* Insights teaser */}
+        <section className="border-y border-[#424a35]/15 bg-[#070e1d] px-4 py-16 sm:px-6 sm:py-20 md:px-12 md:py-24" id="insights">
+          <div className="mx-auto max-w-[1920px]">
+            <div className="landing-reveal mb-10 flex flex-col items-start justify-between gap-6 sm:mb-12 md:flex-row md:items-end">
+              <div className="max-w-2xl">
+                <p className="mb-3 font-headline text-[10px] font-bold uppercase tracking-[0.3em] text-[#aef833]">
+                  Insights
+                </p>
+                <h2 className="font-headline text-3xl font-bold uppercase tracking-tighter text-white sm:text-4xl md:text-5xl">
+                  Why commodity hedging matters
+                </h2>
+                <p className="mt-4 max-w-xl text-sm text-[#c1caaf] sm:text-base">
+                  Guides for treasury and trading desks - oil, metals, agriculture, FX overlap and hedging software.
+                </p>
+              </div>
+              <Link
+                to="/blog"
+                className="landing-btn-industrial border border-[#424a35]/30 bg-[#2e3545] px-6 py-3 font-headline text-sm font-bold uppercase tracking-widest text-white hover:bg-[#323949]"
+              >
+                All insights
+              </Link>
+            </div>
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+              {BLOG_ARTICLES.slice(0, 3).map((article, i) => (
+                <Link
+                  key={article.slug}
+                  to={article.path}
+                  className="landing-reveal landing-glass-card block rounded-sm p-5 transition-colors hover:border-[#aef833]/30 sm:p-6"
+                  style={{ transitionDelay: `${i * 80}ms` }}
+                >
+                  <p className="mb-3 font-headline text-[10px] uppercase tracking-widest text-[#8c947b]">
+                    {article.tags[0]} · {article.readMinutes} min
+                  </p>
+                  <h3 className="mb-3 font-headline text-lg font-bold uppercase tracking-tight text-white sm:text-xl">
+                    {article.h1}
+                  </h3>
+                  <p className="text-sm leading-relaxed text-[#c1caaf] line-clamp-3">{article.description}</p>
+                </Link>
+              ))}
+            </div>
+          </div>
+        </section>
+
         {/* FAQ */}
         <section className="bg-[#0c1322] px-4 py-16 sm:px-6 sm:py-20 md:px-12 md:py-28" id="faq">
           <div className="mx-auto max-w-3xl">
@@ -997,7 +1041,7 @@ const LandingPage = () => {
                   Architect <br /> your <span className="bg-gradient-to-br from-[#aef833] to-[#93db04] bg-clip-text text-transparent">edge.</span>
                 </h2>
                 <p className="max-w-xl text-sm font-light text-[#c1caaf] sm:text-base md:text-lg">
-                  {BRAND.name} ties pricing, hedging and scenarios into one terminal — from desk trial to production risk reviews.
+                  {BRAND.name} ties pricing, hedging and scenarios into one terminal - from desk trial to production risk reviews.
                 </p>
               </div>
               <div className="flex flex-col gap-3 lg:col-span-5 lg:items-end">
@@ -1108,6 +1152,11 @@ const LandingPage = () => {
               <li>
                 <Link to="/intel-workspace" className="font-headline text-[11px] uppercase tracking-widest text-[#aeb5c5] transition-colors hover:text-white">
                   Intelligence workspace
+                </Link>
+              </li>
+              <li>
+                <Link to="/blog" className="font-headline text-[11px] uppercase tracking-widest text-[#aeb5c5] transition-colors hover:text-white">
+                  Insights
                 </Link>
               </li>
               <li>

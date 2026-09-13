@@ -1,5 +1,6 @@
 import { BRAND } from "@/constants/branding";
 import { SOLUTION_PAGES } from "@/seo/solutions";
+import { getAllBlogSeoPages, getBlogArticle } from "@/seo/blog-articles";
 
 export const SITE_ORIGIN = "https://www.commohedge.com";
 
@@ -48,6 +49,7 @@ const PUBLIC_SEO: Record<string, PageSeo> = {
     robots: "noindex, nofollow",
   },
   ...Object.fromEntries(Object.values(SOLUTION_PAGES).map((s) => [s.path, s.seo])),
+  ...Object.fromEntries(getAllBlogSeoPages().map((p) => [p.path, p])),
 };
 
 const APP_TITLE_HINTS: { prefix: string; label: string }[] = [
@@ -80,6 +82,12 @@ const APP_TITLE_HINTS: { prefix: string; label: string }[] = [
 export function resolvePageSeo(pathname: string): PageSeo {
   const exact = PUBLIC_SEO[pathname];
   if (exact) return exact;
+
+  if (pathname.startsWith("/blog/")) {
+    const slug = pathname.replace(/^\/blog\//, "").replace(/\/$/, "");
+    const article = getBlogArticle(slug);
+    if (article) return article.seo;
+  }
 
   if (pathname.startsWith("/auth/")) {
     return {
