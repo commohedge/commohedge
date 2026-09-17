@@ -13,7 +13,15 @@ const BlogArticlePage: React.FC = () => {
 
   const related = useMemo(() => {
     if (!article) return [];
-    return BLOG_ARTICLES.filter((a) => a.slug !== article.slug).slice(0, 3);
+    const others = BLOG_ARTICLES.filter((a) => a.slug !== article.slug);
+    const tagSet = new Set(article.tags);
+    const scored = others
+      .map((a) => ({
+        a,
+        score: a.tags.reduce((n, t) => n + (tagSet.has(t) ? 1 : 0), 0),
+      }))
+      .sort((x, y) => y.score - x.score || y.a.date.localeCompare(x.a.date));
+    return scored.slice(0, 3).map((x) => x.a);
   }, [article]);
 
   useEffect(() => {
@@ -134,12 +142,23 @@ const BlogArticlePage: React.FC = () => {
             </section>
 
             <div className="mt-12 flex flex-col gap-3 border-t border-[#424a35]/20 pt-10 sm:flex-row">
-              <Link
-                to={article.relatedCta.to}
-                className="landing-btn-industrial landing-industrial-gradient inline-flex items-center justify-center px-8 py-4 font-headline text-sm font-bold uppercase tracking-widest text-[#213600]"
-              >
-                {article.relatedCta.label}
-              </Link>
+              {article.relatedCta.to.startsWith("http") ? (
+                <a
+                  href={article.relatedCta.to}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="landing-btn-industrial landing-industrial-gradient inline-flex items-center justify-center px-8 py-4 font-headline text-sm font-bold uppercase tracking-widest text-[#213600]"
+                >
+                  {article.relatedCta.label}
+                </a>
+              ) : (
+                <Link
+                  to={article.relatedCta.to}
+                  className="landing-btn-industrial landing-industrial-gradient inline-flex items-center justify-center px-8 py-4 font-headline text-sm font-bold uppercase tracking-widest text-[#213600]"
+                >
+                  {article.relatedCta.label}
+                </Link>
+              )}
               <Link
                 to="/blog"
                 className="landing-btn-industrial inline-flex items-center justify-center border border-[#424a35]/40 px-8 py-4 font-headline text-sm font-bold uppercase tracking-widest text-white"

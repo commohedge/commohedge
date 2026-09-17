@@ -955,10 +955,10 @@ const LandingPage = () => {
                   Insights
                 </p>
                 <h2 className="font-headline text-3xl font-bold uppercase tracking-tighter text-white sm:text-4xl md:text-5xl">
-                  Why commodity hedging matters
+                  Commodity &amp; FX hedging insights
                 </h2>
                 <p className="mt-4 max-w-xl text-sm text-[#c1caaf] sm:text-base">
-                  Guides for treasury and trading desks - oil, metals, agriculture, FX overlap and hedging software.
+                  Guides for treasury and trading desks - FX hedging, oil, metals, agriculture and hedging software.
                 </p>
               </div>
               <Link

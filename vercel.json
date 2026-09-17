@@ -7,6 +7,24 @@
   "regions": ["iad1"],
   "installCommand": "npm install --legacy-peer-deps",
   "buildCommand": "npm run build",
+  "redirects": [
+    {
+      "source": "/:path*",
+      "has": [{ "type": "host", "value": "commohedge.com" }],
+      "destination": "https://www.commohedge.com/:path*",
+      "statusCode": 301
+    },
+    {
+      "source": "/auth/sign-in",
+      "destination": "/login",
+      "statusCode": 301
+    },
+    {
+      "source": "/auth/sign-up",
+      "destination": "/login",
+      "statusCode": 301
+    }
+  ],
   "rewrites": [
     {
       "source": "/((?!api/|assets/|landing-page/|landing-media/|solutions/|request-access/|blog/|robots\\.txt|sitemap\\.xml|og-image\\.png|favicon\\.ico|favicon-.*\\.png|apple-touch-icon\\.png|icon-.*\\.png|commohedge-logo.*\\.png|logo\\.png|theme-init\\.js|_redirects).*)",
@@ -55,6 +73,33 @@
         {
           "key": "Cache-Control",
           "value": "public, max-age=604800, immutable"
+        }
+      ]
+    },
+    {
+      "source": "/auth/(.*)",
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow"
+        }
+      ]
+    },
+    {
+      "source": "/login",
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow"
+        }
+      ]
+    },
+    {
+      "source": "/supabase-login",
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow"
         }
       ]
     },

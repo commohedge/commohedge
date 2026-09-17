@@ -9,6 +9,8 @@ Allow: /blog/
 Disallow: /login
 Disallow: /supabase-login
 Disallow: /auth/
+Disallow: /auth/sign-in
+Disallow: /auth/sign-up
 Disallow: /dashboard
 Disallow: /exposures
 Disallow: /hedging

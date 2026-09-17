@@ -1,6 +1,9 @@
 import { BRAND } from "@/constants/branding";
 import type { PageSeo } from "@/seo/site-seo";
 
+/** Sister product - FX Risk Manager */
+export const FX_PLATFORM_URL = "https://fx.commohedge.com/";
+
 export type BlogArticle = {
   slug: string;
   path: `/blog/${string}`;
@@ -15,11 +18,204 @@ export type BlogArticle = {
   sections: { heading: string; paragraphs: string[] }[];
   takeaways: string[];
   faqs: { q: string; a: string }[];
+  /** Internal path (/...) or absolute URL (https://...) */
   relatedCta: { label: string; to: string };
   seo: PageSeo;
 };
 
 export const BLOG_ARTICLES: BlogArticle[] = [
+  {
+    slug: "fx-hedging-for-treasury-teams",
+    path: "/blog/fx-hedging-for-treasury-teams",
+    title: `FX hedging for treasury teams: exposures, ratios and cash-flow protection | ${BRAND.name}`,
+    h1: "FX hedging for treasury teams: exposures, ratios and cash-flow protection",
+    description:
+      "How treasury teams design FX hedging programs - map currency exposures, set hedge ratios and choose forwards or options to stabilize cash flow.",
+    date: "2026-09-13",
+    readMinutes: 8,
+    tags: ["FX", "Treasury"],
+    keywords: [
+      "FX hedging",
+      "treasury FX risk",
+      "currency hedging program",
+      "FX Risk Manager",
+    ],
+    lead: "FX hedging is how treasury turns volatile exchange rates into a manageable cost of doing business. Without a clear exposure map and hedge policy, boards inherit surprise FX lines every reporting cycle.",
+    sections: [
+      {
+        heading: "Start with exposures, not instruments",
+        paragraphs: [
+          "Good FX hedging begins with what you actually owe or will receive: transactional exposures (payables/receivables), translational exposures (foreign subsidiaries) and economic exposures (competitive pricing in another currency).",
+          "Tag each exposure by currency pair, amount, maturity bucket and business unit. Only then do hedge ratios and instrument choices mean something to the risk committee.",
+        ],
+      },
+      {
+        heading: "Hedge ratios that survive a board review",
+        paragraphs: [
+          "A written FX hedge policy should define target ratios by horizon (for example near-term cash flows hedged more heavily than far-dated forecasts), allowed instruments and who can approve exceptions.",
+          "Forwards lock a rate; options buy flexibility at a premium. Mixing both is common when forecasts are uncertain but covenant headroom cannot absorb a large FX move.",
+        ],
+      },
+      {
+        heading: "From spreadsheet FX books to a dedicated platform",
+        paragraphs: [
+          `Many desks still run FX hedges in Excel until a volatile week exposes version conflicts and stale rates. ${BRAND.name}'s FX platform - FX Risk Manager at ${FX_PLATFORM_URL} - is built for exposure visibility, hedge tracking and risk views that stay consistent under market stress.`,
+          "Treasury teams that treat FX hedging as an operational workflow - not a month-end rebuild - answer board questions faster and with fewer reconciling plugs.",
+        ],
+      },
+    ],
+    takeaways: [
+      "Map currency exposures before choosing FX instruments.",
+      "Hedge ratios belong in policy, not in ad-hoc trader preference alone.",
+      "A dedicated FX risk platform keeps MTM and cash-flow views aligned.",
+    ],
+    faqs: [
+      {
+        q: "Is FX hedging only for multinationals?",
+        a: "No. Any firm with material foreign-currency payables, receivables or funding can benefit - scale the program to the size of the book.",
+      },
+      {
+        q: "Where can desks evaluate an FX hedging platform?",
+        a: `Explore FX Risk Manager at ${FX_PLATFORM_URL} for FX hedging and currency risk workflows alongside ${BRAND.name}'s commodity terminal.`,
+      },
+    ],
+    relatedCta: { label: "Open FX Risk Manager", to: FX_PLATFORM_URL },
+    seo: {
+      title: `FX hedging for treasury teams: exposures, ratios and cash-flow protection | ${BRAND.name}`,
+      description:
+        "How treasury teams design FX hedging programs - map currency exposures, set hedge ratios and choose forwards or options to stabilize cash flow.",
+      path: "/blog/fx-hedging-for-treasury-teams",
+      robots: "index, follow",
+    },
+  },
+  {
+    slug: "currency-risk-management-corporate-fx",
+    path: "/blog/currency-risk-management-corporate-fx",
+    title: `Currency risk management for corporates: from policy to daily FX desk work | ${BRAND.name}`,
+    h1: "Currency risk management for corporates: from policy to daily FX desk work",
+    description:
+      "A practical guide to corporate currency risk management - FX policy, cash-flow at risk, reporting and how FX Risk Manager supports daily hedging workflows.",
+    date: "2026-09-12",
+    readMinutes: 8,
+    tags: ["FX", "Risk"],
+    keywords: [
+      "currency risk management",
+      "corporate FX hedging",
+      "FX risk policy",
+      "cash flow at risk FX",
+    ],
+    lead: "Currency risk management is governance plus execution. Policy without tooling becomes theater; tooling without policy becomes speculation. Corporates need both wired together.",
+    sections: [
+      {
+        heading: "What a usable FX risk policy contains",
+        paragraphs: [
+          "Scope (which entities and currencies), risk metrics (cash-flow at risk, earnings at risk, or simple open exposure), hedge ratio bands, permitted instruments, counterparty limits and escalation paths when markets gap.",
+          "The policy should also state how often exposures are refreshed - weekly for trading-heavy groups, monthly for slower commercial cycles - so the desk is not guessing which forecast is current.",
+        ],
+      },
+      {
+        heading: "Daily work: measure, hedge, explain",
+        paragraphs: [
+          "Operational currency risk management is repetitive on purpose: refresh exposures, mark hedges, check limit breaches, and prepare a short narrative for treasury leadership.",
+          "When spot or forward moves hit, the question is not only P&L - it is whether open FX risk still sits inside the board-approved envelope.",
+        ],
+      },
+      {
+        heading: "Platform support for FX risk desks",
+        paragraphs: [
+          `FX Risk Manager (${FX_PLATFORM_URL}) focuses on FX hedging and currency risk workflows so corporates can monitor exposures and hedges without rebuilding the stack for every reporting cycle.`,
+          `Paired with ${BRAND.name}'s commodity hedging terminal, groups that face both commodity and FX risk can keep each book disciplined while still coordinating dual exposures.`,
+        ],
+      },
+    ],
+    takeaways: [
+      "FX policy must define metrics, ratios and escalation - not slogans.",
+      "Daily FX risk work is exposure refresh + hedge MTM + limit checks.",
+      "Dedicated FX tooling reduces spreadsheet drift in volatile weeks.",
+    ],
+    faqs: [
+      {
+        q: "What is cash-flow at risk in FX?",
+        a: "A measure of how much future cash flows could worsen under adverse FX moves, given open exposures and existing hedges.",
+      },
+      {
+        q: "How is FX Risk Manager related to CommoHedge?",
+        a: `FX Risk Manager (${FX_PLATFORM_URL}) is the FX-focused sister platform; ${BRAND.name} centers on commodity hedging and intelligence - many desks use both lenses.`,
+      },
+    ],
+    relatedCta: { label: "Visit FX Risk Manager", to: FX_PLATFORM_URL },
+    seo: {
+      title: `Currency risk management for corporates: from policy to daily FX desk work | ${BRAND.name}`,
+      description:
+        "A practical guide to corporate currency risk management - FX policy, cash-flow at risk, reporting and how FX Risk Manager supports daily hedging workflows.",
+      path: "/blog/currency-risk-management-corporate-fx",
+      robots: "index, follow",
+    },
+  },
+  {
+    slug: "fx-forwards-options-hedge-program",
+    path: "/blog/fx-forwards-options-hedge-program",
+    title: `FX forwards vs options: building a practical FX hedge program | ${BRAND.name}`,
+    h1: "FX forwards vs options: building a practical FX hedge program",
+    description:
+      "When to use FX forwards versus currency options in a hedge program - cost of protection, flexibility, roll risk and how to keep the book auditable.",
+    date: "2026-09-11",
+    readMinutes: 9,
+    tags: ["FX", "Instruments"],
+    keywords: [
+      "FX forwards",
+      "currency options hedging",
+      "FX hedge program",
+      "FX risk management platform",
+    ],
+    lead: "Instrument choice is strategy. FX forwards deliver certainty at a locked rate; currency options preserve upside participation when forecasts are noisy. A durable FX hedge program knows when to use each - and how to roll without losing the audit trail.",
+    sections: [
+      {
+        heading: "Forwards: certainty with opportunity cost",
+        paragraphs: [
+          "An FX forward locks a future exchange rate for a notional and maturity. It is efficient when cash-flow timing is known and the firm values budget certainty over participating in favorable FX moves.",
+          "Watch roll and extension risk: repeatedly rolling short-dated forwards against uncertain commercial timing can create a stack of overlapping hedges that is hard to explain in committee.",
+        ],
+      },
+      {
+        heading: "Options: flexibility with premium discipline",
+        paragraphs: [
+          "Vanilla FX options (or simple collars) let treasury cap adverse moves while keeping some upside. The premium is the visible cost of that flexibility - it should be budgeted, not improvised after a spike.",
+          "Path-dependent or exotic structures need the same pricing and risk spine as vanillas; otherwise the hedge book becomes a collection of opaque tickets.",
+        ],
+      },
+      {
+        heading: "Running the program on one FX spine",
+        paragraphs: [
+          `Whether the book is mostly forwards, mostly options or a blend, MTM, exposures and scenario views must agree. FX Risk Manager at ${FX_PLATFORM_URL} is designed around FX hedging workflows so desks can track instruments and risk without spreadsheet forks.`,
+          `If your commercial story also includes commodity prices, pair FX program discipline with ${BRAND.name}'s commodity terminal - and see our guide on commodity hedging vs FX hedging for dual-risk design.`,
+        ],
+      },
+    ],
+    takeaways: [
+      "Use FX forwards when timing is firm and certainty matters most.",
+      "Use options when forecast noise makes full locking too rigid.",
+      "Keep forwards and options on one auditable FX risk platform.",
+    ],
+    faqs: [
+      {
+        q: "Should every FX exposure be hedged with forwards?",
+        a: "No. Match instrument to forecast confidence and risk appetite. Partial hedge ratios and option overlays are common.",
+      },
+      {
+        q: "Where can I explore FX hedging tools?",
+        a: `Start with FX Risk Manager: ${FX_PLATFORM_URL}.`,
+      },
+    ],
+    relatedCta: { label: "Try FX Risk Manager", to: FX_PLATFORM_URL },
+    seo: {
+      title: `FX forwards vs options: building a practical FX hedge program | ${BRAND.name}`,
+      description:
+        "When to use FX forwards versus currency options in a hedge program - cost of protection, flexibility, roll risk and how to keep the book auditable.",
+      path: "/blog/fx-forwards-options-hedge-program",
+      robots: "index, follow",
+    },
+  },
   {
     slug: "why-commodity-hedging-matters-treasury-2026",
     path: "/blog/why-commodity-hedging-matters-treasury-2026",
@@ -283,7 +479,7 @@ export const BLOG_ARTICLES: BlogArticle[] = [
       {
         heading: "One terminal for both lenses",
         paragraphs: [
-          `${BRAND.name} unifies commodity and FX-oriented workflows so treasury can see price and currency dimensions together when building protection.`,
+          `${BRAND.name} unifies commodity workflows while FX Risk Manager (${FX_PLATFORM_URL}) focuses on currency hedging - so treasury can run both lenses without mixing books.`,
         ],
       },
     ],
@@ -295,14 +491,14 @@ export const BLOG_ARTICLES: BlogArticle[] = [
     faqs: [
       {
         q: "Should commodity and FX hedges always be done together?",
-        a: "Not always simultaneously — but they should be designed in the same risk framework.",
+        a: "Not always simultaneously - but they should be designed in the same risk framework.",
       },
       {
         q: "What is a dual risk hedge?",
         a: "A program that explicitly addresses both underlying commodity price risk and the FX risk embedded in settlement or costing.",
       },
     ],
-    relatedCta: { label: "Request access to the terminal", to: "/request-access" },
+    relatedCta: { label: "Open FX Risk Manager", to: FX_PLATFORM_URL },
     seo: {
       title: `Commodity hedging vs FX hedging: when desks need both | ${BRAND.name}`,
       description:
@@ -606,8 +802,8 @@ export const BLOG_ARTICLES: BlogArticle[] = [
 ];
 
 export const BLOG_INDEX_SEO: PageSeo = {
-  title: `Insights on commodity hedging | ${BRAND.name}`,
-  description: `Articles on commodity hedging, oil metals and agriculture risk, FX exposure and hedging software — practical guides for treasury and trading desks.`,
+  title: `Insights on commodity & FX hedging | ${BRAND.name}`,
+  description: `Articles on commodity hedging, FX hedging, oil metals and agriculture risk, currency risk management and hedging software - practical guides for treasury and trading desks.`,
   path: "/blog",
   robots: "index, follow",
 };

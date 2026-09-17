@@ -18,10 +18,10 @@ const BlogIndex: React.FC = () => {
               Insights
             </p>
             <h1 className="mb-6 font-headline text-4xl font-bold uppercase tracking-tighter text-white sm:text-5xl md:text-6xl">
-              Commodity hedging insights
+              Commodity &amp; FX hedging insights
             </h1>
             <p className="max-w-3xl text-base font-light leading-relaxed text-[#c1caaf] sm:text-lg">
-              Practical guides on why commodity hedging matters — oil, metals, agriculture, FX overlap and how institutional desks run hedge books with discipline.
+              Practical guides on commodity hedging, FX hedging and currency risk - oil, metals, agriculture and how institutional desks run hedge books with discipline.
             </p>
           </div>
         </section>
