@@ -27,10 +27,10 @@ export const BLOG_ARTICLES: BlogArticle[] = [
   {
     slug: "commodity-hedging-definition-meaning",
     path: "/blog/commodity-hedging-definition-meaning",
-    title: `Commodity hedging: definition and meaning explained | ${BRAND.name}`,
+    title: `Commodity Hedging Definition & Meaning (With Examples) | ${BRAND.name}`,
     h1: "Commodity hedging - definition, meaning",
     description:
-      "What commodity hedging means in practice: definition, how hedges work, instruments, hedge ratios, accounting context and why treasury and trading desks use commodity hedging to protect margins.",
+      "Clear commodity hedging definition and meaning: how hedges work, instruments, hedge ratios and real buyer/seller examples for treasury and trading desks.",
     date: "2026-09-17",
     readMinutes: 14,
     tags: ["Commodity", "Education", "Treasury"],
@@ -159,9 +159,9 @@ export const BLOG_ARTICLES: BlogArticle[] = [
     ],
     relatedCta: { label: "Request access to CommoHedge", to: "/request-access" },
     seo: {
-      title: `Commodity hedging: definition and meaning explained | ${BRAND.name}`,
+      title: `Commodity Hedging Definition & Meaning (With Examples) | ${BRAND.name}`,
       description:
-        "What commodity hedging means in practice: definition, how hedges work, instruments, hedge ratios, accounting context and why treasury and trading desks use commodity hedging to protect margins.",
+        "Clear commodity hedging definition and meaning: how hedges work, instruments, hedge ratios and real buyer/seller examples for treasury and trading desks.",
       path: "/blog/commodity-hedging-definition-meaning",
       robots: "index, follow",
     },
@@ -169,10 +169,10 @@ export const BLOG_ARTICLES: BlogArticle[] = [
   {
     slug: "commodity-risk-management",
     path: "/blog/commodity-risk-management",
-    title: `Commodity risk management: framework, metrics and desk playbook | ${BRAND.name}`,
+    title: `Commodity Risk Management: Framework for Treasury & Desks | ${BRAND.name}`,
     h1: "Commodity risk management",
     description:
-      "A complete guide to commodity risk management: identify exposures, set policy and limits, choose hedges, measure VaR and cash-flow at risk, stress test and report - for treasury, trading and risk desks.",
+      "Commodity risk management playbook: map exposures, set policy and limits, choose hedges, run stress tests and report risk packs for treasury and trading desks.",
     date: "2026-09-17",
     readMinutes: 15,
     tags: ["Risk", "Commodity", "Treasury"],
@@ -306,9 +306,9 @@ export const BLOG_ARTICLES: BlogArticle[] = [
     ],
     relatedCta: { label: "Request a desk trial", to: "/request-access" },
     seo: {
-      title: `Commodity risk management: framework, metrics and desk playbook | ${BRAND.name}`,
+      title: `Commodity Risk Management: Framework for Treasury & Desks | ${BRAND.name}`,
       description:
-        "A complete guide to commodity risk management: identify exposures, set policy and limits, choose hedges, measure VaR and cash-flow at risk, stress test and report - for treasury, trading and risk desks.",
+        "Commodity risk management playbook: map exposures, set policy and limits, choose hedges, run stress tests and report risk packs for treasury and trading desks.",
       path: "/blog/commodity-risk-management",
       robots: "index, follow",
     },
@@ -316,10 +316,10 @@ export const BLOG_ARTICLES: BlogArticle[] = [
   {
     slug: "fx-hedging-for-treasury-teams",
     path: "/blog/fx-hedging-for-treasury-teams",
-    title: `FX hedging for treasury teams: exposures, ratios and cash-flow protection | ${BRAND.name}`,
+    title: `FX Hedging for Treasury: Exposures, Ratios & Cash Flow | ${BRAND.name}`,
     h1: "FX hedging for treasury teams: exposures, ratios and cash-flow protection",
     description:
-      "How treasury teams design FX hedging programs - map currency exposures, set hedge ratios and choose forwards or options to stabilize cash flow.",
+      "Practical FX hedging for treasury teams: map currency exposures, set hedge ratios and choose forwards or options to protect cash flow.",
     date: "2026-09-13",
     readMinutes: 8,
     tags: ["FX", "Treasury"],
@@ -370,9 +370,9 @@ export const BLOG_ARTICLES: BlogArticle[] = [
     ],
     relatedCta: { label: "Open FX Risk Manager", to: FX_PLATFORM_URL },
     seo: {
-      title: `FX hedging for treasury teams: exposures, ratios and cash-flow protection | ${BRAND.name}`,
+      title: `FX Hedging for Treasury: Exposures, Ratios & Cash Flow | ${BRAND.name}`,
       description:
-        "How treasury teams design FX hedging programs - map currency exposures, set hedge ratios and choose forwards or options to stabilize cash flow.",
+        "Practical FX hedging for treasury teams: map currency exposures, set hedge ratios and choose forwards or options to protect cash flow.",
       path: "/blog/fx-hedging-for-treasury-teams",
       robots: "index, follow",
     },
@@ -508,14 +508,20 @@ export const BLOG_ARTICLES: BlogArticle[] = [
   {
     slug: "why-commodity-hedging-matters-treasury-2026",
     path: "/blog/why-commodity-hedging-matters-treasury-2026",
-    title: `Why commodity hedging matters for treasury teams in 2026 | ${BRAND.name}`,
+    title: `Treasury Hedging in 2026: Why Commodity Hedges Matter | ${BRAND.name}`,
     h1: "Why commodity hedging matters for treasury teams in 2026",
     description:
-      "How commodity hedging protects margins, stabilizes cash flow and improves board reporting for treasury and risk teams facing volatile markets.",
+      "Treasury hedging guide: how commodity hedges protect margins, stabilize cash flow and improve board reporting when prices swing.",
     date: "2026-09-10",
     readMinutes: 8,
     tags: ["Treasury", "Risk"],
-    keywords: ["commodity hedging", "treasury risk management", "margin protection"],
+    keywords: [
+      "treasury hedging",
+      "commodity hedging",
+      "treasury risk management",
+      "margin protection",
+      "hedging treasury",
+    ],
     lead: "When commodity prices swing, treasury teams feel it first in working capital, forecast accuracy and board questions. Commodity hedging is not speculation — it is a disciplined way to protect margins and make volatility manageable.",
     sections: [
       {
@@ -557,9 +563,9 @@ export const BLOG_ARTICLES: BlogArticle[] = [
     ],
     relatedCta: { label: "Request treasury access", to: "/request-access" },
     seo: {
-      title: `Why commodity hedging matters for treasury teams in 2026 | ${BRAND.name}`,
+      title: `Treasury Hedging in 2026: Why Commodity Hedges Matter | ${BRAND.name}`,
       description:
-        "How commodity hedging protects margins, stabilizes cash flow and improves board reporting for treasury and risk teams facing volatile markets.",
+        "Treasury hedging guide: how commodity hedges protect margins, stabilize cash flow and improve board reporting when prices swing.",
       path: "/blog/why-commodity-hedging-matters-treasury-2026",
       robots: "index, follow",
     },
@@ -626,10 +632,10 @@ export const BLOG_ARTICLES: BlogArticle[] = [
   {
     slug: "metals-mining-hedging-copper-aluminium",
     path: "/blog/metals-mining-hedging-copper-aluminium",
-    title: `Metals & mining: hedging copper, aluminium and precious metals | ${BRAND.name}`,
+    title: `Metals Hedging: Copper, Aluminium & Mining Price Risk | ${BRAND.name}`,
     h1: "Metals & mining: hedging copper, aluminium and precious metals exposure",
     description:
-      "How mining and metals groups hedge copper, aluminium and precious metals — exposures by subsidiary, hedge ratios and vol-aware strategy design.",
+      "Metals hedging for mining groups: copper and aluminium exposures by entity, hedge ratios and strategies that survive price cycles.",
     date: "2026-09-06",
     readMinutes: 8,
     tags: ["Metals & mining"],
@@ -674,9 +680,9 @@ export const BLOG_ARTICLES: BlogArticle[] = [
     ],
     relatedCta: { label: "Explore metals & mining desk", to: "/solutions/metals-mining" },
     seo: {
-      title: `Metals & mining: hedging copper, aluminium and precious metals | ${BRAND.name}`,
+      title: `Metals Hedging: Copper, Aluminium & Mining Price Risk | ${BRAND.name}`,
       description:
-        "How mining and metals groups hedge copper, aluminium and precious metals — exposures by subsidiary, hedge ratios and vol-aware strategy design.",
+        "Metals hedging for mining groups: copper and aluminium exposures by entity, hedge ratios and strategies that survive price cycles.",
       path: "/blog/metals-mining-hedging-copper-aluminium",
       robots: "index, follow",
     },
@@ -742,10 +748,10 @@ export const BLOG_ARTICLES: BlogArticle[] = [
   {
     slug: "commodity-hedging-vs-fx-hedging",
     path: "/blog/commodity-hedging-vs-fx-hedging",
-    title: `Commodity hedging vs FX hedging: when desks need both | ${BRAND.name}`,
+    title: `Commodity Hedging vs FX Hedging: When Desks Need Both | ${BRAND.name}`,
     h1: "Commodity hedging vs FX hedging: when desks need both",
     description:
-      "When commodity price risk and FX exposure interact — and how desks design hedges that address both without double-counting risk.",
+      "Commodity hedging vs FX hedging explained: how dual exposures interact and how to design hedges without double-counting risk.",
     date: "2026-09-02",
     readMinutes: 7,
     tags: ["FX", "Commodity"],
@@ -789,9 +795,9 @@ export const BLOG_ARTICLES: BlogArticle[] = [
     ],
     relatedCta: { label: "Open FX Risk Manager", to: FX_PLATFORM_URL },
     seo: {
-      title: `Commodity hedging vs FX hedging: when desks need both | ${BRAND.name}`,
+      title: `Commodity Hedging vs FX Hedging: When Desks Need Both | ${BRAND.name}`,
       description:
-        "When commodity price risk and FX exposure interact — and how desks design hedges that address both without double-counting risk.",
+        "Commodity hedging vs FX hedging explained: how dual exposures interact and how to design hedges without double-counting risk.",
       path: "/blog/commodity-hedging-vs-fx-hedging",
       robots: "index, follow",
     },
@@ -915,10 +921,10 @@ export const BLOG_ARTICLES: BlogArticle[] = [
   {
     slug: "building-commodity-hedge-policy",
     path: "/blog/building-commodity-hedge-policy",
-    title: `Building a hedge policy: exposures, hedge ratios and risk committees | ${BRAND.name}`,
+    title: `Commodity Hedge Policy: Exposures, Ratios & Board Packs | ${BRAND.name}`,
     h1: "Building a hedge policy: exposures, hedge ratios and risk committee packs",
     description:
-      "How to write a commodity hedge policy that links exposures, hedge ratios and board reporting — so desks execute within governance, not around it.",
+      "Write a commodity hedge policy that links exposures, hedge ratios and board reporting so desks execute inside governance.",
     date: "2026-08-26",
     readMinutes: 8,
     tags: ["Governance", "Treasury"],
@@ -962,9 +968,9 @@ export const BLOG_ARTICLES: BlogArticle[] = [
     ],
     relatedCta: { label: "Request access", to: "/request-access" },
     seo: {
-      title: `Building a hedge policy: exposures, hedge ratios and risk committees | ${BRAND.name}`,
+      title: `Commodity Hedge Policy: Exposures, Ratios & Board Packs | ${BRAND.name}`,
       description:
-        "How to write a commodity hedge policy that links exposures, hedge ratios and board reporting — so desks execute within governance, not around it.",
+        "Write a commodity hedge policy that links exposures, hedge ratios and board reporting so desks execute inside governance.",
       path: "/blog/building-commodity-hedge-policy",
       robots: "index, follow",
     },
@@ -1029,14 +1035,15 @@ export const BLOG_ARTICLES: BlogArticle[] = [
   {
     slug: "choose-commodity-hedging-software",
     path: "/blog/choose-commodity-hedging-software",
-    title: `How to choose commodity hedging software for institutional desks | ${BRAND.name}`,
+    title: `Commodity Hedging Software: Buyer's Checklist for Desks | ${BRAND.name}`,
     h1: "How to choose commodity hedging software for institutional desks",
     description:
-      "A buyer’s checklist for commodity hedging software — pricing spine, exposures, auditability, sectors covered and path from trial to production risk reviews.",
+      "Commodity hedging software checklist: pricing spine, exposures, audit trail, sector fit and how to pilot before you commit.",
     date: "2026-08-22",
     readMinutes: 9,
     tags: ["Buyer's guide"],
     keywords: [
+      "commodity hedging software",
       "best commodity hedging software",
       "commodity risk management platform",
       "institutional hedging terminal",
@@ -1081,9 +1088,9 @@ export const BLOG_ARTICLES: BlogArticle[] = [
     ],
     relatedCta: { label: "Request a desk trial", to: "/request-access" },
     seo: {
-      title: `How to choose commodity hedging software for institutional desks | ${BRAND.name}`,
+      title: `Commodity Hedging Software: Buyer's Checklist for Desks | ${BRAND.name}`,
       description:
-        "A buyer’s checklist for commodity hedging software — pricing spine, exposures, auditability, sectors covered and path from trial to production risk reviews.",
+        "Commodity hedging software checklist: pricing spine, exposures, audit trail, sector fit and how to pilot before you commit.",
       path: "/blog/choose-commodity-hedging-software",
       robots: "index, follow",
     },
