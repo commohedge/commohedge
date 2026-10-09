@@ -1,18 +1,12 @@
 {
   "functions": {
     "api/cron/refresh-commodity-cache.js": {
-      "maxDuration": 300
+      "maxDuration": 60
     },
     "api/**/*.js": {
       "maxDuration": 60
     }
   },
-  "crons": [
-    {
-      "path": "/api/cron/refresh-commodity-cache",
-      "schedule": "0 * * * *"
-    }
-  ],
   "regions": ["iad1"],
   "installCommand": "npm install --legacy-peer-deps",
   "buildCommand": "npm run build",

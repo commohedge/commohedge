@@ -1,0 +1,35 @@
+# Hourly overwrite of shared commodity_market_cache in Supabase.
+# (Vercel Hobby only allows daily crons — GitHub Actions handles hourly.)
+name: Refresh commodity market cache
+
+on:
+  schedule:
+    - cron: "0 * * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: refresh-commodity-cache
+  cancel-in-progress: true
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install deps
+        run: npm install --legacy-peer-deps --no-audit --no-fund
+
+      - name: Scrape + UPSERT Supabase cache
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+        run: node scripts/seed-commodity-cache.mjs

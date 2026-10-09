@@ -71,11 +71,16 @@ export function CommodityMarketPricesPanel({ defaultTab = "agricultural" }: { de
   };
 
   useEffect(() => {
-    void loadCommodityCategory("agricultural", false);
-    void loadCommodityCategory("freight", false);
-    void loadCommodityCategory("bunker", false);
-    void loadFertilizers();
-    // Keep it lightweight inside the workspace; CommodityMarket page already does periodic refresh.
+    const softLoad = () => {
+      void loadCommodityCategory("agricultural", false);
+      void loadCommodityCategory("freight", false);
+      void loadCommodityCategory("bunker", false);
+      void loadFertilizers();
+    };
+    softLoad();
+    // Soft re-read from shared Supabase cache every hour (manual Refresh still force-scrapes).
+    const interval = window.setInterval(softLoad, 60 * 60 * 1000);
+    return () => window.clearInterval(interval);
   }, []);
 
   const onRefresh = async () => {
