@@ -171,15 +171,15 @@ export default function CommodityMarket() {
     }
   }, [activeCategory]);
 
-  // Charger les données initiales
+  // Initial load from shared Supabase cache; soft re-read every hour (cron keeps DB fresh).
+  // Manual "Refresh" still force-scrapes via loadAllData(true).
   useEffect(() => {
-    loadAllData();
-    
-    // Rafraîchir les données toutes les 5 minutes
+    loadAllData(false);
+
     const interval = setInterval(() => {
-      loadAllData();
-    }, 5 * 60 * 1000);
-    
+      loadAllData(false);
+    }, 60 * 60 * 1000);
+
     return () => clearInterval(interval);
   }, []);
 

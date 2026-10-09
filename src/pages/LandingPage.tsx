@@ -329,7 +329,7 @@ const LandingPage = () => {
     };
 
     void loadTickerFromDb();
-    const interval = window.setInterval(loadTickerFromDb, 5 * 60 * 1000);
+    const interval = window.setInterval(loadTickerFromDb, 60 * 60 * 1000);
     return () => {
       cancelled = true;
       window.clearInterval(interval);

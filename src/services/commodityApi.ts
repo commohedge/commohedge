@@ -15,7 +15,7 @@ interface CacheData {
 
 // Cache storage
 const CACHE_PREFIX = 'fx_commodities_cache_';
-const CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
+const CACHE_DURATION = 60 * 60 * 1000; // 1 hour (aligned with hourly Supabase cron)
 
 // List of available commodity types
 export type CommodityCategory = 'metals' | 'agricultural' | 'energy' | 'freight' | 'bunker';

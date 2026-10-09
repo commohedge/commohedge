@@ -11,7 +11,7 @@ const SUPABASE_ANON =
   process.env.VITE_SUPABASE_ANON_KEY ||
   "sb_publishable_1wxQlJYrs4cqXinMMohHtw_KIsybCpJ";
 
-const TTL_MS = 24 * 60 * 60 * 1000;
+const TTL_MS = 60 * 60 * 1000; // 1 hour — matches hourly Vercel cron
 const CATEGORIES = ["energy", "metals", "agricultural", "freight"];
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON);

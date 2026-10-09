@@ -11,8 +11,8 @@ export type CommodityMarketCategory =
   | "freight"
   | "bunker";
 
-/** Server-side freshness window (align with previous local 24h cache). */
-export const COMMODITY_DB_TTL_MS = 24 * 60 * 60 * 1000;
+/** Server-side freshness window — hourly cron refreshes Supabase snapshots. */
+export const COMMODITY_DB_TTL_MS = 60 * 60 * 1000;
 
 type DbRow = {
   category: CommodityMarketCategory;
