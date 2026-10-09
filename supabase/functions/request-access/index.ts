@@ -71,7 +71,7 @@ serve(async (req) => {
     // Supabase Edge Functions can't send email by themselves; we use an email provider.
     // Recommended: Resend (simple API + good deliverability).
     const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY") || "";
-    const REQUEST_ACCESS_TO = Deno.env.get("REQUEST_ACCESS_TO") || "commohedge@gmail.com";
+    const REQUEST_ACCESS_TO = Deno.env.get("REQUEST_ACCESS_TO") || "contact@commohedge.com";
     const REQUEST_ACCESS_FROM = Deno.env.get("REQUEST_ACCESS_FROM") || "CommoHedge <onboarding@resend.dev>";
 
     if (!RESEND_API_KEY) {

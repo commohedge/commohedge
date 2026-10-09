@@ -1123,11 +1123,11 @@ const LandingPage = () => {
               {BRAND.tagline}. Commodity pricers, hedge books and strategy analytics built for clarity under volatility.
             </p>
             <a
-              href="mailto:commohedge@gmail.com"
+              href="mailto:contact@commohedge.com"
               className="inline-flex items-center gap-2 font-headline text-xs font-bold uppercase tracking-widest text-[#aef833] hover:text-white"
             >
               <span className="material-symbols-outlined text-base">mail</span>
-              commohedge@gmail.com
+              contact@commohedge.com
             </a>
             <div className="mt-6 flex items-center gap-3">
               <a

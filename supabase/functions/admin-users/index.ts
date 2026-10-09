@@ -15,7 +15,7 @@ function json(body: unknown, init: ResponseInit = {}) {
 
 function isAdminEmail(email: string | null): boolean {
   if (!email) return false;
-  const allow = (Deno.env.get("ADMIN_EMAILS") || "bilalfaress00@gmail.com,commohedge@gmail.com")
+  const allow = (Deno.env.get("ADMIN_EMAILS") || "bilalfaress00@gmail.com,contact@commohedge.com")
     .split(",")
     .map((s) => s.trim().toLowerCase())
     .filter(Boolean);

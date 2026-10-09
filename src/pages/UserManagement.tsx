@@ -50,7 +50,7 @@ export default function UserManagement() {
 
   const isAdmin = useMemo(() => {
     const email = (user?.email || "").toLowerCase();
-    return user?.role === "Admin" || email === "bilalfaress00@gmail.com" || email === "commohedge@gmail.com";
+    return user?.role === "Admin" || email === "bilalfaress00@gmail.com" || email === "contact@commohedge.com";
   }, [user?.email, user?.role]);
 
   const loadUsers = useCallback(async () => {
