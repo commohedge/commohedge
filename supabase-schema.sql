@@ -1,6 +1,9 @@
 -- Schema SQL pour Supabase - Forex Pricers
 -- Exécuter ces commandes dans l'éditeur SQL de Supabase
 
+-- Commodity Market shared cache (one row per category, UPSERT overwrite):
+--   supabase/migrations/20261009_commodity_market_cache.sql
+
 -- Table des stratégies Forex
 CREATE TABLE IF NOT EXISTS forex_strategies (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,

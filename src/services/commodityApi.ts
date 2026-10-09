@@ -1,6 +1,10 @@
 import { toast } from "sonner";
 import { parse } from "node-html-parser";
 import { scrapeTradingViewSymbol, scrapeTradingViewCategory, scrapeShipAndBunker, scrapeShipAndBunkerEMEA } from './puppeteerApi';
+import {
+  readCommodityMarketFromDb,
+  writeCommodityMarketToDb,
+} from "@/services/commodityMarketDbCache";
 
 // Cache interface
 interface CacheData {
@@ -858,28 +862,53 @@ function parseCommoditiesData(data: any, category: CommodityCategory): Commodity
   }
 }
 
+/** Persist scrape result: overwrite Supabase row + mirror localStorage (no history growth). */
+async function persistCommoditySnapshot(
+  category: CommodityCategory,
+  commodities: Commodity[],
+): Promise<Commodity[]> {
+  if (!commodities.length) {
+    console.warn(`Skip persist empty snapshot for ${category}`);
+    return commodities;
+  }
+  saveToCache(category, commodities);
+  await writeCommodityMarketToDb(category, commodities);
+  return commodities;
+}
+
 /**
- * Fetches commodity data from TradingView for a specific category
- * Uses cache by default, but can be forced to refresh
+ * Fetches commodity data from TradingView for a specific category.
+ * Order: Supabase shared cache → localStorage → scrape → UPSERT Supabase (overwrite).
  */
 export async function fetchCommoditiesData(category: CommodityCategory = 'metals', forceRefresh: boolean = false): Promise<Commodity[]> {
   try {
     console.log(`Fetching data for ${category} from TradingView...`);
     
-    // Check cache first (unless force refresh is requested)
+    // 1) Shared Supabase cache (all users) — skip when force refresh
     if (!forceRefresh) {
+      const dbHit = await readCommodityMarketFromDb(category);
+      if (dbHit?.data?.length) {
+        const normalized = normalizeCommoditySymbols(dbHit.data);
+        try { saveToCache(category, normalized); } catch {}
+        console.log(`Returning Supabase cache for ${category}: ${normalized.length} items`);
+        return normalized as Commodity[];
+      }
+
+      // 2) Browser localStorage fallback
       const cachedData = loadFromCache(category);
       if (cachedData) {
         const normalized = normalizeCommoditySymbols(cachedData);
-        // If normalization changed any entry, update cache silently
         try { saveToCache(category, normalized); } catch {}
-        console.log(`Returning cached data for ${category}: ${normalized.length} items`);
-        return normalized as any;
+        console.log(`Returning local cache for ${category}: ${normalized.length} items`);
+        // Best-effort backfill shared DB from local (helps first deploy after table create)
+        void writeCommodityMarketToDb(category, normalized);
+        return normalized as Commodity[];
       }
     } else {
-      console.log(`Force refresh requested for ${category}, ignoring cache`);
+      console.log(`Force refresh requested for ${category}, ignoring caches`);
     }
 
+    // 3) Scrape fresh data
     // Special handling for freight
     if (category === 'freight') {
       // Try to fetch from category page first (MUCH faster - single request vs 33 requests)
@@ -916,8 +945,7 @@ export async function fetchCommoditiesData(category: CommodityCategory = 'metals
           const estimatedIndividualTime = 33 * 5; // ~5s per symbol average
           const speedup = (estimatedIndividualTime / parseFloat(categoryTime)).toFixed(1);
           console.log(`   ⚡ Estimated ${speedup}x faster than individual requests (would take ~${estimatedIndividualTime}s)`);
-          saveToCache(category, freightFromCategory);
-          return freightFromCategory;
+          return await persistCommoditySnapshot(category, freightFromCategory);
         } else {
           console.warn(`⚠️  Category page returned ${parsedCommodities.length} commodities but none matched freight symbols`);
         }
@@ -929,10 +957,9 @@ export async function fetchCommoditiesData(category: CommodityCategory = 'metals
       console.log('🔄 Falling back to individual symbol scraping (slower but more reliable)...');
       const freightData = await fetchFreightData();
       if (freightData.length > 0) {
-        saveToCache(category, freightData);
-      } else {
-        console.warn(`Freight fetch produced 0 rows; not caching empty result for ${category}`);
+        return await persistCommoditySnapshot(category, freightData);
       }
+      console.warn(`Freight fetch produced 0 rows; not caching empty result for ${category}`);
       return freightData;
     }
     
@@ -940,10 +967,9 @@ export async function fetchCommoditiesData(category: CommodityCategory = 'metals
     if (category === 'bunker') {
       const bunkerData = await fetchBunkerData();
       if (bunkerData.length > 0) {
-        saveToCache(category, bunkerData);
-      } else {
-        console.warn(`Bunker fetch produced 0 rows; not caching empty result for ${category}`);
+        return await persistCommoditySnapshot(category, bunkerData);
       }
+      console.warn(`Bunker fetch produced 0 rows; not caching empty result for ${category}`);
       return bunkerData;
     }
 
@@ -954,10 +980,9 @@ export async function fetchCommoditiesData(category: CommodityCategory = 'metals
     // Parse the HTML retrieved to extract commodity data
     const commodities = normalizeCommoditySymbols(parseCommoditiesData(data, category));
     if (commodities.length > 0) {
-      saveToCache(category, commodities);
-    } else {
-      console.warn(`Category scrape produced 0 rows; not caching empty result for ${category}`);
+      return await persistCommoditySnapshot(category, commodities);
     }
+    console.warn(`Category scrape produced 0 rows; not caching empty result for ${category}`);
     return commodities;
   } catch (error) {
     console.error(`Error fetching ${category} data:`, error);

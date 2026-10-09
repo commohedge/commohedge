@@ -7,7 +7,8 @@ import { BrandLogo } from "@/components/BrandLogo";
 import { LANDING_FAQS, buildFaqJsonLd } from "@/seo/site-seo";
 import { BLOG_ARTICLES } from "@/seo/blog-articles";
 import "@/styles/landing-terminal.css";
-import { Commodity, CommodityCategory, fetchCommoditiesData, refreshCommoditiesData } from "@/services/commodityApi";
+import type { Commodity, CommodityCategory } from "@/services/commodityApi";
+import { readAllCommodityMarketFromDb } from "@/services/commodityMarketDbCache";
 
 /** Hero & vertical imagery - self-hosted WebP for LCP / crawl reliability */
 const TERMINAL_MEDIA = {
@@ -41,6 +42,99 @@ const FALLBACK_TICKER_ITEMS: LandingTickerItem[] = [
   { label: "VLSFO Singapore", value: "-", change: "-", up: true },
   { label: "Iron ore", value: "-", change: "-", up: true },
 ];
+
+/** Last painted ticker — sync read so revisit paints before any network. */
+const LANDING_TICKER_CACHE_KEY = "commohedge_landing_ticker_v1";
+
+function readCachedLandingTicker(): LandingTickerItem[] | null {
+  try {
+    const raw = localStorage.getItem(LANDING_TICKER_CACHE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { items?: LandingTickerItem[]; savedAt?: number };
+    if (!Array.isArray(parsed?.items) || parsed.items.length === 0) return null;
+    // Keep for 7 days — prices refresh from DB on mount anyway
+    if (parsed.savedAt && Date.now() - parsed.savedAt > 7 * 24 * 60 * 60 * 1000) return null;
+    const ok = parsed.items.every(
+      (it) => it && typeof it.label === "string" && typeof it.value === "string" && it.value !== "-",
+    );
+    return ok ? parsed.items : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeCachedLandingTicker(items: LandingTickerItem[]) {
+  try {
+    if (!items.some((it) => it.value && it.value !== "-")) return;
+    localStorage.setItem(
+      LANDING_TICKER_CACHE_KEY,
+      JSON.stringify({ items, savedAt: Date.now() }),
+    );
+  } catch {
+    /* quota / private mode */
+  }
+}
+
+function buildLandingTickerItems(
+  energy: Commodity[],
+  freight: Commodity[],
+  bunker: Commodity[],
+  metals: Commodity[],
+): LandingTickerItem[] {
+  // Prefer exact front-month symbols when present (faster + more accurate than fuzzy "cl")
+  const wti =
+    pickBestCommodity(energy, "energy", ["wbs1", "wti1", "cl1!", "mcl1"]) ||
+    pickBestCommodity(energy, "energy", ["wti", "nymex"]);
+
+  const brent =
+    pickBestCommodityExcluding(energy, "energy", ["brn1", "bz1", "brent"], wti) ||
+    pickBestCommodityExcluding(energy, "energy", ["br1!"], wti);
+
+  const baltic =
+    pickBestCommodity(freight, "freight", ["baltic", "bdiy", "dry"]) ||
+    pickBestCommodity(freight, "freight", ["freight", "route", "container"]);
+
+  const vlsfoSingapore =
+    pickBestCommodity(bunker, "bunker", ["vlsfo", "singapore"]) ||
+    pickBestCommodity(bunker, "bunker", ["vlsfo", "sg"]);
+
+  const ironOre =
+    pickBestCommodity(metals, "metals", ["tio1", "fef1", "iron ore"]) ||
+    pickBestCommodity(metals, "metals", ["iron", "ore"]);
+
+  return [
+    wti
+      ? (() => {
+          const chg = formatLandingChange(wti);
+          return { label: "WTI", value: formatLandingValue(wti), change: chg.text, up: chg.up };
+        })()
+      : FALLBACK_TICKER_ITEMS[0],
+    brent
+      ? (() => {
+          const chg = formatLandingChange(brent);
+          return { label: "Brent", value: formatLandingValue(brent), change: chg.text, up: chg.up };
+        })()
+      : FALLBACK_TICKER_ITEMS[1],
+    baltic
+      ? (() => {
+          const chg = formatLandingChange(baltic);
+          return { label: "Baltic dry", value: formatLandingValue(baltic), change: chg.text, up: chg.up };
+        })()
+      : FALLBACK_TICKER_ITEMS[2],
+    vlsfoSingapore
+      ? (() => {
+          const chg = formatLandingChange(vlsfoSingapore);
+          return { label: "VLSFO Singapore", value: formatLandingValue(vlsfoSingapore), change: chg.text, up: chg.up };
+        })()
+      : FALLBACK_TICKER_ITEMS[3],
+    ironOre
+      ? (() => {
+          const chg = formatLandingChange(ironOre);
+          return { label: "Iron ore 62%", value: formatLandingValue(ironOre), change: chg.text, up: chg.up };
+        })()
+      : FALLBACK_TICKER_ITEMS[4],
+  ];
+}
 
 function formatLandingValue(c: Commodity): string {
   const price = Number.isFinite(c.price) ? c.price : NaN;
@@ -111,19 +205,6 @@ function pickBestCommodityExcluding(
   if (!exclude) return pickBestCommodity(rows, category, tokens);
   const filtered = rows.filter((r) => r.symbol !== exclude.symbol || r.name !== exclude.name);
   return pickBestCommodity(filtered, category, tokens);
-}
-
-async function loadCommodityCategoryRows(category: CommodityCategory): Promise<Commodity[]> {
-  const first = await fetchCommoditiesData(category, false);
-  const usableFirst = first.filter((r) => isRenderableCommodity(r, category));
-  if (usableFirst.length > 0) return first;
-
-  // Cache can be empty/invalid; force refresh like the Commodity Market "Refresh" button.
-  try {
-    return await refreshCommoditiesData(category);
-  } catch {
-    return first;
-  }
 }
 
 function TickerRow({ runId, items }: { runId: string; items: LandingTickerItem[] }) {
@@ -211,7 +292,10 @@ function AccuracyCounter() {
 const LandingPage = () => {
   const heroImgRef = useRef<HTMLImageElement>(null);
   const [openFaq, setOpenFaq] = useState<number | null>(null);
-  const [tickerItems, setTickerItems] = useState<LandingTickerItem[]>(FALLBACK_TICKER_ITEMS);
+  // Instant paint from last visit; then one DB round-trip (never scrape on landing).
+  const [tickerItems, setTickerItems] = useState<LandingTickerItem[]>(
+    () => readCachedLandingTicker() || FALLBACK_TICKER_ITEMS,
+  );
 
   useLandingReveal();
   useHeroParallax(heroImgRef);
@@ -219,77 +303,33 @@ const LandingPage = () => {
   useEffect(() => {
     let cancelled = false;
 
-    const loadTicker = async () => {
+    const loadTickerFromDb = async () => {
       try {
-        // Same pipeline as Commodity Market, but resilient to empty localStorage caches.
-        const [energy, freight, bunker, metals] = await Promise.all([
-          loadCommodityCategoryRows("energy"),
-          loadCommodityCategoryRows("freight"),
-          loadCommodityCategoryRows("bunker"),
-          loadCommodityCategoryRows("metals"),
-        ]);
+        // Single Supabase query only — no TradingView / puppeteer on the landing path.
+        const dbMap = await readAllCommodityMarketFromDb({
+          allowStale: true,
+          categories: ["energy", "freight", "bunker", "metals"],
+        });
+        if (cancelled) return;
 
-        const wti =
-          pickBestCommodity(energy, "energy", ["wti", "crude", "light", "cl"]) ||
-          pickBestCommodity(energy, "energy", ["nymex", "oil"]);
+        const next = buildLandingTickerItems(
+          (dbMap.energy?.data || []) as Commodity[],
+          (dbMap.freight?.data || []) as Commodity[],
+          (dbMap.bunker?.data || []) as Commodity[],
+          (dbMap.metals?.data || []) as Commodity[],
+        );
 
-        const brent =
-          pickBestCommodityExcluding(energy, "energy", ["brent", "brn", "ice", "north sea"], wti) ||
-          null;
+        if (!next.some((it) => it.value !== "-")) return;
 
-        const baltic =
-          pickBestCommodity(freight, "freight", ["baltic", "bdiy", "dry"]) ||
-          pickBestCommodity(freight, "freight", ["freight", "route", "container"]);
-
-        const vlsfoSingapore =
-          pickBestCommodity(bunker, "bunker", ["vlsfo", "singapore", "sg"]) ||
-          pickBestCommodity(bunker, "bunker", ["vlsfo"]);
-
-        const ironOre =
-          pickBestCommodity(metals, "metals", ["iron ore", "62", "fe", "tio", "ore"]) ||
-          pickBestCommodity(metals, "metals", ["steel"]);
-
-        const next: LandingTickerItem[] = [
-          wti
-            ? (() => {
-                const chg = formatLandingChange(wti);
-                return { label: "WTI", value: formatLandingValue(wti), change: chg.text, up: chg.up };
-              })()
-            : FALLBACK_TICKER_ITEMS[0],
-          brent
-            ? (() => {
-                const chg = formatLandingChange(brent);
-                return { label: "Brent", value: formatLandingValue(brent), change: chg.text, up: chg.up };
-              })()
-            : FALLBACK_TICKER_ITEMS[1],
-          baltic
-            ? (() => {
-                const chg = formatLandingChange(baltic);
-                return { label: "Baltic dry", value: formatLandingValue(baltic), change: chg.text, up: chg.up };
-              })()
-            : FALLBACK_TICKER_ITEMS[2],
-          vlsfoSingapore
-            ? (() => {
-                const chg = formatLandingChange(vlsfoSingapore);
-                return { label: "VLSFO Singapore", value: formatLandingValue(vlsfoSingapore), change: chg.text, up: chg.up };
-              })()
-            : FALLBACK_TICKER_ITEMS[3],
-          ironOre
-            ? (() => {
-                const chg = formatLandingChange(ironOre);
-                return { label: "Iron ore 62%", value: formatLandingValue(ironOre), change: chg.text, up: chg.up };
-              })()
-            : FALLBACK_TICKER_ITEMS[4],
-        ];
-
-        if (!cancelled) setTickerItems(next);
+        setTickerItems(next);
+        writeCachedLandingTicker(next);
       } catch {
-        // keep fallback; Commodity Market page will show details if needed
+        // Keep cached / fallback ticker — never block on scrape here.
       }
     };
 
-    void loadTicker();
-    const interval = window.setInterval(loadTicker, 5 * 60 * 1000);
+    void loadTickerFromDb();
+    const interval = window.setInterval(loadTickerFromDb, 5 * 60 * 1000);
     return () => {
       cancelled = true;
       window.clearInterval(interval);
