@@ -81,3 +81,6 @@ id_rsa*
 
 # Supabase CLI local temp
 supabase/.temp/
+
+# Local scripts / outreach / backtest outputs
+scripts/
