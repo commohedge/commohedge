@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback } from "react";
 import { Link } from "react-router-dom";
 import LandingNav from "@/components/LandingNav";
+import { LandingLegalLinks } from "@/components/LandingLegalLinks";
 import { ChevronDown, ChevronUp, Linkedin, Star } from "lucide-react";
 import { BRAND } from "@/constants/branding";
 import { BrandLogo } from "@/components/BrandLogo";
@@ -1231,7 +1232,10 @@ const LandingPage = () => {
 
         <div className="relative mx-auto mt-12 flex max-w-[1920px] flex-col items-start justify-between gap-3 border-t border-[#424a35]/15 pt-6 sm:mt-16 sm:gap-4 sm:pt-8 md:flex-row md:items-center">
           <p className="font-headline text-[10px] uppercase tracking-widest text-[#8c947b]">{BRAND.copyrightLine}</p>
-          <p className="font-headline text-[10px] uppercase tracking-widest text-[#8c947b]">Commodity · Risk · Strategy</p>
+          <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:gap-6">
+            <LandingLegalLinks />
+            <p className="font-headline text-[10px] uppercase tracking-widest text-[#8c947b]">Commodity · Risk · Strategy</p>
+          </div>
         </div>
       </footer>
     </div>

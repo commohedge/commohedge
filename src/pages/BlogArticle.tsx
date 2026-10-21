@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo } from "react";
 import { Link, Navigate, useParams } from "react-router-dom";
 import LandingNav from "@/components/LandingNav";
+import { LandingLegalLinks } from "@/components/LandingLegalLinks";
 import { BrandLogo } from "@/components/BrandLogo";
 import { BRAND } from "@/constants/branding";
 import { BLOG_ARTICLES, getBlogArticle } from "@/seo/blog-articles";
@@ -230,24 +231,27 @@ const BlogArticlePage: React.FC = () => {
             />
             <span className="font-headline text-sm font-bold uppercase tracking-widest text-white">{BRAND.name}</span>
           </Link>
-          <div className="flex items-center gap-3">
-            <a
-              href={BRAND.social.linkedin}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="font-headline text-[10px] uppercase tracking-widest text-[#8c947b] hover:text-[#aef833]"
-            >
-              LinkedIn
-            </a>
-            <span className="text-[#424a35]">·</span>
-            <a
-              href={BRAND.social.x}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="font-headline text-[10px] uppercase tracking-widest text-[#8c947b] hover:text-[#aef833]"
-            >
-              X
-            </a>
+          <div className="flex flex-col items-start gap-3 sm:items-end">
+            <LandingLegalLinks />
+            <div className="flex items-center gap-3">
+              <a
+                href={BRAND.social.linkedin}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-headline text-[10px] uppercase tracking-widest text-[#8c947b] hover:text-[#aef833]"
+              >
+                LinkedIn
+              </a>
+              <span className="text-[#424a35]">·</span>
+              <a
+                href={BRAND.social.x}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-headline text-[10px] uppercase tracking-widest text-[#8c947b] hover:text-[#aef833]"
+              >
+                X
+              </a>
+            </div>
           </div>
         </div>
       </footer>

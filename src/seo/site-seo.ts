@@ -36,6 +36,18 @@ const PUBLIC_SEO: Record<string, PageSeo> = {
     path: "/request-access",
     robots: "index, follow",
   },
+  "/privacy": {
+    title: `Privacy policy | ${BRAND.name}`,
+    description: `How ${BRAND.name} collects and uses personal data on the public website, including access requests and optional analytics.`,
+    path: "/privacy",
+    robots: "index, follow",
+  },
+  "/cookies": {
+    title: `Cookies & storage | ${BRAND.name}`,
+    description: `Cookie and storage notice for the ${BRAND.name} public website — essential storage, optional Vercel Web Analytics, and how to manage preferences.`,
+    path: "/cookies",
+    robots: "index, follow",
+  },
   "/login": {
     title: `Sign in | ${BRAND.name}`,
     description: `Sign in to the ${BRAND.name} commodity & FX hedging terminal.`,

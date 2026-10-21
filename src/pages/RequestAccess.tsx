@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { ArrowLeft, CheckCircle2, Mail, Send } from "lucide-react";
 import { BRAND } from "@/constants/branding";
 import { BrandLogo } from "@/components/BrandLogo";
+import { LandingLegalLinks } from "@/components/LandingLegalLinks";
 import { supabase } from "@/lib/supabase";
 import "@/styles/landing-terminal.css";
 
@@ -405,7 +406,11 @@ const RequestAccess: React.FC = () => {
               <div className="mt-8 flex flex-col gap-4 border-t border-[#424a35]/15 pt-6 sm:flex-row sm:items-center sm:justify-between">
                 <p className="max-w-sm text-xs leading-relaxed text-[#8c947b]">
                   Your information is used only to evaluate access and contact you about {BRAND.name}. We
-                  do not sell lead data.
+                  do not sell lead data. See our{" "}
+                  <Link to="/privacy" className="text-[#aef833] hover:underline">
+                    Privacy policy
+                  </Link>
+                  .
                 </p>
                 <button
                   type="submit"
@@ -420,9 +425,12 @@ const RequestAccess: React.FC = () => {
           )}
         </div>
 
-        <p className="mt-8 text-center font-headline text-[10px] uppercase tracking-widest text-[#424a35]">
-          {BRAND.copyrightLine}
-        </p>
+        <div className="mt-8 flex flex-col items-center gap-3">
+          <LandingLegalLinks />
+          <p className="text-center font-headline text-[10px] uppercase tracking-widest text-[#424a35]">
+            {BRAND.copyrightLine}
+          </p>
+        </div>
       </div>
     </div>
   );

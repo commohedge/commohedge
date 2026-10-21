@@ -45,11 +45,15 @@ import RequestAccess from "./pages/RequestAccess";
 import SolutionPage from "./pages/SolutionPage";
 import BlogIndex from "./pages/BlogIndex";
 import BlogArticle from "./pages/BlogArticle";
+import Privacy from "./pages/Privacy";
+import Cookies from "./pages/Cookies";
 import SupabaseLogin from "./pages/SupabaseLogin";
 import AuthCallback from "./pages/AuthCallback";
 import NotFound from "./pages/NotFound";
 import ProtectedRoute from "./components/ProtectedRoute";
 import { SeoManager } from "./components/SeoManager";
+import { CookieConsentBanner } from "./components/CookieConsentBanner";
+import { VercelAnalyticsGate } from "./components/VercelAnalyticsGate";
 
 // Theme toggle component
 import { ThemeToggle } from "./components/ui/theme-toggle";
@@ -89,6 +93,8 @@ const App = () => {
           <Router>
           <SeoManager />
           <ThemeToggleDock />
+          <CookieConsentBanner />
+          <VercelAnalyticsGate />
           <Routes>
             {/* Landing Page - Page par défaut */}
             <Route path="/" element={<LandingPage />} />
@@ -96,6 +102,8 @@ const App = () => {
             <Route path="/solutions/:slug" element={<SolutionPage />} />
             <Route path="/blog" element={<BlogIndex />} />
             <Route path="/blog/:slug" element={<BlogArticle />} />
+            <Route path="/privacy" element={<Privacy />} />
+            <Route path="/cookies" element={<Cookies />} />
             
             {/* Authentication */}
             <Route path="/login" element={<SupabaseLogin />} />

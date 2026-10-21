@@ -1,6 +1,7 @@
 import React from "react";
 import { Link } from "react-router-dom";
 import LandingNav from "@/components/LandingNav";
+import { LandingLegalLinks } from "@/components/LandingLegalLinks";
 import { BrandLogo } from "@/components/BrandLogo";
 import { BRAND } from "@/constants/branding";
 import { BLOG_ARTICLES } from "@/seo/blog-articles";
@@ -77,7 +78,10 @@ const BlogIndex: React.FC = () => {
             />
             <span className="font-headline text-sm font-bold uppercase tracking-widest text-white">{BRAND.name}</span>
           </Link>
-          <p className="font-headline text-[10px] uppercase tracking-widest text-[#8c947b]">{BRAND.copyrightLine}</p>
+          <div className="flex flex-col items-start gap-3 sm:items-end">
+            <LandingLegalLinks />
+            <p className="font-headline text-[10px] uppercase tracking-widest text-[#8c947b]">{BRAND.copyrightLine}</p>
+          </div>
         </div>
       </footer>
     </div>
