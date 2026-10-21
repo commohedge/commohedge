@@ -1,0 +1,28 @@
+SUBJECT:
+Hedge H1 2026: what a soft-wheat buyer would have locked in June 2025
+
+PREHEADER:
+Illustrative CBOT SRW case — forward strip vs call / collar. PDF on CommoHedge.
+
+---
+
+Hello {{ contact.FIRSTNAME }},
+
+We published a short treasury memo on CommoHedge: an anonymized soft-wheat flour buyer designs CBOT SRW hedges on 30 June 2025 for H1 2026 purchases.
+
+Same call strike (105%) across Call, Collar 95/105 and Zero-cost collar — plus a forward strip and a coverage matrix from 0% to 100%. The point is the workflow, not a single "winning" trade.
+
+Case study (web):
+https://www.commohedge.com/blog/case-study-wheat-buyer-hedge-h1-2026
+
+PDF download:
+https://www.commohedge.com/case-studies/wheat-buyer-hedge-h1-2026.pdf
+
+If useful, reply with your commodity, monthly volume band and decision window — we can rebuild the same matrix on your numbers inside CommoHedge.
+
+Best regards,
+CommoHedge
+https://www.commohedge.com
+
+—
+Illustrative anonymized case — not a real company. Public CBOT data. Not investment advice.

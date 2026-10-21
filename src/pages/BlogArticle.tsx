@@ -98,7 +98,28 @@ const BlogArticlePage: React.FC = () => {
             <h1 className="mb-6 font-headline text-3xl font-bold uppercase tracking-tighter text-white sm:text-4xl md:text-5xl">
               {article.h1}
             </h1>
-            <p className="mb-10 text-base font-light leading-relaxed text-[#c1caaf] sm:text-lg">{article.lead}</p>
+            <p className="mb-8 text-base font-light leading-relaxed text-[#c1caaf] sm:text-lg">{article.lead}</p>
+
+            {article.pdfUrl && (
+              <div className="mb-10 flex flex-col gap-3 rounded-sm border border-[#aef833]/25 bg-[#141b2b]/60 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
+                <div>
+                  <p className="mb-1 font-headline text-[10px] font-bold uppercase tracking-widest text-[#aef833]">
+                    Case study PDF
+                  </p>
+                  <p className="text-sm text-[#c1caaf]">
+                    Full treasury memo — forward strip, options, coverage matrix.
+                  </p>
+                </div>
+                <a
+                  href={article.pdfUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="landing-btn-industrial landing-industrial-gradient inline-flex shrink-0 items-center justify-center px-6 py-3 font-headline text-xs font-bold uppercase tracking-widest text-[#213600]"
+                >
+                  {article.pdfLabel || "Download PDF"}
+                </a>
+              </div>
+            )}
 
             <div className="space-y-10">
               {article.sections.map((section) => (
@@ -141,20 +162,30 @@ const BlogArticlePage: React.FC = () => {
               </div>
             </section>
 
-            <div className="mt-12 flex flex-col gap-3 border-t border-[#424a35]/20 pt-10 sm:flex-row">
+            <div className="mt-12 flex flex-col gap-3 border-t border-[#424a35]/20 pt-10 sm:flex-row sm:flex-wrap">
+              {article.pdfUrl && (
+                <a
+                  href={article.pdfUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="landing-btn-industrial landing-industrial-gradient inline-flex items-center justify-center px-8 py-4 font-headline text-sm font-bold uppercase tracking-widest text-[#213600]"
+                >
+                  {article.pdfLabel || "Download PDF"}
+                </a>
+              )}
               {article.relatedCta.to.startsWith("http") ? (
                 <a
                   href={article.relatedCta.to}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="landing-btn-industrial landing-industrial-gradient inline-flex items-center justify-center px-8 py-4 font-headline text-sm font-bold uppercase tracking-widest text-[#213600]"
+                  className="landing-btn-industrial inline-flex items-center justify-center border border-[#424a35]/40 px-8 py-4 font-headline text-sm font-bold uppercase tracking-widest text-white"
                 >
                   {article.relatedCta.label}
                 </a>
               ) : (
                 <Link
                   to={article.relatedCta.to}
-                  className="landing-btn-industrial landing-industrial-gradient inline-flex items-center justify-center px-8 py-4 font-headline text-sm font-bold uppercase tracking-widest text-[#213600]"
+                  className="landing-btn-industrial inline-flex items-center justify-center border border-[#424a35]/40 px-8 py-4 font-headline text-sm font-bold uppercase tracking-widest text-white"
                 >
                   {article.relatedCta.label}
                 </Link>

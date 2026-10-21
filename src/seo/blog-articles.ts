@@ -20,10 +20,88 @@ export type BlogArticle = {
   faqs: { q: string; a: string }[];
   /** Internal path (/...) or absolute URL (https://...) */
   relatedCta: { label: string; to: string };
+  /** Optional public PDF (served from /public) for case studies */
+  pdfUrl?: string;
+  pdfLabel?: string;
   seo: PageSeo;
 };
 
 export const BLOG_ARTICLES: BlogArticle[] = [
+  {
+    slug: "case-study-wheat-buyer-hedge-h1-2026",
+    path: "/blog/case-study-wheat-buyer-hedge-h1-2026",
+    title: `Case Study: Soft-Wheat Buyer Hedge H1 2026 (CBOT SRW) | ${BRAND.name}`,
+    h1: "Case study: soft-wheat buyer hedge for H1 2026",
+    description:
+      "Illustrative anonymized case: a US soft-wheat flour buyer designs CBOT SRW hedges on 30 June 2025 for H1 2026 — forward strip, call 105%, collar 95/105 and zero-cost collar, with coverage matrix.",
+    date: "2026-10-12",
+    readMinutes: 8,
+    tags: ["Case Study", "Agriculture", "Wheat", "Treasury"],
+    keywords: [
+      "wheat hedge case study",
+      "CBOT SRW hedging",
+      "commodity collar zero cost",
+      "flour buyer hedge",
+      "agriculture hedge policy",
+      "CommoHedge case study",
+    ],
+    lead: "A mid-size soft-wheat flour buyer faces the same question every budget cycle: how much of next season's purchases to lock, insure, or leave open — and at what cost? This memo walks through that decision as of 30 June 2025 for H1 2026 CBOT Soft Red Winter exposure. The company is fictional; the curve and outcomes use public market data.",
+    pdfUrl: "/case-studies/wheat-buyer-hedge-h1-2026.pdf",
+    pdfLabel: "Download the full PDF memo",
+    sections: [
+      {
+        heading: "What this case shows",
+        paragraphs: [
+          "On 30 June 2025 we price a hedge book for January–June 2026 wheat purchases: a forward strip from the June CBOT SRW curve, a call at 105% of the strip average, a collar 95%/105%, and a zero-cost collar that re-solves the put each month so net premium is about zero.",
+          "All three option structures share the same call strike. Only the put leg changes — so the comparison is fair. We then stress coverage at 0%, 25%, 50%, 75% and 100% of monthly volume.",
+          "Volumes are industry-scaled fiction (~50,000 tonnes wheat-equivalent per year). Flour basis and milling margin are residual risks, stated but not modeled.",
+        ],
+      },
+      {
+        heading: "Why it matters for agri-food treasury",
+        paragraphs: [
+          "Between budget season and delivery, the CBOT SRW curve can move enough to erase a thin bakery or milling margin. The practical question is not \"will wheat go up?\" — it is how much of the book to lock versus insure, and how that choice looks when coverage changes.",
+          "CommoHedge Strategy Builder and Zero-Cost Strategies use the same Black-76 engine as this memo. The goal is a board-ready view: premium, payoff and hedge benefit shown separately, not a black box.",
+        ],
+      },
+      {
+        heading: "How to read the PDF",
+        paragraphs: [
+          "Start with the executive snapshot and the June 2025 forward strip versus H1 2026 realized averages. Then compare structures at 50% coverage and open the coverage matrix to pick a policy band (often 25–75%).",
+          "The zero-cost section lists the put strike solved for each maturity — it moves because time to expiry changes from the decision date, not because the model is unstable.",
+          "This is an illustrative anonymized case for education and product demonstration. It is not investment advice and not a description of any real hedge book.",
+        ],
+      },
+    ],
+    takeaways: [
+      "Same call (105%) across Call, Collar 95/105 and Zero-cost — compare puts and premiums, not mixed strikes.",
+      "Coverage choice often moves P&L as much as structure choice — use the 0–100% matrix.",
+      "Forward strip vs options: lock price certainty versus premium paid for asymmetry.",
+      "CommoHedge can reproduce this workflow: exposure → curve → structures → matrix → export.",
+    ],
+    faqs: [
+      {
+        q: "Is Northbridge Bakery Group a real company?",
+        a: "No. It is an illustrative anonymized profile scaled to mid-size US commercial bakery flour usage. Prices are public CBOT SRW data.",
+      },
+      {
+        q: "Why CBOT Soft Red Winter and not durum?",
+        a: "SRW is the Chicago contract most relevant to cake, cookie and pastry flour. Durum/pasta belongs to a different physical market.",
+      },
+      {
+        q: "Can we run the same memo on our volumes?",
+        a: "Yes. Replace the fictional monthly bushels with your purchase plan, keep the decision date and structures, and re-export the coverage matrix from CommoHedge.",
+      },
+    ],
+    relatedCta: { label: "Request a desk trial", to: "/request-access" },
+    seo: {
+      title: `Case Study: Soft-Wheat Buyer Hedge H1 2026 | ${BRAND.name}`,
+      description:
+        "Illustrative CBOT SRW case study: June 2025 hedge design for H1 2026 — forward strip, call 105%, collar and zero-cost collar with coverage matrix. Download the PDF.",
+      path: "/blog/case-study-wheat-buyer-hedge-h1-2026",
+      robots: "index, follow",
+    },
+  },
   {
     slug: "commodity-hedging-definition-meaning",
     path: "/blog/commodity-hedging-definition-meaning",
