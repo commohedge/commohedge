@@ -48,6 +48,12 @@ const PUBLIC_SEO: Record<string, PageSeo> = {
     path: "/cookies",
     robots: "index, follow",
   },
+  "/commodity-prices": {
+    title: `Commodity prices (monthly) | ${BRAND.name}`,
+    description: `Free monthly World Bank Pink Sheet commodity prices — energy, metals, agriculture and fertilizers. Historical CMO averages for treasury and hedging desks.`,
+    path: "/commodity-prices",
+    robots: "index, follow",
+  },
   "/login": {
     title: `Sign in | ${BRAND.name}`,
     description: `Sign in to the ${BRAND.name} commodity & FX hedging terminal.`,

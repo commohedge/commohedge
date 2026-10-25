@@ -1187,6 +1187,11 @@ const LandingPage = () => {
                 </Link>
               </li>
               <li>
+                <Link to="/commodity-prices" className="font-headline text-[11px] uppercase tracking-widest text-[#aeb5c5] transition-colors hover:text-white">
+                  Commodity prices
+                </Link>
+              </li>
+              <li>
                 <Link to="/blog/why-commodity-hedging-matters-treasury-2026" className="font-headline text-[11px] uppercase tracking-widest text-[#aeb5c5] transition-colors hover:text-white">
                   Why hedge commodities
                 </Link>

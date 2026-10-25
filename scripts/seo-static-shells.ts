@@ -175,6 +175,17 @@ function noscriptFor(seo: PageSeo): string {
 </noscript>`;
   }
 
+  if (seo.path === "/commodity-prices") {
+    return `<noscript>
+  <article>
+    <h1>Commodity prices — monthly World Bank data</h1>
+    <p>${escapeHtml(seo.description)}</p>
+    <p>Free monthly Pink Sheet (CMO) averages for energy, metals, agriculture and fertilizers.</p>
+    <p><a href="${SITE_ORIGIN}/request-access">Request access</a> · <a href="${SITE_ORIGIN}/blog">Insights</a></p>
+  </article>
+</noscript>`;
+  }
+
   return `<noscript>
   <article>
     <h1>${escapeHtml(seo.title)}</h1>

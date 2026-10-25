@@ -45,6 +45,7 @@ import RequestAccess from "./pages/RequestAccess";
 import SolutionPage from "./pages/SolutionPage";
 import BlogIndex from "./pages/BlogIndex";
 import BlogArticle from "./pages/BlogArticle";
+import CommodityPrices from "./pages/CommodityPrices";
 import Privacy from "./pages/Privacy";
 import Cookies from "./pages/Cookies";
 import SupabaseLogin from "./pages/SupabaseLogin";
@@ -102,6 +103,7 @@ const App = () => {
             <Route path="/solutions/:slug" element={<SolutionPage />} />
             <Route path="/blog" element={<BlogIndex />} />
             <Route path="/blog/:slug" element={<BlogArticle />} />
+            <Route path="/commodity-prices" element={<CommodityPrices />} />
             <Route path="/privacy" element={<Privacy />} />
             <Route path="/cookies" element={<Cookies />} />
             

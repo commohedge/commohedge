@@ -11,6 +11,7 @@ const navLinks: { name: string; href: string }[] = [
   { name: "Metals", href: "/solutions/metals-mining" },
   { name: "Agri", href: "/solutions/agriculture" },
   { name: "Insights", href: "/blog" },
+  { name: "Prices", href: "/commodity-prices" },
   { name: "FAQ", href: "/#faq" },
   { name: "Contact", href: "/#contact" },
 ];
