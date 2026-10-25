@@ -73,7 +73,7 @@ export function isLandingPublicPath(pathname: string): boolean {
   if (pathname === "/request-access") return true;
   if (pathname === "/privacy" || pathname === "/cookies") return true;
   if (pathname === "/blog" || pathname.startsWith("/blog/")) return true;
-  if (pathname === "/commodity-prices") return true;
+  if (pathname === "/commodity-pricers" || pathname === "/commodity-prices") return true;
   if (pathname.startsWith("/solutions/")) return true;
   if (pathname === "/login" || pathname === "/supabase-login") return true;
   return false;

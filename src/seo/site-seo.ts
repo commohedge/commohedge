@@ -48,11 +48,17 @@ const PUBLIC_SEO: Record<string, PageSeo> = {
     path: "/cookies",
     robots: "index, follow",
   },
+  "/commodity-pricers": {
+    title: `Commodity Pricers (monthly) | ${BRAND.name}`,
+    description: `Free monthly World Bank Pink Sheet commodity prices — energy, metals, agriculture and fertilizers. Historical CMO averages for treasury and hedging desks.`,
+    path: "/commodity-pricers",
+    robots: "index, follow",
+  },
   "/commodity-prices": {
-    title: `Commodity prices (monthly) | ${BRAND.name}`,
+    title: `Commodity Pricers (monthly) | ${BRAND.name}`,
     description: `Free monthly World Bank Pink Sheet commodity prices — energy, metals, agriculture and fertilizers. Historical CMO averages for treasury and hedging desks.`,
     path: "/commodity-prices",
-    robots: "index, follow",
+    robots: "noindex, follow",
   },
   "/login": {
     title: `Sign in | ${BRAND.name}`,

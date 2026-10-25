@@ -5,7 +5,7 @@ Allow: /request-access
 Allow: /solutions/
 Allow: /blog
 Allow: /blog/
-Allow: /commodity-prices
+Allow: /commodity-pricers
 
 Disallow: /login
 Disallow: /supabase-login

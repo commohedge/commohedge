@@ -1187,8 +1187,8 @@ const LandingPage = () => {
                 </Link>
               </li>
               <li>
-                <Link to="/commodity-prices" className="font-headline text-[11px] uppercase tracking-widest text-[#aeb5c5] transition-colors hover:text-white">
-                  Commodity prices
+                <Link to="/commodity-pricers" className="font-headline text-[11px] uppercase tracking-widest text-[#aeb5c5] transition-colors hover:text-white">
+                  Commodity Pricers
                 </Link>
               </li>
               <li>

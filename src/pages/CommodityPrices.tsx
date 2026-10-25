@@ -84,7 +84,7 @@ const CommodityPrices: React.FC = () => {
               Market data
             </p>
             <h1 className="mb-4 font-headline text-4xl font-bold uppercase tracking-tighter text-white sm:text-5xl md:text-6xl">
-              Commodity prices
+              Commodity Pricers
             </h1>
             <p className="mb-6 max-w-3xl text-base font-light leading-relaxed text-[#c1caaf] sm:text-lg">
               Monthly World Bank Pink Sheet (CMO) prices for energy, metals, agriculture and
