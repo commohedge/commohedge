@@ -60,3 +60,7 @@ verify_jwt = false
 
 [functions.ais-mmsi-sse]
 verify_jwt = false
+
+# Cron / service_role secret auth inside the function (not end-user JWT).
+[functions.sync-world-bank-cmo]
+verify_jwt = false

@@ -234,11 +234,14 @@ export default function WorldBankFileImport({ onDataImported }: WorldBankFileImp
         <div className="text-sm text-muted-foreground space-y-2">
           <p className="font-medium">Instructions:</p>
           <ul className="list-disc list-inside space-y-1 ml-4">
-            <li>Download the World Bank Pink Sheet from the official website</li>
-            <li>Ensure the file contains commodity data with dates and values</li>
-            <li>The first column should contain commodity names</li>
-            <li>Subsequent columns should contain price data by date</li>
-            <li>Supported formats: Excel (.xlsx, .xls) and CSV files</li>
+            <li>
+              Prefer the shared monthly sync (Supabase) — import is a local fallback only
+            </li>
+            <li>
+              Official file: CMO-Historical-Data-Monthly.xlsx (World Bank Pink Sheet)
+            </li>
+            <li>Sheet &quot;Monthly Prices&quot; with dates like 2024M01</li>
+            <li>Supported formats: Excel (.xlsx, .xls) up to 10MB</li>
           </ul>
         </div>
       </CardContent>

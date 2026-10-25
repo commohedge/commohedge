@@ -3,6 +3,10 @@
 
 -- Commodity Market shared cache (one row per category, UPSERT overwrite):
 --   supabase/migrations/20261009_commodity_market_cache.sql
+--
+-- World Bank CMO monthly Pink Sheet (single row + Storage overwrite):
+--   supabase/migrations/20261025_world_bank_cmo_cache.sql
+--   Edge: supabase/functions/sync-world-bank-cmo
 
 -- Table des stratégies Forex
 CREATE TABLE IF NOT EXISTS forex_strategies (

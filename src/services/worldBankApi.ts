@@ -1,4 +1,5 @@
 import * as XLSX from 'xlsx';
+import { readWorldBankCmoFromDb } from '@/services/worldBankDbCache';
 
 export interface WorldBankCommodity {
   id: string;
@@ -20,6 +21,9 @@ export interface WorldBankData {
   lastUpdated: Date;
   fileName?: string;
   isDefault?: boolean;
+  /** Present when loaded from shared Supabase cache */
+  sourceUrl?: string;
+  periodLabel?: string;
 }
 
 // Catégories de commodités World Bank
@@ -766,34 +770,47 @@ export async function importWorldBankPinkSheet(file: File): Promise<WorldBankDat
   }
 }
 
-// Fonction pour récupérer les données World Bank
+/**
+ * Prefer shared Supabase snapshot (public), then browser localStorage,
+ * then tiny built-in defaults only as last resort.
+ */
 export async function fetchWorldBankData(): Promise<WorldBankData> {
   try {
-    // Vérifier le cache local
+    const fromDb = await readWorldBankCmoFromDb();
+    if (fromDb && fromDb.commodities.length > 0) {
+      cachedData = fromDb;
+      try {
+        localStorage.setItem('world_bank_data', JSON.stringify(fromDb));
+      } catch {
+        /* quota / private mode */
+      }
+      return fromDb;
+    }
+
     const cached = localStorage.getItem('world_bank_data');
     if (cached) {
       const parsedData = JSON.parse(cached);
-      cachedData = {
-        ...parsedData,
-        lastUpdated: new Date(parsedData.lastUpdated)
-      };
-      return cachedData;
+      if (
+        Array.isArray(parsedData?.commodities) &&
+        parsedData.commodities.length > 0 &&
+        !parsedData.isDefault
+      ) {
+        cachedData = {
+          ...parsedData,
+          lastUpdated: new Date(parsedData.lastUpdated),
+        };
+        return cachedData;
+      }
     }
 
-    // Si pas de cache, utiliser les données par défaut
     const defaultCommodities = createDefaultData();
-    
     const result: WorldBankData = {
       commodities: defaultCommodities,
       lastUpdated: new Date(),
       fileName: 'Default Data',
-      isDefault: true
+      isDefault: true,
     };
-
-    // Sauvegarder dans le cache
     cachedData = result;
-    localStorage.setItem('world_bank_data', JSON.stringify(result));
-
     return result;
   } catch (error) {
     console.error('Error fetching World Bank data:', error);
@@ -828,7 +845,7 @@ export function clearWorldBankData(): void {
   localStorage.removeItem('world_bank_data');
 }
 
-// Fonction pour rafraîchir les données
+/** Clear local cache then re-read shared DB (does not trigger remote sync). */
 export async function refreshWorldBankData(): Promise<WorldBankData> {
   clearWorldBankData();
   return fetchWorldBankData();

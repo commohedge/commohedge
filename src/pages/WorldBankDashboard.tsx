@@ -1,19 +1,16 @@
 import { useEffect, useState, useMemo } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { AlertCircle, RefreshCw, Building2, Upload } from 'lucide-react';
-import { toast } from 'sonner';
 import { 
   WorldBankCommodity, 
   fetchWorldBankData, 
   refreshWorldBankData,
-  fetchWorldBankDataByCategory,
   getWorldBankCategories,
   WORLD_BANK_CATEGORIES,
-  hasWorldBankData,
-  getCurrentWorldBankData
+  getCurrentWorldBankData,
 } from '@/services/worldBankApi';
 import { CommodityCategory } from '@/services/commodityApi';
 import WorldBankTable from '@/components/WorldBankTable';
@@ -83,26 +80,32 @@ export default function WorldBankDashboard({ selectedDomains }: WorldBankDashboa
   const loadData = async (forceRefresh: boolean = false) => {
     setLoading(true);
     setError(null);
-    
+
     try {
-      // Vérifier d'abord s'il y a des données dans le localStorage
-      const existingData = getCurrentWorldBankData();
-      
-      if (existingData && existingData.commodities.length > 0) {
-        setCommodities(existingData.commodities);
-        setLastUpdated(existingData.lastUpdated);
-        setCurrentData(existingData);
+      const data = forceRefresh
+        ? await refreshWorldBankData()
+        : await fetchWorldBankData();
+
+      if (data && data.commodities.length > 0 && !data.isDefault) {
+        setCommodities(data.commodities);
+        setLastUpdated(data.lastUpdated);
+        setCurrentData(data);
         setError(null);
-      } else {
-        // Aucune donnée importée - ne pas afficher d'erreur
+      } else if (data && data.commodities.length > 0 && data.isDefault) {
+        // Shared DB empty and no local import — don't show fake defaults in UI
         setCommodities([]);
         setLastUpdated(null);
         setCurrentData(null);
-        setError(null); // Pas d'erreur, juste pas de données
+        setError(null);
+      } else {
+        setCommodities([]);
+        setLastUpdated(null);
+        setCurrentData(null);
+        setError(null);
       }
     } catch (error) {
       console.error('Error loading World Bank data:', error);
-      setError(null); // Pas d'erreur pour les données manuelles
+      setError(error instanceof Error ? error.message : 'Failed to load World Bank data');
       setCommodities([]);
       setLastUpdated(null);
       setCurrentData(null);
@@ -198,7 +201,11 @@ export default function WorldBankDashboard({ selectedDomains }: WorldBankDashboa
               </p>
               {currentData && (
                 <p className="text-xs">
-                  {currentData.isDefault ? 'Default data' : `Custom: ${currentData.fileName}`}
+                  {currentData.periodLabel
+                    ? `Shared CMO · ${currentData.periodLabel}`
+                    : currentData.isDefault
+                      ? 'Default data'
+                      : currentData.fileName || 'Imported'}
                 </p>
               )}
             </div>
@@ -214,7 +221,7 @@ export default function WorldBankDashboard({ selectedDomains }: WorldBankDashboa
           <Button
             variant="outline"
             size="sm"
-            onClick={() => loadData()}
+            onClick={() => loadData(true)}
             disabled={loading}
           >
             <RefreshCw size={16} className={loading ? "animate-spin mr-2" : "mr-2"} />
@@ -237,12 +244,19 @@ export default function WorldBankDashboard({ selectedDomains }: WorldBankDashboa
           <Building2 className="h-12 w-12 mx-auto mb-4 text-blue-500" />
           <h3 className="text-lg font-semibold text-blue-900 mb-2">No World Bank Data Available</h3>
           <p className="text-blue-700 mb-4">
-            Import World Bank Pink Sheet data to start analyzing commodity prices and trends.
+            Shared monthly World Bank CMO data is not loaded yet. Wait for the automatic sync
+            (around the 3rd business day of each month), refresh, or import a Pink Sheet file.
           </p>
-          <Button onClick={() => setShowImport(true)} className="bg-blue-600 hover:bg-blue-700">
-            <Upload size={16} className="mr-2" />
-            Import World Bank Data
-          </Button>
+          <div className="flex flex-wrap justify-center gap-2">
+            <Button onClick={() => loadData(true)} variant="outline">
+              <RefreshCw size={16} className="mr-2" />
+              Refresh from database
+            </Button>
+            <Button onClick={() => setShowImport(true)} className="bg-blue-600 hover:bg-blue-700">
+              <Upload size={16} className="mr-2" />
+              Import World Bank Data
+            </Button>
+          </div>
         </div>
       )}
 
