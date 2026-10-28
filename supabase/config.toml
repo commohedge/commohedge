@@ -7,10 +7,10 @@
 #   - hedge-assistant-chat  (chat, appelé avec la clé publishable)
 #   - hormuz-tracker / ais-sse / ais-mmsi-sse (fetch direct avec clé publishable)
 #
-# Les fonctions scrape-* appelées par l'app vivent sur d'autres projets
-# (wrlwmvggedkqhmdzgmbo pour Rate Explorer, exspgdhlzbolngavwlii pour Ticker
-# Peek Pro) et leurs clients utilisent des anon keys legacy (JWT) → verify_jwt
-# peut y être activé sans rien casser.
+# Rate Explorer (scrape-rates / scrape-irs / scrape-bonds) → projet
+# iflnsckduohrcafafcpj (même projet Auth principal).
+# Ticker Peek Pro (scrape-futures / options / vol) → exspgdhlzbolngavwlii.
+# Ancien projet Rate Explorer wrlwmvggedkqhmdzgmbo : supprimé (DNS mort).
 
 [functions.scrape-rates]
 verify_jwt = true
