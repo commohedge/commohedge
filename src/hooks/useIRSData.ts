@@ -9,15 +9,15 @@ export function useIRSData(currency: string) {
   const query = useQuery<IRSResponse>({
     queryKey: ['irs-rates', currency],
     queryFn: () => fetchIRSRates(currency, false),
-    staleTime: 1000 * 60 * 30, // 30 minutes (matches cache duration)
+    staleTime: 1000 * 60 * 30,
     refetchOnWindowFocus: false,
-    refetchInterval: false, // Don't auto-refetch, use cache
+    refetchInterval: false,
     enabled: !!currency,
   });
 
-  const forceRefresh = useCallback(() => {
-    // Force refresh bypasses cache
-    queryClient.fetchQuery({
+  /** Manual refresh: scrape + overwrite Supabase shared cache. */
+  const forceRefresh = useCallback(async () => {
+    return queryClient.fetchQuery({
       queryKey: ['irs-rates', currency],
       queryFn: () => fetchIRSRates(currency, true),
     });
@@ -25,7 +25,7 @@ export function useIRSData(currency: string) {
 
   return {
     ...query,
+    refetch: forceRefresh,
     forceRefresh,
   };
 }
-

@@ -8,15 +8,15 @@ export function useRateData(index: string) {
   const query = useQuery({
     queryKey: ["rateData", index],
     queryFn: () => fetchRateData(index, false),
-    staleTime: 1000 * 60 * 30, // 30 minutes (matches cache duration)
-    refetchInterval: false, // Don't auto-refetch, use cache
+    staleTime: 1000 * 60 * 30,
+    refetchInterval: false,
     refetchOnWindowFocus: false,
-    enabled: !!index, // Don't fetch if index is empty
+    enabled: !!index,
   });
 
-  const forceRefresh = useCallback(() => {
-    // Force refresh bypasses cache
-    queryClient.fetchQuery({
+  /** Manual refresh: scrape + overwrite Supabase shared cache. */
+  const forceRefresh = useCallback(async () => {
+    return queryClient.fetchQuery({
       queryKey: ["rateData", index],
       queryFn: () => fetchRateData(index, true),
     });
@@ -24,7 +24,8 @@ export function useRateData(index: string) {
 
   return {
     ...query,
+    /** Alias used by Rate Explorer Refresh buttons — always force scrape. */
+    refetch: forceRefresh,
     forceRefresh,
   };
 }
-

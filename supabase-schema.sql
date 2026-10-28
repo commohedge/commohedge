@@ -4,6 +4,10 @@
 -- Commodity Market shared cache (one row per category, UPSERT overwrite):
 --   supabase/migrations/20261009_commodity_market_cache.sql
 --
+-- Rate Explorer shared cache (rates / IRS / bonds, UPSERT overwrite):
+--   supabase/migrations/20261028_rate_explorer_cache.sql
+--   Cron ~07:00 CET: scripts/seed-rate-explorer-cache.mjs + api/cron/refresh-rate-explorer-cache.js
+--
 -- World Bank CMO monthly Pink Sheet (single row + Storage overwrite):
 --   supabase/migrations/20261025_world_bank_cmo_cache.sql
 --   Edge: supabase/functions/sync-world-bank-cmo
