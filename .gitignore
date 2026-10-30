@@ -84,3 +84,6 @@ supabase/.temp/
 
 # Local scripts / outreach / backtest outputs
 scripts/
+# Keep CI seed scripts tracked (GitHub Actions Rate Explorer / Commodity cache)
+!scripts/seed-*.mjs
+!scripts/seed-*.js
