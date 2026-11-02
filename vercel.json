@@ -1,7 +1,7 @@
 {
   "functions": {
     "api/cron/refresh-commodity-cache.js": {
-      "maxDuration": 60
+      "maxDuration": 300
     },
     "api/cron/refresh-rate-explorer-cache.js": {
       "maxDuration": 300

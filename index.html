@@ -35,18 +35,22 @@
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;500;600&family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
-    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;500;600&family=Roboto:wght@400;500;700&family=Space+Grotesk:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0&display=swap" onload="this.onload=null;this.rel='stylesheet'" />
+    <noscript><link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0&display=swap" rel="stylesheet" /></noscript>
     <script type="application/ld+json">
       {
         "@context": "https://schema.org",
         "@graph": [
           {
             "@type": "Organization",
+            "@id": "https://www.commohedge.com/#organization",
             "name": "CommoHedge",
             "url": "https://www.commohedge.com/",
-            "logo": "https://www.commohedge.com/commohedge-logo.png",
+            "logo": {
+              "@type": "ImageObject",
+              "url": "https://www.commohedge.com/commohedge-logo.png"
+            },
             "email": "contact@commohedge.com",
             "sameAs": [
               "https://www.linkedin.com/company/commohedge/",
@@ -55,9 +59,11 @@
           },
           {
             "@type": "WebSite",
+            "@id": "https://www.commohedge.com/#website",
             "name": "CommoHedge",
             "url": "https://www.commohedge.com/",
-            "description": "Pricing, hedging, strategy builder and market data for commodity and FX desks."
+            "description": "Pricing, hedging, strategy builder and market data for commodity and FX desks.",
+            "publisher": { "@id": "https://www.commohedge.com/#organization" }
           },
           {
             "@type": "SoftwareApplication",
@@ -65,7 +71,14 @@
             "applicationCategory": "BusinessApplication",
             "operatingSystem": "Web",
             "url": "https://www.commohedge.com/",
-            "description": "Institutional-grade commodity and FX hedging terminal for pricing, exposures and risk workflows."
+            "description": "Institutional-grade commodity and FX hedging terminal for pricing, exposures and risk workflows.",
+            "offers": {
+              "@type": "Offer",
+              "price": "0",
+              "priceCurrency": "USD",
+              "description": "Request access for a guided desk trial"
+            },
+            "publisher": { "@id": "https://www.commohedge.com/#organization" }
           }
         ]
       }

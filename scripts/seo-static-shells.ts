@@ -5,9 +5,14 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { SITE_ORIGIN, listIndexableSeoPages, type PageSeo } from "../src/seo/site-seo.ts";
+import { SITE_ORIGIN, listIndexableSeoPages, buildFaqJsonLd, type PageSeo } from "../src/seo/site-seo.ts";
 import { SOLUTION_PAGES } from "../src/seo/solutions.ts";
-import { BLOG_ARTICLES, BLOG_INDEX_SEO } from "../src/seo/blog-articles.ts";
+import {
+  BLOG_ARTICLES,
+  BLOG_INDEX_SEO,
+  buildBlogArticleJsonLd,
+  stripMdLinks,
+} from "../src/seo/blog-articles.ts";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const dist = path.resolve(__dirname, "../dist");
@@ -118,6 +123,7 @@ function noscriptFor(seo: PageSeo): string {
   const solution = Object.values(SOLUTION_PAGES).find((s) => s.path === seo.path);
   if (solution) {
     const bullets = solution.bullets.map((b) => `<li>${escapeHtml(b)}</li>`).join("");
+    const why = solution.whyItMatters.map((p) => `<p>${escapeHtml(p)}</p>`).join("");
     const faqs = solution.faqs
       .map((f) => `<h3>${escapeHtml(f.q)}</h3><p>${escapeHtml(f.a)}</p>`)
       .join("");
@@ -125,6 +131,8 @@ function noscriptFor(seo: PageSeo): string {
   <article>
     <h1>${escapeHtml(solution.h1)}</h1>
     <p>${escapeHtml(solution.lead)}</p>
+    <h2>Why it matters for the desk</h2>
+    ${why}
     <h2>What you get</h2>
     <ul>${bullets}</ul>
     <h2>FAQ</h2>
@@ -139,14 +147,21 @@ function noscriptFor(seo: PageSeo): string {
     const sections = article.sections
       .map(
         (s) =>
-          `<h2>${escapeHtml(s.heading)}</h2>${s.paragraphs.map((p) => `<p>${escapeHtml(p)}</p>`).join("")}`,
+          `<h2>${escapeHtml(s.heading)}</h2>${s.paragraphs
+            .map((p) => `<p>${escapeHtml(stripMdLinks(p))}</p>`)
+            .join("")}`,
       )
+      .join("");
+    const faqs = article.faqs
+      .map((f) => `<h3>${escapeHtml(f.q)}</h3><p>${escapeHtml(f.a)}</p>`)
       .join("");
     return `<noscript>
   <article>
     <h1>${escapeHtml(article.h1)}</h1>
-    <p>${escapeHtml(article.lead)}</p>
+    <p>${escapeHtml(stripMdLinks(article.lead))}</p>
     ${sections}
+    <h2>FAQ</h2>
+    ${faqs}
     <p><a href="${SITE_ORIGIN}/blog">All insights</a> · <a href="${SITE_ORIGIN}/request-access">Request access</a></p>
   </article>
 </noscript>`;
@@ -186,6 +201,26 @@ function noscriptFor(seo: PageSeo): string {
 </noscript>`;
   }
 
+  if (seo.path === "/") {
+    return `<noscript>
+  <article>
+    <h1>CommoHedge</h1>
+    <p>${escapeHtml(seo.description)}</p>
+    <p>Commodity and FX hedging terminal for pricing, exposures, strategy builder and board-ready risk reviews on one pricing spine.</p>
+    <h2>Explore</h2>
+    <ul>
+      <li><a href="${SITE_ORIGIN}/blog/commodity-hedging-definition-meaning">Commodity hedging definition</a></li>
+      <li><a href="${SITE_ORIGIN}/blog/commodity-risk-management">Commodity risk management</a></li>
+      <li><a href="${SITE_ORIGIN}/solutions/oil-energy">Oil &amp; energy hedging</a></li>
+      <li><a href="${SITE_ORIGIN}/solutions/metals-mining">Metals &amp; mining hedging</a></li>
+      <li><a href="${SITE_ORIGIN}/solutions/agriculture">Agriculture hedging</a></li>
+      <li><a href="${SITE_ORIGIN}/commodity-pricers">Commodity pricers</a></li>
+    </ul>
+    <p><a href="${SITE_ORIGIN}/request-access">Request access</a> · <a href="${SITE_ORIGIN}/blog">Insights</a></p>
+  </article>
+</noscript>`;
+  }
+
   return `<noscript>
   <article>
     <h1>${escapeHtml(seo.title)}</h1>
@@ -202,8 +237,85 @@ function injectNoscript(html: string, block: string): string {
   return html.replace(/<\/body>/i, `${block}\n</body>`);
 }
 
+function stripExistingJsonLd(html: string): string {
+  return html.replace(/<script\s+type="application\/ld\+json">[\s\S]*?<\/script>/gi, "");
+}
+
+function injectJsonLd(html: string, payloads: unknown[]): string {
+  if (!payloads.length) return html;
+  const scripts = payloads
+    .map(
+      (data) =>
+        `<script type="application/ld+json">${JSON.stringify(data).replace(/</g, "\\u003c")}</script>`,
+    )
+    .join("\n    ");
+  return html.replace(/<\/head>/i, `    ${scripts}\n  </head>`);
+}
+
+function organizationWebSiteGraph() {
+  return {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "Organization",
+        "@id": `${SITE_ORIGIN}/#organization`,
+        name: "CommoHedge",
+        url: `${SITE_ORIGIN}/`,
+        logo: { "@type": "ImageObject", url: `${SITE_ORIGIN}/commohedge-logo.png` },
+        email: "contact@commohedge.com",
+        sameAs: [
+          "https://www.linkedin.com/company/commohedge/",
+          "https://x.com/CommoHedge",
+        ],
+      },
+      {
+        "@type": "WebSite",
+        "@id": `${SITE_ORIGIN}/#website`,
+        name: "CommoHedge",
+        url: `${SITE_ORIGIN}/`,
+        description:
+          "Pricing, hedging, strategy builder and market data for commodity and FX desks.",
+        publisher: { "@id": `${SITE_ORIGIN}/#organization` },
+      },
+      {
+        "@type": "SoftwareApplication",
+        name: "CommoHedge",
+        applicationCategory: "BusinessApplication",
+        operatingSystem: "Web",
+        url: `${SITE_ORIGIN}/`,
+        description:
+          "Institutional-grade commodity and FX hedging terminal for pricing, exposures and risk workflows.",
+        offers: {
+          "@type": "Offer",
+          price: "0",
+          priceCurrency: "USD",
+          description: "Request access for a guided desk trial",
+        },
+        publisher: { "@id": `${SITE_ORIGIN}/#organization` },
+      },
+    ],
+  };
+}
+
+function jsonLdFor(seo: PageSeo): unknown[] {
+  if (seo.path === "/") return [organizationWebSiteGraph()];
+
+  const article = BLOG_ARTICLES.find((a) => a.path === seo.path);
+  if (article) {
+    return [buildBlogArticleJsonLd(article), buildFaqJsonLd(article.faqs)];
+  }
+  const solution = Object.values(SOLUTION_PAGES).find((s) => s.path === seo.path);
+  if (solution) {
+    return [buildFaqJsonLd(solution.faqs)];
+  }
+  return [];
+}
+
 function writeShell(seo: PageSeo, baseHtml: string) {
   let html = applySeoHead(baseHtml, seo);
+  // Replace homepage graph with page-specific JSON-LD (or re-emit home graph).
+  html = stripExistingJsonLd(html);
+  html = injectJsonLd(html, jsonLdFor(seo));
   html = injectNoscript(html, noscriptFor(seo));
 
   if (seo.path === "/") {

@@ -72,6 +72,21 @@ const SolutionPage: React.FC = () => {
           </div>
         </section>
 
+        <section className="border-t border-[#424a35]/15 px-4 py-14 sm:px-6 md:px-12 md:py-20">
+          <div className="mx-auto max-w-3xl">
+            <h2 className="mb-6 font-headline text-2xl font-bold uppercase tracking-tighter text-white sm:text-3xl">
+              Why it matters for the desk
+            </h2>
+            <div className="space-y-4">
+              {page.whyItMatters.map((p) => (
+                <p key={p.slice(0, 48)} className="text-sm leading-relaxed text-[#c1caaf] sm:text-base">
+                  {p}
+                </p>
+              ))}
+            </div>
+          </div>
+        </section>
+
         <section className="border-t border-[#424a35]/15 bg-[#070e1d] px-4 py-14 sm:px-6 md:px-12 md:py-20">
           <div className="mx-auto grid max-w-5xl gap-10 md:grid-cols-2">
             <div>

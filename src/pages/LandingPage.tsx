@@ -424,19 +424,17 @@ const LandingPage = () => {
                   Pricing & hedging terminal · Live
                 </span>
               </div>
-              <h1 className="mb-6 text-white">
-                <span className="block font-headline text-[2.5rem] font-bold uppercase leading-[0.95] tracking-tighter sm:text-7xl sm:leading-[0.88] md:text-8xl lg:text-[7.5rem] xl:text-[9rem]">
-                  {BRAND.heroLine1} <br />{" "}
-                  <span className="bg-gradient-to-br from-[#aef833] to-[#93db04] bg-clip-text text-transparent">
-                    {BRAND.heroLine2}
-                  </span>
-                </span>
-                <span className="mt-4 block max-w-2xl font-headline text-base font-medium normal-case leading-snug tracking-normal text-[#dce2f7] sm:mt-5 sm:text-lg md:text-xl">
-                  Commodity &amp; FX hedging terminal for pricing, exposures and risk management
+              <h1 className="mb-4 font-headline text-[2.5rem] font-bold uppercase leading-[0.95] tracking-tighter text-white sm:mb-5 sm:text-7xl sm:leading-[0.88] md:text-8xl lg:text-[7.5rem] xl:text-[9rem]">
+                {BRAND.heroLine1} <br />{" "}
+                <span className="bg-gradient-to-br from-[#aef833] to-[#93db04] bg-clip-text text-transparent">
+                  {BRAND.heroLine2}
                 </span>
               </h1>
+              <p className="mb-4 max-w-2xl font-headline text-base font-medium leading-snug text-[#dce2f7] sm:mb-5 sm:text-lg md:text-xl">
+                Commodity &amp; FX hedging terminal for pricing, exposures and risk management
+              </p>
               <p className="mb-8 max-w-2xl text-base font-light leading-relaxed text-[#c1caaf] sm:mb-10 sm:text-lg md:text-xl">
-                <span className="font-medium text-[#dce2f7]">{BRAND.name}</span> unifies commodity pricing, exposures and hedging into one institutional-grade terminal - from daily desk monitoring to board-ready risk reviews, with a single consistent pricing spine.
+                <span className="font-medium text-[#dce2f7]">{BRAND.name}</span> unifies commodity pricing, exposures and hedging into one institutional-grade terminal - from daily desk monitoring to board-ready risk reviews, with a single consistent pricing spine. Teams use it to map commodity risk, size hedges and export board-ready packs without reconciling conflicting spreadsheets.
               </p>
               <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:gap-4">
                 <Link

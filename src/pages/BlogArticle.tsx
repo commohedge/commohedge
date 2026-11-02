@@ -1,12 +1,49 @@
-import React, { useEffect, useMemo } from "react";
+import React, { useEffect, useMemo, type ReactNode } from "react";
 import { Link, Navigate, useParams } from "react-router-dom";
 import LandingNav from "@/components/LandingNav";
 import { LandingLegalLinks } from "@/components/LandingLegalLinks";
 import { BrandLogo } from "@/components/BrandLogo";
 import { BRAND } from "@/constants/branding";
-import { BLOG_ARTICLES, getBlogArticle } from "@/seo/blog-articles";
-import { buildFaqJsonLd, SITE_ORIGIN } from "@/seo/site-seo";
+import { BLOG_ARTICLES, getBlogArticle, buildBlogArticleJsonLd } from "@/seo/blog-articles";
+import { buildFaqJsonLd } from "@/seo/site-seo";
 import "@/styles/landing-terminal.css";
+
+const LINK_RE = /\[([^\]]+)\]\((\/[^)]+|https?:\/\/[^)]+)\)/g;
+
+/** Render blog paragraph text with markdown-style [label](/path) links. */
+function renderRichText(text: string): ReactNode {
+  const nodes: ReactNode[] = [];
+  let last = 0;
+  let match: RegExpExecArray | null;
+  const re = new RegExp(LINK_RE.source, "g");
+  while ((match = re.exec(text)) !== null) {
+    if (match.index > last) nodes.push(text.slice(last, match.index));
+    const label = match[1];
+    const href = match[2];
+    if (href.startsWith("/")) {
+      nodes.push(
+        <Link key={`${match.index}-${href}`} to={href} className="text-[#aef833] underline-offset-2 hover:underline">
+          {label}
+        </Link>,
+      );
+    } else {
+      nodes.push(
+        <a
+          key={`${match.index}-${href}`}
+          href={href}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-[#aef833] underline-offset-2 hover:underline"
+        >
+          {label}
+        </a>,
+      );
+    }
+    last = match.index + match[0].length;
+  }
+  if (last < text.length) nodes.push(text.slice(last));
+  return nodes.length === 1 ? nodes[0] : nodes;
+}
 
 const BlogArticlePage: React.FC = () => {
   const { slug } = useParams<{ slug: string }>();
@@ -42,21 +79,7 @@ const BlogArticlePage: React.FC = () => {
     };
 
     upsert(faqId, buildFaqJsonLd(article.faqs));
-    upsert(articleId, {
-      "@context": "https://schema.org",
-      "@type": "Article",
-      headline: article.h1,
-      description: article.description,
-      datePublished: article.date,
-      author: { "@type": "Organization", name: BRAND.name },
-      publisher: {
-        "@type": "Organization",
-        name: BRAND.name,
-        logo: { "@type": "ImageObject", url: `${SITE_ORIGIN}/commohedge-logo.png` },
-      },
-      mainEntityOfPage: `${SITE_ORIGIN}${article.path}`,
-      keywords: article.keywords.join(", "),
-    });
+    upsert(articleId, buildBlogArticleJsonLd(article));
 
     return () => {
       document.getElementById(faqId)?.remove();
@@ -99,7 +122,9 @@ const BlogArticlePage: React.FC = () => {
             <h1 className="mb-6 font-headline text-3xl font-bold uppercase tracking-tighter text-white sm:text-4xl md:text-5xl">
               {article.h1}
             </h1>
-            <p className="mb-8 text-base font-light leading-relaxed text-[#c1caaf] sm:text-lg">{article.lead}</p>
+            <p className="mb-8 text-base font-light leading-relaxed text-[#c1caaf] sm:text-lg">
+              {renderRichText(article.lead)}
+            </p>
 
             {article.pdfUrl && (
               <div className="mb-10 flex flex-col gap-3 rounded-sm border border-[#aef833]/25 bg-[#141b2b]/60 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
@@ -131,7 +156,7 @@ const BlogArticlePage: React.FC = () => {
                   <div className="space-y-4">
                     {section.paragraphs.map((p) => (
                       <p key={p.slice(0, 48)} className="text-sm leading-relaxed text-[#c1caaf] sm:text-base">
-                        {p}
+                        {renderRichText(p)}
                       </p>
                     ))}
                   </div>

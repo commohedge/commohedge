@@ -105,18 +105,21 @@ export const BLOG_ARTICLES: BlogArticle[] = [
   {
     slug: "commodity-hedging-definition-meaning",
     path: "/blog/commodity-hedging-definition-meaning",
-    title: `Commodity Hedging Definition & Meaning (With Examples) | ${BRAND.name}`,
-    h1: "Commodity hedging - definition, meaning",
+    title: `What Is Commodity Hedging? Definition, Meaning & Examples | ${BRAND.name}`,
+    h1: "What is commodity hedging? Definition, meaning and examples",
     description:
-      "Clear commodity hedging definition and meaning: how hedges work, instruments, hedge ratios and real buyer/seller examples for treasury and trading desks.",
+      "What is commodity hedging? Plain-English definition and meaning, buyer/seller examples, instruments and hedge ratios for treasury and trading desks.",
     date: "2026-09-17",
     readMinutes: 14,
-    tags: ["Commodity", "Education", "Treasury"],
+    tags: ["Commodity", "Education", "Treasury", "Risk"],
     keywords: [
       "commodity hedging definition",
       "what is commodity hedging",
       "commodity hedging meaning",
       "commodity hedge",
+      "hedging commodities",
+      "hedge commodities",
+      "commodities hedging",
       "hedging commodities explained",
     ],
     lead: "Commodity hedging is the disciplined use of financial or physical contracts to reduce the impact of commodity price moves on cash flow, margins and planning. It is not a bet on the market direction - it is a way to make costs and revenues more predictable when oil, metals, grains or softs swing.",
@@ -135,6 +138,14 @@ export const BLOG_ARTICLES: BlogArticle[] = [
           "It is not speculation. Speculators seek profit from price direction. Hedgers start from a real commercial exposure (purchase, sale, inventory or contracted volume) and use instruments to reshape that risk.",
           "It does not eliminate all risk. Basis risk (local price vs benchmark), timing mismatch, counterparty risk, liquidity and FX embedded in USD-priced commodities can remain after the hedge.",
           "It is not only for large banks. Mid-market industrials, agri processors, energy marketers and treasury teams all hedge when exposure size justifies the governance overhead.",
+        ],
+      },
+      {
+        heading: "Hedging commodities in practice (how desks say it)",
+        paragraphs: [
+          "Teams often search for hedging commodities or how to hedge commodities when they need the same idea in operational language: map the physical book, choose an instrument, set a hedge ratio, and measure the combined result.",
+          "To hedge commodities well, start from firm vs forecast volumes, pick a benchmark that matches your grade and location as closely as possible, then size coverage inside a written band (for example 50–80% of the next two quarters).",
+          "Commodities hedging fails most often when the ticket exists but the exposure map does not — or when FX and basis residuals are ignored after the flat-price hedge is on.",
         ],
       },
       {
@@ -174,7 +185,7 @@ export const BLOG_ARTICLES: BlogArticle[] = [
         heading: "Sectors where commodity hedging is standard practice",
         paragraphs: [
           "Oil and energy: crude, distillates, natural gas and power-linked products. Desks manage crack spreads, basis and seasonal storage alongside flat-price hedges.",
-          "Metals and mining: copper, aluminium, precious metals and concentrates. Group exposures often sit across subsidiaries and need roll-up by currency and tenor.",
+          "Metals and mining: copper, aluminium, precious metals and concentrates. Group exposures often sit across subsidiaries and need roll-up by currency and tenor. For copper specifically, see [metals hedging for copper and aluminium](/blog/metals-mining-hedging-copper-aluminium).",
           "Agriculture: grains, oilseeds and softs. Hedge windows follow crop calendars; basis to local elevators or ports is often as important as the exchange flat price.",
           `${BRAND.name} organizes these desks under dedicated solution pages for oil and energy, metals and mining, and agriculture - so pricing models and workflows match each sector's curve and calendar reality.`,
         ],
@@ -183,7 +194,7 @@ export const BLOG_ARTICLES: BlogArticle[] = [
         heading: "Accounting and governance context (high level)",
         paragraphs: [
           "Many corporates apply hedge accounting (for example under IFRS 9 or US GAAP) when documentation, effectiveness testing and designation rules are met. Even without hedge accounting, economic hedges still matter for risk management - but P&L volatility can look louder.",
-          "Governance typically covers: who may trade, approved instruments, counterparty limits, hedge ratio bands, escalation when markets gap, and how often exposures are refreshed.",
+          "Governance typically covers: who may trade, approved instruments, counterparty limits, hedge ratio bands, escalation when markets gap, and how often exposures are refreshed. Pair this with a written [commodity hedge policy](/blog/building-commodity-hedge-policy).",
           "Audit trails - why a hedge was sized, against which forecast version - separate institutional programs from spreadsheet improvisation.",
         ],
       },
@@ -191,7 +202,14 @@ export const BLOG_ARTICLES: BlogArticle[] = [
         heading: "Commodity hedging vs FX hedging",
         paragraphs: [
           "Commodity hedging targets the price of the underlying commodity. FX hedging targets currency conversion risk. Many books need both: USD-priced metal bought by a EUR cost center is a dual exposure.",
-          "Design the risks in one framework so you do not double-hedge or leave a silent FX gap after locking the commodity. See our dedicated guide on commodity hedging vs FX hedging for sequencing and shared exposure views.",
+          "Design the risks in one framework so you do not double-hedge or leave a silent FX gap after locking the commodity. See our dedicated guide on [commodity hedging vs FX hedging](/blog/commodity-hedging-vs-fx-hedging) for sequencing and shared exposure views.",
+        ],
+      },
+      {
+        heading: "From hedging tickets to commodity risk management",
+        paragraphs: [
+          "A single hedge answers one exposure. [Commodity risk management](/blog/commodity-risk-management) is the full cycle: map exposures, set limits, choose hedges, stress the book and report one spine of numbers to the board.",
+          "If you only add tickets without measurement and policy, hedging becomes accidental speculation. Link every trade back to an exposure and a ratio band.",
         ],
       },
       {
@@ -211,35 +229,35 @@ export const BLOG_ARTICLES: BlogArticle[] = [
     ],
     faqs: [
       {
-        q: "What is the simple definition of commodity hedging?",
-        a: "Using financial or physical contracts to offset the impact of commodity price changes on a business that buys, sells or holds commodities.",
+        q: "What is commodity hedging?",
+        a: "Commodity hedging is using financial or physical contracts to offset the impact of commodity price changes on a business that buys, sells or holds commodities — so cash flow and margins stay closer to plan.",
       },
       {
-        q: "What does commodity hedging mean for treasury?",
-        a: "It means protecting cash-flow and margin forecasts from commodity volatility under a board-approved hedge policy and measurable hedge ratios.",
+        q: "What does commodity hedging mean?",
+        a: "It means converting open price exposure into a controlled residual risk under a board-approved policy: you accept some hedge cost or opportunity cost in exchange for more predictable P&L.",
+      },
+      {
+        q: "What is an example of commodity hedging?",
+        a: "A flour buyer fearing higher wheat prices buys CBOT futures or a call; a copper miner fearing lower prices sells forwards or buys puts. Success is judged on physical plus hedge combined.",
       },
       {
         q: "Is commodity hedging the same as commodity trading?",
         a: "No. Trading can be speculative. Hedging starts from a real commercial exposure and aims to reshape risk, not to maximize directional profit.",
       },
       {
-        q: "Which instruments are used in commodity hedging?",
+        q: "Which instruments are used when hedging commodities?",
         a: "Futures, OTC forwards and swaps, listed or OTC options (including collars), and fixed-price physical contracts - chosen for cost, flexibility and governance fit.",
       },
       {
         q: "Can small and mid-size firms hedge commodities?",
         a: "Yes, when exposure is material. Scale notionals, instruments and bank relationships to the size of the book and the cost of running the program.",
       },
-      {
-        q: "Where can I learn more about sector desks?",
-        a: `Explore ${BRAND.name} solutions for oil and energy, metals and mining, and agriculture, plus related Insights articles on instruments, policy and stress testing.`,
-      },
     ],
     relatedCta: { label: "Request access to CommoHedge", to: "/request-access" },
     seo: {
-      title: `Commodity Hedging Definition & Meaning (With Examples) | ${BRAND.name}`,
+      title: `What Is Commodity Hedging? Definition, Meaning & Examples | ${BRAND.name}`,
       description:
-        "Clear commodity hedging definition and meaning: how hedges work, instruments, hedge ratios and real buyer/seller examples for treasury and trading desks.",
+        "What is commodity hedging? Plain-English definition and meaning, buyer/seller examples, instruments and hedge ratios for treasury and trading desks.",
       path: "/blog/commodity-hedging-definition-meaning",
       robots: "index, follow",
     },
@@ -247,10 +265,10 @@ export const BLOG_ARTICLES: BlogArticle[] = [
   {
     slug: "commodity-risk-management",
     path: "/blog/commodity-risk-management",
-    title: `Commodity Risk Management: Framework for Treasury & Desks | ${BRAND.name}`,
-    h1: "Commodity risk management",
+    title: `Commodity Risk Management: Framework, Process & Metrics | ${BRAND.name}`,
+    h1: "Commodity risk management: framework, process and metrics",
     description:
-      "Commodity risk management playbook: map exposures, set policy and limits, choose hedges, run stress tests and report risk packs for treasury and trading desks.",
+      "Commodity risk management explained: how to map exposures, set policy, hedge inside limits, stress-test and report one risk pack for treasury and trading desks.",
     date: "2026-09-17",
     readMinutes: 15,
     tags: ["Risk", "Commodity", "Treasury"],
@@ -260,6 +278,7 @@ export const BLOG_ARTICLES: BlogArticle[] = [
       "commodity risk framework",
       "commodity risk management process",
       "manage commodity risk",
+      "how to manage commodity risk",
     ],
     lead: "Commodity risk management is the end-to-end process of identifying, measuring, mitigating and reporting commodity price (and related) risks so the firm can operate within board-approved appetite. Hedging is one tool inside that process - not a substitute for measurement, limits and governance.",
     sections: [
@@ -269,6 +288,14 @@ export const BLOG_ARTICLES: BlogArticle[] = [
           "At minimum: flat price risk on commodities you buy, sell or hold; basis and location differentials; calendar and roll risk; volatility and optionality; credit to hedge counterparties; and often FX when commodities are priced in a currency different from your functional currency.",
           "Operationally it also covers data quality (which curve, which volume forecast), model risk (how you price Asians, barriers or average options) and process risk (who can change hedge ratios without approval).",
           "A mature program answers: What is our open risk today? What is allowed? What did we hedge? What if the market gaps tomorrow? Who signed off?",
+        ],
+      },
+      {
+        heading: "Commodity risk management vs commodity hedging",
+        paragraphs: [
+          "Commodity hedging is an action: taking offsetting futures, forwards, swaps or options against a commercial exposure. See the [commodity hedging definition](/blog/commodity-hedging-definition-meaning) for instruments and buyer/seller examples.",
+          "Commodity risk management is the full cycle around that action — exposure inventory, appetite and policy, measurement, limit checks, stress testing and committee reporting. You can hedge without managing risk (and quietly create speculative tickets); you cannot manage commodity risk well without a clear hedge framework.",
+          "Buyer example: a metals manufacturer maps copper purchase forecasts, sets a 40–70% hedge-ratio band for the next two quarters, then executes forwards inside that band and reports open risk weekly. Seller example: a miner rolls entity exposures to group level, stress-tests a 15% price drop, then sizes puts or a collar before the board pack.",
         ],
       },
       {
@@ -300,7 +327,7 @@ export const BLOG_ARTICLES: BlogArticle[] = [
         heading: "Step 4 - Mitigate: hedge design inside the risk framework",
         paragraphs: [
           "Choose instruments that match the exposure shape: flat price with futures/forwards/swaps; asymmetric needs with options; spread exposures with crack or basis structures when the desk can risk-manage them.",
-          "Set hedge ratios explicitly against policy bands. Document the forecast version and commercial rationale so next quarter's committee can reconstruct the decision.",
+          "Set hedge ratios explicitly against policy bands. Document the forecast version and commercial rationale so next quarter's committee can reconstruct the decision. Codify bands in a written [commodity hedge policy](/blog/building-commodity-hedge-policy).",
           "Coordinate with FX risk management when settlement currency differs from functional currency - otherwise commodity hedges can leave FX volatility as the residual surprise. Pair with FX Risk Manager workflows when currency risk is material.",
         ],
       },
@@ -308,7 +335,7 @@ export const BLOG_ARTICLES: BlogArticle[] = [
         heading: "Step 5 - Monitor, limit-check and report",
         paragraphs: [
           "Daily or weekly: refresh curves, revalue hedges, compare open risk to limits, flag breaches and orphan hedges (tickets without a matching exposure).",
-          "Committee pack: one spine of numbers for desk, treasury and board - exposures, hedge ratios, MTM, stress results and exceptions. Conflicting Excel packs destroy governance credibility.",
+          "Committee pack: one spine of numbers for desk, treasury and board - exposures, hedge ratios, MTM, stress results and exceptions. Conflicting Excel packs destroy governance credibility. Use [stress testing for commodity hedges](/blog/stress-testing-commodity-hedges) before the next gap day — not only after.",
           "After large market moves: re-run stresses, confirm collateral and liquidity, and decide whether to rebalance within policy or escalate for a temporary exception.",
         ],
       },
@@ -384,9 +411,9 @@ export const BLOG_ARTICLES: BlogArticle[] = [
     ],
     relatedCta: { label: "Request a desk trial", to: "/request-access" },
     seo: {
-      title: `Commodity Risk Management: Framework for Treasury & Desks | ${BRAND.name}`,
+      title: `Commodity Risk Management: Framework, Process & Metrics | ${BRAND.name}`,
       description:
-        "Commodity risk management playbook: map exposures, set policy and limits, choose hedges, run stress tests and report risk packs for treasury and trading desks.",
+        "Commodity risk management explained: how to map exposures, set policy, hedge inside limits, stress-test and report one risk pack for treasury and trading desks.",
       path: "/blog/commodity-risk-management",
       robots: "index, follow",
     },
@@ -710,21 +737,36 @@ export const BLOG_ARTICLES: BlogArticle[] = [
   {
     slug: "metals-mining-hedging-copper-aluminium",
     path: "/blog/metals-mining-hedging-copper-aluminium",
-    title: `Metals Hedging: Copper, Aluminium & Mining Price Risk | ${BRAND.name}`,
-    h1: "Metals & mining: hedging copper, aluminium and precious metals exposure",
+    title: `Copper Hedging Meaning & Metals Mining Price Risk | ${BRAND.name}`,
+    h1: "Copper hedging meaning: metals & mining price risk for copper and aluminium",
     description:
-      "Metals hedging for mining groups: copper and aluminium exposures by entity, hedge ratios and strategies that survive price cycles.",
+      "Copper hedging meaning for producers and buyers: how metals desks roll up copper and aluminium exposures, set hedge ratios and choose forwards vs options.",
     date: "2026-09-06",
     readMinutes: 8,
-    tags: ["Metals & mining"],
-    keywords: ["metals hedging", "mining risk management", "copper hedging strategy"],
-    lead: "Mining groups face multi-year price cycles and multi-entity books. Metals hedging is how they stabilize cash flows without freezing commercial flexibility entirely.",
+    tags: ["Metals & mining", "Commodity"],
+    keywords: [
+      "copper hedging meaning",
+      "copper hedging",
+      "metals hedging",
+      "mining risk management",
+      "copper hedging strategy",
+      "aluminium hedging",
+    ],
+    lead: "Mining groups face multi-year price cycles and multi-entity books. Metals hedging is how they stabilize cash flows without freezing commercial flexibility entirely — starting with a clear copper hedging meaning for producers and industrial buyers.",
     sections: [
+      {
+        heading: "Copper hedging meaning (producers and buyers)",
+        paragraphs: [
+          "Copper hedging meaning, in desk language: offset the impact of copper price moves on planned sales (producer) or planned purchases (manufacturer) with forwards, swaps or options sized to a policy hedge ratio.",
+          "It is the same idea as general [commodity hedging](/blog/commodity-hedging-definition-meaning), applied to LME/COMEX copper (or a related concentrate formula) with explicit attention to quality, treatment charges and location basis.",
+          "A producer fearing lower prices sells forwards or buys puts; a cable or components buyer fearing higher prices buys forwards or calls. Judge success on physical plus hedge, not the ticket alone.",
+        ],
+      },
       {
         heading: "Roll up exposure across subsidiaries first",
         paragraphs: [
           "Group risk is often invisible at entity level. Copper concentrate in one subsidiary and aluminium downstream in another can net — or amplify — when rolled to group currency and maturity buckets.",
-          "A metals hedging program that skips roll-up tends to over-hedge locally and under-hedge globally.",
+          "A metals hedging program that skips roll-up tends to over-hedge locally and under-hedge globally. That roll-up sits inside [commodity risk management](/blog/commodity-risk-management), not only inside a single trade blotter.",
         ],
       },
       {
@@ -742,11 +784,16 @@ export const BLOG_ARTICLES: BlogArticle[] = [
       },
     ],
     takeaways: [
+      "Copper hedging means offsetting planned copper sales or purchases — not guessing the next print.",
       "Group roll-up beats entity-by-entity hedging guesses.",
       "Instrument mix should reflect cycle position and balance-sheet goals.",
       "Hedge ratios need the same numbers desk and board share.",
     ],
     faqs: [
+      {
+        q: "What does copper hedging mean?",
+        a: "Using futures, forwards, swaps or options to reduce the impact of copper price moves on a producer’s sales book or a buyer’s purchase plan, inside an agreed hedge-ratio band.",
+      },
       {
         q: "Is metals hedging only for producers?",
         a: "No. Consumers and traders also hedge purchase or inventory risk — the policy differs, the need for consistent pricing does not.",
@@ -758,9 +805,9 @@ export const BLOG_ARTICLES: BlogArticle[] = [
     ],
     relatedCta: { label: "Explore metals & mining desk", to: "/solutions/metals-mining" },
     seo: {
-      title: `Metals Hedging: Copper, Aluminium & Mining Price Risk | ${BRAND.name}`,
+      title: `Copper Hedging Meaning & Metals Mining Price Risk | ${BRAND.name}`,
       description:
-        "Metals hedging for mining groups: copper and aluminium exposures by entity, hedge ratios and strategies that survive price cycles.",
+        "Copper hedging meaning for producers and buyers: how metals desks roll up copper and aluminium exposures, set hedge ratios and choose forwards vs options.",
       path: "/blog/metals-mining-hedging-copper-aluminium",
       robots: "index, follow",
     },
@@ -999,15 +1046,21 @@ export const BLOG_ARTICLES: BlogArticle[] = [
   {
     slug: "building-commodity-hedge-policy",
     path: "/blog/building-commodity-hedge-policy",
-    title: `Commodity Hedge Policy: Exposures, Ratios & Board Packs | ${BRAND.name}`,
-    h1: "Building a hedge policy: exposures, hedge ratios and risk committee packs",
+    title: `Commodity Hedging Policy: Exposures, Ratios & Board Packs | ${BRAND.name}`,
+    h1: "Commodity hedging policy: exposures, hedge ratios and risk committee packs",
     description:
-      "Write a commodity hedge policy that links exposures, hedge ratios and board reporting so desks execute inside governance.",
+      "How to write a commodity hedging policy that links exposures, hedge-ratio bands and board reporting so desks execute inside governance.",
     date: "2026-08-26",
     readMinutes: 8,
-    tags: ["Governance", "Treasury"],
-    keywords: ["hedge policy", "hedge ratio", "commodity risk committee reporting"],
-    lead: "A hedge without a policy is a trade. A hedge policy turns commodity hedging into a repeatable control framework the board can trust.",
+    tags: ["Governance", "Treasury", "Risk"],
+    keywords: [
+      "commodity hedging policy",
+      "hedge policy",
+      "hedge ratio",
+      "commodity risk committee reporting",
+      "commodity hedge policy",
+    ],
+    lead: "A hedge without a policy is a trade. A commodity hedging policy turns [commodity hedging](/blog/commodity-hedging-definition-meaning) into a repeatable control framework the board can trust — and feeds [commodity risk management](/blog/commodity-risk-management) with clear bands and owners.",
     sections: [
       {
         heading: "Define exposures in business language",
@@ -1025,7 +1078,7 @@ export const BLOG_ARTICLES: BlogArticle[] = [
       {
         heading: "Report with the same numbers used to trade",
         paragraphs: [
-          `${BRAND.name} helps teams export board-ready views from the same pricing and exposure spine used on the desk — closing the classic “committee pack vs trading book” gap.`,
+          `${BRAND.name} helps teams export board-ready views from the same pricing and exposure spine used on the desk — closing the classic “committee pack vs trading book” gap. Pair policy reviews with [stress testing commodity hedges](/blog/stress-testing-commodity-hedges).`,
         ],
       },
     ],
@@ -1035,6 +1088,10 @@ export const BLOG_ARTICLES: BlogArticle[] = [
       "Reporting must reuse desk numbers.",
     ],
     faqs: [
+      {
+        q: "What should a commodity hedging policy include?",
+        a: "In-scope exposures, approved instruments, hedge-ratio bands by horizon, escalation rules, counterparty limits, and who may trade or grant exceptions.",
+      },
       {
         q: "Who owns the hedge policy?",
         a: "Usually treasury/risk with board or ALCO approval — desks execute inside the mandate.",
@@ -1046,9 +1103,9 @@ export const BLOG_ARTICLES: BlogArticle[] = [
     ],
     relatedCta: { label: "Request access", to: "/request-access" },
     seo: {
-      title: `Commodity Hedge Policy: Exposures, Ratios & Board Packs | ${BRAND.name}`,
+      title: `Commodity Hedging Policy: Exposures, Ratios & Board Packs | ${BRAND.name}`,
       description:
-        "Write a commodity hedge policy that links exposures, hedge ratios and board reporting so desks execute inside governance.",
+        "How to write a commodity hedging policy that links exposures, hedge-ratio bands and board reporting so desks execute inside governance.",
       path: "/blog/building-commodity-hedge-policy",
       robots: "index, follow",
     },
@@ -1181,6 +1238,41 @@ export const BLOG_INDEX_SEO: PageSeo = {
   path: "/blog",
   robots: "index, follow",
 };
+
+/** Latest editorial pass date for Article schema dateModified */
+export const BLOG_CONTENT_UPDATED = "2026-11-02";
+
+/** Strip markdown-style [label](url) links to plain label text (JSON-LD / noscript). */
+export function stripMdLinks(text: string): string {
+  return text.replace(/\[([^\]]+)\]\((\/[^)]+|https?:\/\/[^)]+)\)/g, "$1");
+}
+
+export function buildBlogArticleJsonLd(article: BlogArticle) {
+  // Keep origin inline to avoid a runtime cycle with site-seo.ts
+  const origin = "https://www.commohedge.com";
+  const pageUrl = `${origin}${article.path}`;
+  const imageUrl = `${origin}/og-image.png`;
+  return {
+    "@context": "https://schema.org",
+    "@type": "Article",
+    headline: article.h1,
+    description: article.description,
+    image: [imageUrl],
+    datePublished: article.date,
+    dateModified: article.date > BLOG_CONTENT_UPDATED ? article.date : BLOG_CONTENT_UPDATED,
+    author: { "@type": "Organization", name: BRAND.name, url: `${origin}/` },
+    publisher: {
+      "@type": "Organization",
+      name: BRAND.name,
+      logo: { "@type": "ImageObject", url: `${origin}/commohedge-logo.png` },
+    },
+    mainEntityOfPage: {
+      "@type": "WebPage",
+      "@id": pageUrl,
+    },
+    keywords: article.keywords.join(", "),
+  };
+}
 
 export function getBlogArticle(slug: string | undefined): BlogArticle | undefined {
   if (!slug) return undefined;

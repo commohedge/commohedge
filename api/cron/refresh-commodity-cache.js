@@ -3,22 +3,21 @@
  *
  * Auth: Authorization Bearer CRON_SECRET (Vercel Cron) or x-vercel-cron: 1
  * Optional query: ?category=energy|metals|agricultural|freight|bunker
+ *
+ * Freight: TradingView scanner API (quotes-freight page is 404).
+ * Bunker: Ship&Bunker prices wide table + EMEA Gibraltar.
  */
 import {
   appBaseUrl,
+  fetchFreightFromScanner,
+  mergeBunkerCommodities,
   parseBunkerHtml,
-  parseNumber,
+  parseGibraltarBunkerHtml,
   parseTradingViewHtml,
   upsertCommodityCache,
 } from "../utils/commodity-cache-upsert.js";
 
 const TV_CATEGORIES = ["energy", "metals", "agricultural"];
-const FREIGHT_SYMBOLS = [
-  { symbol: "CS41!", name: "Container Freight China to N Europe (Baltic)", type: "container" },
-  { symbol: "CS11!", name: "Container Freight China to USWC (Baltic)", type: "container" },
-  { symbol: "TM1!", name: "Freight Route TC2 (Baltic)", type: "freight_route" },
-  { symbol: "TL1!", name: "Freight Route TD3C (Baltic)", type: "freight_route" },
-];
 
 function isAuthorized(req) {
   const cronHeader = req.headers["x-vercel-cron"];
@@ -26,8 +25,6 @@ function isAuthorized(req) {
 
   const secret = process.env.CRON_SECRET;
   if (!secret) {
-    // Allow in production cron without secret only if Vercel sets the cron header above.
-    // Manual/dev: require secret when set; if unset, allow for local smoke tests.
     return process.env.NODE_ENV !== "production" || process.env.VERCEL !== "1";
   }
 
@@ -47,45 +44,35 @@ async function refreshTradingViewCategory(base, category) {
   return upsertCommodityCache(category, rows);
 }
 
-async function refreshBunker(base) {
-  const json = await fetchJson(`${base}/api/shipandbunker`);
-  const rows = parseBunkerHtml(json.data);
-  return upsertCommodityCache("bunker", rows);
+async function refreshFreight() {
+  const rows = await fetchFreightFromScanner();
+  return upsertCommodityCache("freight", rows);
 }
 
-async function refreshFreight(base) {
-  const out = [];
-  for (const s of FREIGHT_SYMBOLS) {
-    try {
-      const json = await fetchJson(
-        `${base}/api/tradingview/symbol/${encodeURIComponent(s.symbol)}`,
-        60000,
-      );
-      const html = json.data || "";
-      const priceMatch =
-        html.match(/data-field=["']last["'][^>]*>?\s*([\d.,]+)/i) ||
-        html.match(/"last"\s*:\s*([\d.]+)/) ||
-        html.match(/js-symbol-last[^>]*>\s*([\d.,]+)/i);
-      const price = priceMatch ? parseNumber(priceMatch[1]) : 0;
-      if (!(price >= 0) || !priceMatch) continue;
-      out.push({
-        symbol: s.symbol,
-        name: s.name,
-        price,
-        currency: "USD",
-        percentChange: 0,
-        absoluteChange: 0,
-        high: price,
-        low: price,
-        technicalEvaluation: "Neutral",
-        type: s.type,
-        category: "freight",
-      });
-    } catch (e) {
-      console.warn(`[cron] freight ${s.symbol}:`, e.message || e);
-    }
+async function refreshBunker(base) {
+  const [pricesSettled, emeaSettled] = await Promise.allSettled([
+    fetchJson(`${base}/api/shipandbunker`, 120000),
+    fetchJson(`${base}/api/shipandbunker/emea`, 120000),
+  ]);
+
+  const fromPrices =
+    pricesSettled.status === "fulfilled"
+      ? parseBunkerHtml(pricesSettled.value?.data)
+      : [];
+  const fromEmea =
+    emeaSettled.status === "fulfilled"
+      ? parseGibraltarBunkerHtml(emeaSettled.value?.data)
+      : [];
+
+  if (pricesSettled.status === "rejected") {
+    console.warn("[cron] bunker prices:", pricesSettled.reason?.message || pricesSettled.reason);
   }
-  return upsertCommodityCache("freight", out);
+  if (emeaSettled.status === "rejected") {
+    console.warn("[cron] bunker emea:", emeaSettled.reason?.message || emeaSettled.reason);
+  }
+
+  const rows = mergeBunkerCommodities(fromEmea, fromPrices);
+  return upsertCommodityCache("bunker", rows);
 }
 
 export default async function handler(req, res) {
@@ -125,19 +112,19 @@ export default async function handler(req, res) {
       });
     }
 
+    if (runFreight) {
+      try {
+        results.freight = await refreshFreight();
+      } catch (e) {
+        results.freight = { ok: false, error: String(e.message || e) };
+      }
+    }
+
     if (runBunker) {
       try {
         results.bunker = await refreshBunker(base);
       } catch (e) {
         results.bunker = { ok: false, error: String(e.message || e) };
-      }
-    }
-
-    if (runFreight) {
-      try {
-        results.freight = await refreshFreight(base);
-      } catch (e) {
-        results.freight = { ok: false, error: String(e.message || e) };
       }
     }
 

@@ -10,6 +10,8 @@ export type SolutionPageContent = {
   eyebrow: string;
   h1: string;
   lead: string;
+  /** Extra indexable copy for crawlers / thin-content audits */
+  whyItMatters: string[];
   seo: PageSeo;
   bullets: string[];
   instruments: string[];
@@ -25,7 +27,12 @@ export const SOLUTION_PAGES: Record<SolutionSlug, SolutionPageContent> = {
     navLabel: "Oil & energy",
     eyebrow: "Oil & energy desk",
     h1: "Oil & energy hedging terminal",
-    lead: `${BRAND.name} prices crude, distillates and refined structures on one consistent spine — Black-76, barriers and Asians wired to your forward curves for desk and board reporting.`,
+    lead: `${BRAND.name} prices crude, distillates and refined structures on one consistent spine — Black-76, barriers and Asians wired to your forward curves for desk and board reporting. Energy desks use it to keep crack, basis and flat-price views aligned from pricing through hedge monitoring.`,
+    whyItMatters: [
+      "Oil and refined books move on curve shape as much as flat price. A hedging terminal that only bumps spot will miss how a steepener or seasonal storage view changes hedge cost and residual risk.",
+      "Treasury and trading need the same MTM after a curve update. When pricers, strategy builder and exposure roll-up share one spine, committee packs stop diverging from the desk blotter.",
+      "Barriers, Asians and vanilla options belong in the same workflow as forwards and swaps so energy desks can compare protection cost without leaving the terminal for a second model.",
+    ],
     seo: {
       title: `Oil & energy hedging software | ${BRAND.name}`,
       description:
@@ -72,7 +79,12 @@ export const SOLUTION_PAGES: Record<SolutionSlug, SolutionPageContent> = {
     navLabel: "Metals & mining",
     eyebrow: "Metals & mining desk",
     h1: "Metals & mining risk terminal",
-    lead: `Base and precious metals desks use ${BRAND.name} for vol surfaces, forwards and group-wide exposure roll-up — from mine to treasury hedge book.`,
+    lead: `Base and precious metals desks use ${BRAND.name} for vol surfaces, forwards and group-wide exposure roll-up — from mine to treasury hedge book. Copper, aluminium and precious programs share one pricing spine so entity books roll up cleanly.`,
+    whyItMatters: [
+      "Mining groups often hedge locally and miss net group risk. Rolling copper, aluminium and related FX exposures by entity and tenor is the first control before instrument choice.",
+      "Cycle position changes the right mix of forwards, collars and options. Desks need vol context and consistent Greeks so protection cost is explainable in committee, not only on a trader screen.",
+      "Copper hedging meaning for producers and buyers is the same core idea — offset planned sales or purchases inside a policy band — executed with metals-aware curves and roll-up.",
+    ],
     seo: {
       title: `Metals & mining hedging software | ${BRAND.name}`,
       description:
@@ -119,7 +131,12 @@ export const SOLUTION_PAGES: Record<SolutionSlug, SolutionPageContent> = {
     navLabel: "Agriculture",
     eyebrow: "Agriculture desk",
     h1: "Agriculture hedging & strategy terminal",
-    lead: `Grains and softs teams use ${BRAND.name} to build hedge windows, stress paths and hedge-ratio views before they press the trade.`,
+    lead: `Grains and softs teams use ${BRAND.name} to build hedge windows, stress paths and hedge-ratio views before they press the trade. Seasonal calendars, basis and layered coverage stay on one spine for procurement and treasury.`,
+    whyItMatters: [
+      "Agricultural hedges fail when the window ignores crop calendars. Strategy builder is designed so coverage periods match planting, harvest and delivery — not a single blunt strike.",
+      "Basis and logistics can dominate flat price. Stress paths for basis and vol shocks help procurement and treasury agree before execution instead of reconciling after the move.",
+      "Hedge-ratio monitoring should update as crop estimates and sales commitments change, so agri desks keep policy bands honest through the season.",
+    ],
     seo: {
       title: `Agriculture hedging software | ${BRAND.name}`,
       description:

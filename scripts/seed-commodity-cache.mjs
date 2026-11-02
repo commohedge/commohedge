@@ -1,251 +1,125 @@
 /**
- * One-shot: scrape TradingView (prod API) + Ship&Bunker, UPSERT into commodity_market_cache.
- * Run: node scripts/seed-commodity-cache.mjs
+ * One-shot / hourly: scrape TradingView + Ship&Bunker → UPSERT commodity_market_cache.
+ * Run: node scripts/seed-commodity-cache.mjs [energy|metals|agricultural|freight|bunker]
+ *
+ * Freight: TradingView scanner (quotes-freight page is 404).
+ * Bunker: prices wide table + EMEA Gibraltar.
  */
-import { createClient } from "@supabase/supabase-js";
-import { parse } from "node-html-parser";
+import {
+  fetchFreightFromScanner,
+  mergeBunkerCommodities,
+  parseBunkerHtml,
+  parseGibraltarBunkerHtml,
+  parseTradingViewHtml,
+  upsertCommodityCache,
+} from "../api/utils/commodity-cache-upsert.js";
 
-const BASE = "https://www.commohedge.com";
-const SUPABASE_URL = "https://iflnsckduohrcafafcpj.supabase.co";
-const SUPABASE_ANON =
-  process.env.VITE_SUPABASE_ANON_KEY ||
-  "sb_publishable_1wxQlJYrs4cqXinMMohHtw_KIsybCpJ";
+const BASE = (process.env.COMMODITY_SCRAPE_BASE_URL || "https://www.commohedge.com").replace(/\/$/, "");
+const TV_CATEGORIES = ["energy", "metals", "agricultural"];
 
-const TTL_MS = 60 * 60 * 1000; // 1 hour — matches hourly Vercel cron
-const CATEGORIES = ["energy", "metals", "agricultural", "freight"];
-
-const supabase = createClient(SUPABASE_URL, SUPABASE_ANON);
-
-function parseNumber(text) {
-  if (!text) return 0;
-  let cleanText = String(text).replace(/[^\d.,-]/g, "");
-  if (cleanText.includes(",") && cleanText.includes(".")) {
-    const lastDotIndex = cleanText.lastIndexOf(".");
-    const lastCommaIndex = cleanText.lastIndexOf(",");
-    if (lastDotIndex > lastCommaIndex) cleanText = cleanText.replace(/,/g, "");
-    else cleanText = cleanText.replace(/\./g, "").replace(",", ".");
-  } else if (cleanText.includes(",")) {
-    const parts = cleanText.split(",");
-    if (parts.length === 2 && parts[1].length === 3) cleanText = cleanText.replace(/,/g, "");
-    else cleanText = cleanText.replace(",", ".");
-  }
-  return parseFloat(cleanText) || 0;
+async function fetchJson(path, timeoutMs = 120000) {
+  const url = path.startsWith("http") ? path : `${BASE}${path}`;
+  const res = await fetch(url, { signal: AbortSignal.timeout(timeoutMs) });
+  if (!res.ok) throw new Error(`HTTP ${res.status} for ${url}`);
+  return res.json();
 }
 
-function parseTradingViewHtml(html, category) {
-  const root = parse(html);
-  let rows = root.querySelectorAll(".tv-data-table__row");
-  if (!rows.length) rows = root.querySelectorAll("tr[data-rowid]");
-  if (!rows.length) rows = root.querySelectorAll("table tr");
-
-  const commodities = [];
-  for (const row of rows) {
-    const cells = row.querySelectorAll("td");
-    if (!cells || cells.length < 6) continue;
-
-    const firstCell = cells[0];
-    let symbol = "";
-    let name = "";
-    const symbolElement = firstCell.querySelector(".symbol-name");
-    if (symbolElement) {
-      symbol = symbolElement.text.trim();
-      name = symbolElement.getAttribute("title") || "";
-    } else {
-      const parts = firstCell.text.trim().split(/\s+/);
-      symbol = parts[0] || "";
-      name = parts.slice(1).join(" ");
-    }
-    if (symbol.includes("!")) {
-      const m = symbol.match(/^(.*?!)(.+)$/);
-      if (m) {
-        symbol = m[1].trim();
-        const trailing = m[2].trim();
-        if (trailing) name = name ? `${trailing} ${name}`.trim() : trailing;
-      }
-    }
-    if (!symbol) continue;
-
-    const price = parseNumber(cells[1]?.text.trim());
-    let percentChange = parseNumber(cells[2]?.text.trim());
-    if (String(cells[2]).includes("negative") && percentChange > 0) percentChange = -percentChange;
-    let absoluteChange = parseNumber(cells[3]?.text.trim());
-    if (String(cells[3]).includes("negative") && absoluteChange > 0) absoluteChange = -absoluteChange;
-
-    const usable = category === "freight" ? price >= 0 : price > 0;
-    if (!usable) continue;
-
-    commodities.push({
-      symbol,
-      name,
-      price,
-      currency: "USD",
-      percentChange,
-      absoluteChange,
-      high: parseNumber(cells[4]?.text.trim()),
-      low: parseNumber(cells[5]?.text.trim()),
-      technicalEvaluation: cells[6]?.text.trim() || "Neutral",
-      type: "other",
-      category,
-    });
-  }
-  return commodities;
+async function seedTvCategory(category) {
+  console.log(`Fetching ${category}...`);
+  const json = await fetchJson(`/api/tradingview/${category}`);
+  const rows = parseTradingViewHtml(json.data, category);
+  console.log(`  parsed ${rows.length}`);
+  const r = await upsertCommodityCache(category, rows);
+  if (!r.ok) console.error(`UPSERT ${category} FAILED:`, r.error);
+  else console.log(`UPSERT ${category}: ${r.count} items`);
+  return r;
 }
 
-async function fetchCategory(category) {
-  const res = await fetch(`${BASE}/api/tradingview/${category}`, { signal: AbortSignal.timeout(120000) });
-  if (!res.ok) throw new Error(`tradingview/${category} HTTP ${res.status}`);
-  const json = await res.json();
-  return parseTradingViewHtml(json.data, category);
+async function seedFreight() {
+  console.log("Fetching freight (TradingView scanner)...");
+  const rows = await fetchFreightFromScanner();
+  console.log(`  parsed ${rows.length}`);
+  const r = await upsertCommodityCache("freight", rows);
+  if (!r.ok) console.error("UPSERT freight FAILED:", r.error);
+  else console.log(`UPSERT freight: ${r.count} items`);
+  return r;
 }
 
-async function fetchBunker() {
-  const res = await fetch(`${BASE}/api/shipandbunker`, { signal: AbortSignal.timeout(120000) });
-  if (!res.ok) throw new Error(`shipandbunker HTTP ${res.status}`);
-  const json = await res.json();
-  const html = json.data || "";
-  const root = parse(html);
-  const commodities = [];
-  const typeCycle = ["vlsfo", "mgo", "ifo380"];
-  const units = root.querySelectorAll("a.unit");
+async function seedBunker() {
+  console.log("Fetching bunker (prices + EMEA)...");
+  const [pricesSettled, emeaSettled] = await Promise.allSettled([
+    fetchJson("/api/shipandbunker"),
+    fetchJson("/api/shipandbunker/emea"),
+  ]);
 
-  units.forEach((u, i) => {
-    const name = (u.querySelector(".name")?.text || "").trim();
-    const priceEl = u.querySelector(".price");
-    const raw = priceEl?.innerHTML || "";
-    const m = raw.match(/^([\d.,]+)/);
-    const price = m ? parseFloat(m[1]) : parseNumber(priceEl?.text);
-    const chg = parseNumber(u.querySelector(".change")?.text);
-    const type = typeCycle[Math.floor(i / 8)] || "vlsfo";
-    if (!(price > 0) || !name) return;
-    commodities.push({
-      symbol: `${type.toUpperCase()}-${name.replace(/\s+/g, "-").toUpperCase().slice(0, 24)}`,
-      name: `${type.toUpperCase()} ${name}`,
-      price,
-      currency: "USD",
-      percentChange: 0,
-      absoluteChange: chg,
-      high: price,
-      low: price,
-      technicalEvaluation: "Neutral",
-      type,
-      category: "bunker",
-    });
-  });
-  return commodities;
-}
+  const fromPrices =
+    pricesSettled.status === "fulfilled" ? parseBunkerHtml(pricesSettled.value?.data) : [];
+  const fromEmea =
+    emeaSettled.status === "fulfilled"
+      ? parseGibraltarBunkerHtml(emeaSettled.value?.data)
+      : [];
 
-async function fetchFreightSymbols() {
-  const symbols = [
-    { symbol: "CS41!", name: "Container Freight China to N Europe (Baltic)", type: "container" },
-    { symbol: "CS11!", name: "Container Freight China to USWC (Baltic)", type: "container" },
-    { symbol: "TM1!", name: "Freight Route TC2 (Baltic)", type: "freight_route" },
-    { symbol: "TL1!", name: "Freight Route TD3C (Baltic)", type: "freight_route" },
-  ];
-  const out = [];
-  for (const s of symbols) {
-    try {
-      const res = await fetch(`${BASE}/api/tradingview/symbol/${encodeURIComponent(s.symbol)}`, {
-        signal: AbortSignal.timeout(90000),
-      });
-      if (!res.ok) {
-        console.warn(`symbol ${s.symbol} HTTP ${res.status}`);
-        continue;
-      }
-      const j = await res.json();
-      const html = j.data || "";
-      const priceMatch =
-        html.match(/data-field=["']last["'][^>]*>?\s*([\d.,]+)/i) ||
-        html.match(/"last"\s*:\s*([\d.]+)/) ||
-        html.match(/js-symbol-last[^>]*>\s*([\d.,]+)/i);
-      const price = priceMatch ? parseNumber(priceMatch[1]) : 0;
-      if (!(price >= 0) || !priceMatch) {
-        console.warn(`no price for ${s.symbol}`);
-        continue;
-      }
-      out.push({
-        symbol: s.symbol,
-        name: s.name,
-        price,
-        currency: "USD",
-        percentChange: 0,
-        absoluteChange: 0,
-        high: price,
-        low: price,
-        technicalEvaluation: "Neutral",
-        type: s.type,
-        category: "freight",
-      });
-      console.log(`  freight ${s.symbol} = ${price}`);
-    } catch (e) {
-      console.warn(s.symbol, e.message || e);
-    }
+  if (pricesSettled.status === "rejected") {
+    console.warn("  prices:", pricesSettled.reason?.message || pricesSettled.reason);
+  } else {
+    console.log(`  prices parsed ${fromPrices.length}`);
   }
-  return out;
-}
+  if (emeaSettled.status === "rejected") {
+    console.warn("  emea:", emeaSettled.reason?.message || emeaSettled.reason);
+  } else {
+    console.log(`  emea/gibraltar parsed ${fromEmea.length}`);
+  }
 
-async function upsert(category, payload) {
-  if (!payload.length) {
-    console.warn(`skip empty ${category}`);
-    return false;
-  }
-  const now = new Date();
-  const { error } = await supabase.from("commodity_market_cache").upsert(
-    {
-      category,
-      payload,
-      item_count: payload.length,
-      scraped_at: now.toISOString(),
-      expires_at: new Date(now.getTime() + TTL_MS).toISOString(),
-      updated_at: now.toISOString(),
-    },
-    { onConflict: "category" },
-  );
-  if (error) {
-    console.error(`UPSERT ${category} FAILED:`, error.message);
-    return false;
-  }
-  console.log(`UPSERT ${category}: ${payload.length} items`);
-  return true;
+  const rows = mergeBunkerCommodities(fromEmea, fromPrices);
+  console.log(`  merged ${rows.length}`);
+  const r = await upsertCommodityCache("bunker", rows);
+  if (!r.ok) console.error("UPSERT bunker FAILED:", r.error);
+  else console.log(`UPSERT bunker: ${r.count} items`);
+  return r;
 }
 
 async function main() {
-  const only = process.argv[2]; // optional: energy|metals|agricultural|freight|bunker
+  const only = process.argv[2];
   const runAll = !only;
+  const results = {};
 
-  if (runAll || CATEGORIES.includes(only)) {
-    for (const category of CATEGORIES) {
+  if (runAll || TV_CATEGORIES.includes(only)) {
+    for (const category of TV_CATEGORIES) {
       if (only && category !== only) continue;
       try {
-        console.log(`Fetching ${category}...`);
-        const rows = await fetchCategory(category);
-        console.log(`  parsed ${rows.length}`);
-        await upsert(category, rows);
+        results[category] = await seedTvCategory(category);
       } catch (e) {
         console.error(`${category}:`, e.message || e);
+        results[category] = { ok: false, error: String(e.message || e) };
       }
     }
   }
 
   if (runAll || only === "freight") {
     try {
-      console.log("Fetching freight symbols...");
-      const freight = await fetchFreightSymbols();
-      console.log(`  parsed ${freight.length}`);
-      await upsert("freight", freight);
+      results.freight = await seedFreight();
     } catch (e) {
       console.error("freight:", e.message || e);
+      results.freight = { ok: false, error: String(e.message || e) };
     }
   }
 
   if (runAll || only === "bunker") {
     try {
-      console.log("Fetching bunker...");
-      const bunker = await fetchBunker();
-      console.log(`  parsed ${bunker.length}`);
-      await upsert("bunker", bunker);
+      results.bunker = await seedBunker();
     } catch (e) {
       console.error("bunker:", e.message || e);
+      results.bunker = { ok: false, error: String(e.message || e) };
     }
+  }
+
+  const failed = Object.entries(results).filter(([, r]) => !r?.ok);
+  if (failed.length) {
+    console.error(
+      "Failed categories:",
+      failed.map(([k, r]) => `${k} (${r.error || "unknown"})`).join(", "),
+    );
+    process.exitCode = 1;
   }
 }
 
