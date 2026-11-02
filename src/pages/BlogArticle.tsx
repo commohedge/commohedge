@@ -104,7 +104,23 @@ const BlogArticlePage: React.FC = () => {
             </Link>
 
             <div className="mb-5 flex flex-wrap items-center gap-x-3 gap-y-2">
-              <time className="font-headline text-[10px] uppercase tracking-widest text-[#8c947b]">{article.date}</time>
+              <time
+                dateTime={article.date}
+                className="font-headline text-[10px] uppercase tracking-widest text-[#8c947b]"
+              >
+                {article.date}
+              </time>
+              {article.updated && article.updated !== article.date && (
+                <>
+                  <span className="text-[#424a35]">·</span>
+                  <time
+                    dateTime={article.updated}
+                    className="font-headline text-[10px] uppercase tracking-widest text-[#8c947b]"
+                  >
+                    Updated {article.updated}
+                  </time>
+                </>
+              )}
               <span className="text-[#424a35]">·</span>
               <span className="font-headline text-[10px] uppercase tracking-widest text-[#8c947b]">
                 {article.readMinutes} min read

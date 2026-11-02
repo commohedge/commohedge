@@ -343,7 +343,9 @@ function writeSitemap(pages: PageSeo[]) {
             : p.path.startsWith("/blog")
               ? "0.85"
               : "0.8";
-      return `  <url>\n    <loc>${loc}</loc>\n    <changefreq>weekly</changefreq>\n    <priority>${priority}</priority>\n  </url>`;
+      const article = BLOG_ARTICLES.find((a) => a.path === p.path);
+      const lastmod = article ? `\n    <lastmod>${article.updated ?? article.date}</lastmod>` : "";
+      return `  <url>\n    <loc>${loc}</loc>${lastmod}\n    <changefreq>weekly</changefreq>\n    <priority>${priority}</priority>\n  </url>`;
     })
     .join("\n");
   const xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls}\n</urlset>\n`;

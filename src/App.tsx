@@ -2,6 +2,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { Suspense, lazy } from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { ThemeProvider } from "./hooks/ThemeProvider";
 import { useSmoothScroll, useMomentumScroll } from "./hooks/useSmoothScroll";
@@ -14,43 +15,43 @@ import "./utils/testSupabaseFinal";
 import "./utils/testSignUp";
 import "./utils/cleanupLocalStorage";
 
-// Import pages
-import Dashboard from "./pages/Dashboard";
-import Exposures from "./pages/Exposures";
-import HedgingInstruments from "./pages/HedgingInstruments";
-import HedgingInstrumentDetail from "./pages/HedgingInstrumentDetail";
-import RiskAnalysis from "./pages/RiskAnalysis";
-import PositionMonitor from "./pages/PositionMonitor";
-import Index from "./pages/Index";
-import StrategyBuilder from "./pages/StrategyBuilder";
-import Pricers from "./pages/Pricers";
-import Reports from "./pages/Reports";
-import CommodityMarket from "./pages/CommodityMarket";
-import MarketNews from "./pages/MarketNews";
-import EconomicCalendar from "./pages/EconomicCalendar";
-import AdvancedChart from "./pages/AdvancedChart";
-import UserManagement from "./pages/UserManagement";
-import Settings from "./pages/Settings";
-import DatabaseSync from "./pages/DatabaseSync";
-import RegressionAnalysis from "./pages/RegressionAnalysis";
-import RateExplorer from "./pages/RateExplorer";
-import HedgeHelper from "./pages/HedgeHelper";
-import TickerPeekPro from "./pages/TickerPeekPro";
-import IntelWorkspace from "./pages/IntelWorkspace";
-import IntelPanelPage from "./pages/IntelPanelPage";
-import WorldMap from "./pages/WorldMap";
-import CommodityNews from "./pages/CommodityNews";
-import LandingPage from "./pages/LandingPage";
-import RequestAccess from "./pages/RequestAccess";
-import SolutionPage from "./pages/SolutionPage";
-import BlogIndex from "./pages/BlogIndex";
-import BlogArticle from "./pages/BlogArticle";
-import CommodityPrices from "./pages/CommodityPrices";
-import Privacy from "./pages/Privacy";
-import Cookies from "./pages/Cookies";
-import SupabaseLogin from "./pages/SupabaseLogin";
-import AuthCallback from "./pages/AuthCallback";
-import NotFound from "./pages/NotFound";
+// Pages are code-split per route so public SEO pages (landing, blog, solutions)
+// do not download the whole terminal bundle.
+const Dashboard = lazy(() => import("./pages/Dashboard"));
+const Exposures = lazy(() => import("./pages/Exposures"));
+const HedgingInstruments = lazy(() => import("./pages/HedgingInstruments"));
+const HedgingInstrumentDetail = lazy(() => import("./pages/HedgingInstrumentDetail"));
+const RiskAnalysis = lazy(() => import("./pages/RiskAnalysis"));
+const PositionMonitor = lazy(() => import("./pages/PositionMonitor"));
+const StrategyBuilder = lazy(() => import("./pages/StrategyBuilder"));
+const Pricers = lazy(() => import("./pages/Pricers"));
+const Reports = lazy(() => import("./pages/Reports"));
+const CommodityMarket = lazy(() => import("./pages/CommodityMarket"));
+const MarketNews = lazy(() => import("./pages/MarketNews"));
+const EconomicCalendar = lazy(() => import("./pages/EconomicCalendar"));
+const AdvancedChart = lazy(() => import("./pages/AdvancedChart"));
+const UserManagement = lazy(() => import("./pages/UserManagement"));
+const Settings = lazy(() => import("./pages/Settings"));
+const DatabaseSync = lazy(() => import("./pages/DatabaseSync"));
+const RegressionAnalysis = lazy(() => import("./pages/RegressionAnalysis"));
+const RateExplorer = lazy(() => import("./pages/RateExplorer"));
+const HedgeHelper = lazy(() => import("./pages/HedgeHelper"));
+const TickerPeekPro = lazy(() => import("./pages/TickerPeekPro"));
+const IntelWorkspace = lazy(() => import("./pages/IntelWorkspace"));
+const IntelPanelPage = lazy(() => import("./pages/IntelPanelPage"));
+const WorldMap = lazy(() => import("./pages/WorldMap"));
+const CommodityNews = lazy(() => import("./pages/CommodityNews"));
+const LandingPage = lazy(() => import("./pages/LandingPage"));
+const RequestAccess = lazy(() => import("./pages/RequestAccess"));
+const SolutionPage = lazy(() => import("./pages/SolutionPage"));
+const BlogIndex = lazy(() => import("./pages/BlogIndex"));
+const BlogArticle = lazy(() => import("./pages/BlogArticle"));
+const CommodityPrices = lazy(() => import("./pages/CommodityPrices"));
+const Privacy = lazy(() => import("./pages/Privacy"));
+const Cookies = lazy(() => import("./pages/Cookies"));
+const SupabaseLogin = lazy(() => import("./pages/SupabaseLogin"));
+const AuthCallback = lazy(() => import("./pages/AuthCallback"));
+const NotFound = lazy(() => import("./pages/NotFound"));
 import ProtectedRoute from "./components/ProtectedRoute";
 import { SeoManager } from "./components/SeoManager";
 import { CookieConsentBanner } from "./components/CookieConsentBanner";
@@ -60,6 +61,11 @@ import { VercelAnalyticsGate } from "./components/VercelAnalyticsGate";
 import { ThemeToggle } from "./components/ui/theme-toggle";
 
 const queryClient = new QueryClient();
+
+/** Neutral dark placeholder while a route chunk loads (matches landing/terminal background). */
+function RouteFallback() {
+  return <div className="min-h-screen bg-[#0c1322]" aria-busy="true" />;
+}
 
 function ThemeToggleDock() {
   const location = useLocation();
@@ -96,6 +102,7 @@ const App = () => {
           <ThemeToggleDock />
           <CookieConsentBanner />
           <VercelAnalyticsGate />
+          <Suspense fallback={<RouteFallback />}>
           <Routes>
             {/* Landing Page - Page par défaut */}
             <Route path="/" element={<LandingPage />} />
@@ -145,6 +152,7 @@ const App = () => {
             <Route path="/saved" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
             <Route path="*" element={<NotFound />} />
           </Routes>
+          </Suspense>
           </Router>
         </TooltipProvider>
       </ThemeProvider>

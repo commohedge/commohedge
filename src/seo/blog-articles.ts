@@ -11,6 +11,8 @@ export type BlogArticle = {
   h1: string;
   description: string;
   date: string;
+  /** Real last substantive edit (ISO date). Omit if never revised after publication. */
+  updated?: string;
   readMinutes: number;
   tags: string[];
   keywords: string[];
@@ -110,6 +112,7 @@ export const BLOG_ARTICLES: BlogArticle[] = [
     description:
       "What is commodity hedging? Plain-English definition and meaning, buyer/seller examples, instruments and hedge ratios for treasury and trading desks.",
     date: "2026-09-17",
+    updated: "2026-11-02",
     readMinutes: 14,
     tags: ["Commodity", "Education", "Treasury", "Risk"],
     keywords: [
@@ -270,6 +273,7 @@ export const BLOG_ARTICLES: BlogArticle[] = [
     description:
       "Commodity risk management explained: how to map exposures, set policy, hedge inside limits, stress-test and report one risk pack for treasury and trading desks.",
     date: "2026-09-17",
+    updated: "2026-11-02",
     readMinutes: 15,
     tags: ["Risk", "Commodity", "Treasury"],
     keywords: [
@@ -742,6 +746,7 @@ export const BLOG_ARTICLES: BlogArticle[] = [
     description:
       "Copper hedging meaning for producers and buyers: how metals desks roll up copper and aluminium exposures, set hedge ratios and choose forwards vs options.",
     date: "2026-09-06",
+    updated: "2026-11-02",
     readMinutes: 8,
     tags: ["Metals & mining", "Commodity"],
     keywords: [
@@ -1051,6 +1056,7 @@ export const BLOG_ARTICLES: BlogArticle[] = [
     description:
       "How to write a commodity hedging policy that links exposures, hedge-ratio bands and board reporting so desks execute inside governance.",
     date: "2026-08-26",
+    updated: "2026-11-02",
     readMinutes: 8,
     tags: ["Governance", "Treasury", "Risk"],
     keywords: [
@@ -1239,9 +1245,6 @@ export const BLOG_INDEX_SEO: PageSeo = {
   robots: "index, follow",
 };
 
-/** Latest editorial pass date for Article schema dateModified */
-export const BLOG_CONTENT_UPDATED = "2026-11-02";
-
 /** Strip markdown-style [label](url) links to plain label text (JSON-LD / noscript). */
 export function stripMdLinks(text: string): string {
   return text.replace(/\[([^\]]+)\]\((\/[^)]+|https?:\/\/[^)]+)\)/g, "$1");
@@ -1259,7 +1262,7 @@ export function buildBlogArticleJsonLd(article: BlogArticle) {
     description: article.description,
     image: [imageUrl],
     datePublished: article.date,
-    dateModified: article.date > BLOG_CONTENT_UPDATED ? article.date : BLOG_CONTENT_UPDATED,
+    dateModified: article.updated ?? article.date,
     author: { "@type": "Organization", name: BRAND.name, url: `${origin}/` },
     publisher: {
       "@type": "Organization",
