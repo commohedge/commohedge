@@ -418,12 +418,6 @@ const LandingPage = () => {
 
           <div className="relative z-10 mx-auto grid w-full max-w-[1920px] grid-cols-1 items-center gap-10 lg:grid-cols-12 lg:gap-12">
             <div className="landing-reveal landing-reveal-active lg:col-span-7 xl:col-span-7">
-              <div className="mb-5 inline-flex items-center space-x-2 rounded-full border border-[#aef833]/25 bg-[#aef833]/[0.06] px-3 py-1 sm:mb-6 sm:space-x-3 sm:px-4">
-                <span className="h-2 w-2 shrink-0 animate-pulse rounded-full bg-[#aef833]" />
-                <span className="text-[9px] font-bold uppercase tracking-[0.18em] text-[#aef833] sm:text-[10px] sm:tracking-[0.2em]">
-                  Pricing & hedging terminal · Live
-                </span>
-              </div>
               <h1 className="mb-4 font-headline text-[2.5rem] font-bold uppercase leading-[0.95] tracking-tighter text-white sm:mb-5 sm:text-7xl sm:leading-[0.88] md:text-8xl lg:text-[7.5rem] xl:text-[9rem]">
                 {BRAND.heroLine1} <br />{" "}
                 <span className="bg-gradient-to-br from-[#aef833] to-[#93db04] bg-clip-text text-transparent">
