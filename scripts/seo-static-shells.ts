@@ -87,7 +87,7 @@ function applySeoHead(html: string, seo: PageSeo): string {
   out = setOrReplace(
     out,
     /<meta\s+property="og:image"\s+content="[^"]*"\s*\/?>/i,
-    `<meta property="og:image" content="${SITE_ORIGIN}/og-image.png" />`,
+    `<meta property="og:image" content="${SITE_ORIGIN}/og-image.png?v=20261105" />`,
   );
   out = setOrReplace(
     out,
@@ -107,7 +107,7 @@ function applySeoHead(html: string, seo: PageSeo): string {
   out = setOrReplace(
     out,
     /<meta\s+name="twitter:image"\s+content="[^"]*"\s*\/?>/i,
-    `<meta name="twitter:image" content="${SITE_ORIGIN}/og-image.png" />`,
+    `<meta name="twitter:image" content="${SITE_ORIGIN}/og-image.png?v=20261105" />`,
   );
 
   // Drop Lovable leftover if still present in an old artifact
