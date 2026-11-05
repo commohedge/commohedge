@@ -33,7 +33,7 @@
   ],
   "rewrites": [
     {
-      "source": "/((?!api/|assets/|landing-page/|landing-media/|solutions/|request-access/|blog/|robots\\.txt|sitemap\\.xml|og-image\\.png|favicon\\.ico|favicon-.*\\.png|apple-touch-icon\\.png|icon-.*\\.png|commohedge-logo.*\\.png|logo\\.png|theme-init\\.js|_redirects).*)",
+      "source": "/((?!api/|assets/|landing-page/|landing-media/|solutions/|request-access/|blog/|robots\\.txt|sitemap\\.xml|og-image\\.png|og-share\\.png|favicon\\.ico|favicon-.*\\.png|apple-touch-icon\\.png|icon-.*\\.png|commohedge-logo.*\\.png|logo\\.png|theme-init\\.js|_redirects).*)",
       "destination": "/index.html"
     }
   ],
@@ -66,6 +66,15 @@
     },
     {
       "source": "/og-image.png",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=86400, must-revalidate"
+        }
+      ]
+    },
+    {
+      "source": "/og-share.png",
       "headers": [
         {
           "key": "Cache-Control",

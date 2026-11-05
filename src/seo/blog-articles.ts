@@ -1540,7 +1540,7 @@ export function buildBlogArticleJsonLd(article: BlogArticle) {
   // Keep origin inline to avoid a runtime cycle with site-seo.ts
   const origin = "https://www.commohedge.com";
   const pageUrl = `${origin}${article.path}`;
-  const imageUrl = `${origin}/og-image.png?v=20261105`;
+  const imageUrl = `${origin}/og-share.png`;
   return {
     "@context": "https://schema.org",
     "@type": "Article",
