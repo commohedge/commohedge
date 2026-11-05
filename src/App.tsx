@@ -67,9 +67,39 @@ function RouteFallback() {
   return <div className="min-h-screen bg-[#0c1322]" aria-busy="true" />;
 }
 
+/** Theme switcher only inside the signed-in terminal — not on marketing/auth pages. */
+const APP_THEME_PREFIXES = [
+  "/dashboard",
+  "/exposures",
+  "/hedging",
+  "/risk-analysis",
+  "/strategy-builder",
+  "/pricers",
+  "/positions",
+  "/reports",
+  "/commodity-market",
+  "/intel-workspace",
+  "/world-map",
+  "/commodity-news",
+  "/market-news",
+  "/economic-calendar",
+  "/advanced-chart",
+  "/users",
+  "/database-sync",
+  "/settings",
+  "/regression-analysis",
+  "/rate-explorer",
+  "/hedge-helper",
+  "/ticker-peek-pro",
+  "/saved",
+] as const;
+
 function ThemeToggleDock() {
-  const location = useLocation();
-  if (location.pathname === "/") return null;
+  const { pathname } = useLocation();
+  const show = APP_THEME_PREFIXES.some(
+    (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
+  );
+  if (!show) return null;
   return (
     <div className="fixed top-4 right-4 z-50">
       <ThemeToggle />
