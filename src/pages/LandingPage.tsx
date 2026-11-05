@@ -1194,6 +1194,11 @@ const LandingPage = () => {
                 </Link>
               </li>
               <li>
+                <Link to="/blog/bloomberg-refinitiv-alternative-commodity-pricing" className="font-headline text-[11px] uppercase tracking-widest text-[#aeb5c5] transition-colors hover:text-white">
+                  Bloomberg alternative
+                </Link>
+              </li>
+              <li>
                 <a href="/#faq" className="font-headline text-[11px] uppercase tracking-widest text-[#aeb5c5] transition-colors hover:text-white">
                   FAQ
                 </a>

@@ -46,6 +46,12 @@
     <priority>0.85</priority>
   </url>
   <url>
+    <loc>https://www.commohedge.com/blog/bloomberg-refinitiv-alternative-commodity-pricing</loc>
+    <lastmod>2026-11-05</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.85</priority>
+  </url>
+  <url>
     <loc>https://www.commohedge.com/blog/case-study-wheat-buyer-hedge-h1-2026</loc>
     <lastmod>2026-10-12</lastmod>
     <changefreq>weekly</changefreq>
@@ -137,7 +143,7 @@
   </url>
   <url>
     <loc>https://www.commohedge.com/blog/choose-commodity-hedging-software</loc>
-    <lastmod>2026-08-22</lastmod>
+    <lastmod>2026-11-05</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.85</priority>
   </url>

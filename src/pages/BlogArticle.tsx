@@ -175,6 +175,70 @@ const BlogArticlePage: React.FC = () => {
                         {renderRichText(p)}
                       </p>
                     ))}
+
+                    {section.list && (
+                      <ul className="space-y-3">
+                        {section.list.map((item) => (
+                          <li key={item} className="flex gap-3 text-sm leading-relaxed text-[#c1caaf] sm:text-base">
+                            <span className="mt-2.5 h-1.5 w-1.5 shrink-0 rounded-full bg-[#aef833]" />
+                            <span>{renderRichText(item)}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+
+                    {section.table && (
+                      <div className="landing-glass-card overflow-x-auto rounded-sm">
+                        <table className="w-full min-w-[640px] border-collapse text-left text-xs sm:text-sm">
+                          <caption className="px-4 pb-3 pt-4 text-left font-headline text-[10px] font-bold uppercase tracking-widest text-[#8c947b]">
+                            {section.table.caption}
+                          </caption>
+                          <thead>
+                            <tr>
+                              {section.table.headers.map((h) => (
+                                <th
+                                  key={h}
+                                  scope="col"
+                                  className="border-b border-[#aef833]/30 px-4 py-3 font-headline text-[10px] font-bold uppercase tracking-widest text-[#aef833]"
+                                >
+                                  {h}
+                                </th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {section.table.rows.map((row) => (
+                              <tr key={row[0]} className="align-top">
+                                {row.map((cell, i) =>
+                                  i === 0 ? (
+                                    <th
+                                      key={`${row[0]}-${i}`}
+                                      scope="row"
+                                      className="border-b border-[#424a35]/20 px-4 py-3 text-left font-medium text-white"
+                                    >
+                                      {renderRichText(cell)}
+                                    </th>
+                                  ) : (
+                                    <td
+                                      key={`${row[0]}-${i}`}
+                                      className="border-b border-[#424a35]/20 px-4 py-3 leading-relaxed text-[#c1caaf]"
+                                    >
+                                      {renderRichText(cell)}
+                                    </td>
+                                  ),
+                                )}
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+
+                    {section.closing?.map((p) => (
+                      <p key={p.slice(0, 48)} className="text-sm leading-relaxed text-[#c1caaf] sm:text-base">
+                        {renderRichText(p)}
+                      </p>
+                    ))}
                   </div>
                 </section>
               ))}

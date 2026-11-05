@@ -4,6 +4,24 @@ import type { PageSeo } from "@/seo/site-seo";
 /** Sister product - FX Risk Manager */
 export const FX_PLATFORM_URL = "https://fx.commohedge.com/";
 
+/** Comparison / data table. Cells accept [label](url) markdown links. */
+export type BlogTable = {
+  caption: string;
+  headers: string[];
+  rows: string[][];
+};
+
+export type BlogSection = {
+  heading: string;
+  paragraphs: string[];
+  /** Bulleted list rendered after the paragraphs. */
+  list?: string[];
+  /** Table rendered after the list. */
+  table?: BlogTable;
+  /** Paragraphs rendered after the list/table. */
+  closing?: string[];
+};
+
 export type BlogArticle = {
   slug: string;
   path: `/blog/${string}`;
@@ -17,7 +35,7 @@ export type BlogArticle = {
   tags: string[];
   keywords: string[];
   lead: string;
-  sections: { heading: string; paragraphs: string[] }[];
+  sections: BlogSection[];
   takeaways: string[];
   faqs: { q: string; a: string }[];
   /** Internal path (/...) or absolute URL (https://...) */
@@ -29,6 +47,272 @@ export type BlogArticle = {
 };
 
 export const BLOG_ARTICLES: BlogArticle[] = [
+  {
+    slug: "bloomberg-refinitiv-alternative-commodity-pricing",
+    path: "/blog/bloomberg-refinitiv-alternative-commodity-pricing",
+    title: `Bloomberg & Refinitiv Alternative for Commodities (2026) | ${BRAND.name}`,
+    h1: "Bloomberg and Refinitiv alternative for commodity pricing: what a mid-size desk can actually replace",
+    description:
+      "Bloomberg costs $31,980 a seat; LSEG Workspace ~$22,000. What a mid-size commodity desk can replace for pricing and hedging, and what it can't.",
+    date: "2026-11-05",
+    readMinutes: 12,
+    tags: ["Buyer's guide", "Commodity", "Cost"],
+    keywords: [
+      "bloomberg alternative for commodities",
+      "refinitiv alternative commodity pricing",
+      "LSEG Workspace alternative",
+      "Eikon alternative commodities",
+      "bloomberg terminal cost 2026",
+      "cheaper alternative to bloomberg for commodity hedging",
+      "commodity pricing software mid-size companies",
+      "black-76 commodity option pricing",
+    ],
+    lead: "Short answer: for one job, yes. If your team uses Bloomberg or LSEG Workspace mainly to price commodity forwards, swaps and options, mark the hedge book to market and produce risk-committee numbers, a specialized pricing and hedging terminal can replace that part of the seat. It cannot replace the dealer messaging network, exchange-licensed real-time data, proprietary price assessments or execution. This guide splits a terminal seat into five jobs, puts 2026 numbers on the cost (prices reviewed 5 November 2026), and gives a rule for deciding which seats to keep.",
+    sections: [
+      {
+        heading: "Short answer: a terminal seat does five jobs, and a mid-size desk can usually replace two",
+        paragraphs: [
+          "A Bloomberg Terminal or LSEG Workspace seat is a bundle. For a commodity desk it does five separate jobs, and they do not have the same replacement cost. The table separates them so you can see which part of the seat you are really paying for.",
+        ],
+        table: {
+          caption: "The five jobs of a terminal seat, and what replaces each one",
+          headers: [
+            "Job",
+            "Bloomberg / LSEG Workspace",
+            "Specialized pricing and hedging terminal",
+            "Verdict for a mid-size desk",
+          ],
+          rows: [
+            [
+              "1. Live quotes and exchange data",
+              "Licensed real-time cross-asset data; exchange and third-party fees can be billed on top",
+              "Reference prices and curves for monitoring and as pricing inputs; not an exchange-licensed tick feed",
+              "Keep a terminal seat, or buy a narrow data feed",
+            ],
+            [
+              "2. Pricing forwards, swaps and options",
+              "Broad derivatives analytics (for example OVML on Bloomberg)",
+              "Black-76, barriers, Asians and zero-cost structures with Greeks and Monte Carlo",
+              "Replaceable",
+            ],
+            [
+              "3. Hedge book mark-to-market, exposures, scenarios, committee packs",
+              "Portfolio and risk tools (for example PORT) built around investment portfolios; corporate exposure-to-hedge mapping is often rebuilt in Excel",
+              "Exposure roll-up by entity and maturity, hedge ratios, stress scenarios, exportable packs",
+              "Replaceable",
+            ],
+            [
+              "4. News, research and price assessments",
+              "Bloomberg News, Reuters and licensed content",
+              "Headlines and calendar inside the workspace; no proprietary price assessments",
+              "Keep, or buy a specialist source",
+            ],
+            [
+              "5. Messaging and execution",
+              "Dealer network, chat and order routing",
+              "None",
+              "Keep for the people who trade with dealers",
+            ],
+          ],
+        },
+        closing: [
+          "Jobs 2 and 3 are the daily work of treasury, procurement and risk teams at mid-size industrials: price the structure, mark the book, explain the number to a committee. A purpose-built tool is designed around exactly that workflow. Jobs 1, 4 and 5 rest on licensed data, editorial staff and a dealer network that no pricing tool reproduces. They are a reason to keep some seats, not a reason to keep every seat.",
+        ],
+      },
+      {
+        heading: "What do Bloomberg and LSEG Workspace cost in 2026?",
+        paragraphs: [
+          "Bloomberg's customer letter for its January 2025 increase put a single Terminal at $31,980 per year and $28,320 per seat for sites with two or more seats, as reported by NeuGroup and summarised by [BlueGamma](https://www.bluegamma.io/post/bloomberg-terminal-pricing). Contracts normally run two years. LSEG Workspace, which replaced Refinitiv Eikon, is quote-only, so its figures are third-party reported rather than vendor-published, as [Investables.ai](https://investables.ai/blog/how-much-does-lseg-workspace-cost) explains.",
+        ],
+        table: {
+          caption: "Reported terminal prices, reviewed 5 November 2026",
+          headers: ["Product", "Reported price", "What to know"],
+          rows: [
+            ["Bloomberg Terminal, 1 seat", "$31,980 per year", "Two-year term, about $63,960 committed"],
+            ["Bloomberg Terminal, 2 or more seats", "$28,320 per seat per year", "About $56,640 per seat over two years"],
+            [
+              "LSEG Workspace, full seat",
+              "About $22,000 per user per year",
+              "Quote-only; a reported figure, not a list price",
+            ],
+            [
+              "LSEG Workspace, narrow configuration",
+              "From about $3,600 per year",
+              "Limited content or a single asset class; reported",
+            ],
+            ["Refinitiv Eikon", "No longer sold", "Retired on 30 June 2025 and replaced by LSEG Workspace"],
+          ],
+        },
+        closing: [
+          "For a three-seat desk that is $84,960 a year on Bloomberg multi-seat pricing (3 × $28,320) or roughly $66,000 on reported LSEG full-seat pricing (3 × $22,000), before extras. Exchange and third-party data fees are usually billed on top, and enterprise data feeds are priced separately from the Terminal.",
+          "If you moved from Eikon to Workspace, you inherited the same pricing model rather than a reset, so a renewal is the natural moment to ask which seats still need the full bundle. Prices also drift upward: Bloomberg's January 2025 step was 6.5%, and a further increase for contracts starting or renewing from 1 January 2027 has been reported but not confirmed by Bloomberg. Because the price is fixed for the contract term, your renewal date matters as much as the list price.",
+        ],
+      },
+      {
+        heading: "Test case: Black-76 option pricing is the easiest part to replace",
+        paragraphs: [
+          "Take the most common hedge-desk question: what does protection cost? For options on commodity futures the market standard is the Black-76 model (Fischer Black, 1976): call = e^(-rT) × [F·N(d1) − K·N(d2)], with d1 = [ln(F/K) + ½σ²T] / (σ√T) and d2 = d1 − σ√T. The formula is public and needs five inputs: forward price F, strike K, volatility σ, time to expiry T and discount rate r.",
+          "Here is a worked example for a six-month option on an oil future at $80 per barrel, with 30% volatility and a 4% discount rate.",
+        ],
+        table: {
+          caption: "Black-76 premiums per barrel: 6-month option, F = $80, volatility 30%, rate 4%",
+          headers: ["Structure", "Premium ($ per barrel)"],
+          rows: [
+            ["Call, strike 85 (out of the money)", "4.66"],
+            ["Put, strike 75 (out of the money)", "4.26"],
+            ["Call, strike 80 (at the money)", "6.62"],
+            ["Collar: buy call 85, sell put 75 (net premium)", "0.40"],
+            ["Same call, strike 85, at 25% volatility", "3.58"],
+            ["Same call, strike 85, at 35% volatility", "5.75"],
+          ],
+        },
+        closing: [
+          "Two things matter. First, any competent system returns the same top four numbers from the same inputs, so the formula is not what a terminal seat charges for. Second, a five-point difference in volatility moves the 85 call by about $1.08 per barrel, roughly 23% of its premium. The real risk is two modules using different vols or curves.",
+          "Replacing the terminal's pricing function is therefore a question of input governance: one forward curve, one volatility, one discount rate, shared by the pricer, the strategy builder and the hedge book. You can check the figures yourself: the same inputs in CommoHedge's Black-76 engine, with cost of carry set to zero for futures, return these premiums, and barrier, Asian and Monte Carlo structures run from the same inputs.",
+        ],
+      },
+      {
+        heading: "When a terminal is still the right answer",
+        paragraphs: ["A specialized tool is the wrong choice, or only part of the answer, in four situations. Keep a terminal seat if:"],
+        list: [
+          "Your traders negotiate with dealers on chat and route orders through terminal-connected platforms.",
+          "You trade intraday and need exchange-licensed real-time data, not monitoring-grade reference prices.",
+          "Your workflow depends on proprietary price assessments or news from Bloomberg, Reuters, Platts, Argus or Fastmarkets.",
+          "Compliance or audit requires best-execution records produced inside the terminal.",
+        ],
+        closing: [
+          "If any of these apply, keep a seat for the people who need it. The savings come from removing seats whose main job is pricing and reporting, not from removing the terminal altogether.",
+        ],
+      },
+      {
+        heading: "Beyond Bloomberg and LSEG: what else mid-size desks shortlist",
+        paragraphs: [
+          "Searching for a Bloomberg alternative mostly returns equity-research and charting tools such as Koyfin or TradingView. Those suit analysts, not commodity hedge programs. For commodities the realistic shortlist sits in four categories. Descriptions below are the vendors' own.",
+        ],
+        table: {
+          caption: "Commodity alternatives by category",
+          headers: ["Category", "What it is for", "Examples (as described by each vendor)", "Watch-outs"],
+          rows: [
+            [
+              "Pricing and hedging analytics",
+              "Price structures, mark the hedge book, run scenarios, report to committee",
+              "CommoHedge; [Forge aHedge](https://www.forgeahedge.com/pricing) (mid-market treasury and procurement, hedge accounting); [AEGIS](https://aegis-hedging.com/ctrm) (modular cloud E/CTRM)",
+              "Check data inputs and whether hedge accounting is included",
+            ],
+            [
+              "Light CTRM",
+              "Physical trades, positions, logistics, invoicing",
+              "[CTRM Next](https://ctrmnext.com/solutions/ctrm-for-small-trading-firms) (claims about half the cost of traditional CTRM); [Phlo Systems](https://www.ctrmcenter.com/blog/commodity-trading/phlo-systems-as-a-one-stop-shop-for-mid-size-commodity-traders/) opsPhlo (CTRM, ERP and treasury; three to four months to implement)",
+              "More system than you need if you only hedge",
+            ],
+            [
+              "Commodity data and price assessments",
+              "Curves, proprietary prices, news, freight",
+              "[Sparta](https://www.spartacommodities.com/sparta-curves/) (oil, products, freight); [Tallarium](https://www.tallarium.com/) (OTC energy); [Fastmarkets](https://www.fastmarkets.com/platform/) (metals, 2,000+ proprietary prices); [Enverus MarketView](https://www.enverus.com/solutions/real-time-market-intelligence/) (energy data to Excel, API and Python)",
+              "Data, not hedge analytics; pair with a pricer",
+            ],
+            [
+              "Broad terminals",
+              "Cross-asset data, news, messaging, execution",
+              "Bloomberg, LSEG Workspace, FactSet, S&P Capital IQ",
+              "Per-seat contracts; equity and fixed-income depth you may not need",
+            ],
+          ],
+        },
+        closing: [
+          "The table shows the structure of the market: data vendors, CTRMs and pricing tools solve different problems. The question is rarely which single product replaces the terminal, and more often which combination covers the jobs you actually do. Ask every vendor, including us, for a live demonstration of anything you treat as mandatory, such as hedge accounting, audit trail or ERP integration.",
+        ],
+      },
+      {
+        heading: "How to decide: a seat-triage rule and a break-even test",
+        paragraphs: ["Compare job to job, not product to product. Five steps:"],
+        list: [
+          "List every terminal seat and write down its main job from the five in the first table.",
+          "Seats whose main job is pricing, mark-to-market, scenarios or reporting (jobs 2 and 3) are replacement candidates.",
+          "Seats that need live data, assessments or dealer connectivity (jobs 1, 4 and 5) stay. Check whether fewer seats can serve them.",
+          "Run a parallel period: price your live structures in both systems and reconcile mark-to-market before you give notice.",
+          "Diarise the notice date. Bloomberg terms are typically two years and renew unless you give written notice, commonly 60 days before the term ends.",
+        ],
+        closing: [
+          "Break-even test: replacement saves money when the annual price of the new tool is below the number of seats you remove multiplied by the seat price. Removing two Bloomberg multi-seat licences frees about $56,640 a year; removing three reported LSEG full seats frees about $66,000. Compare that with a written quote, plus any data you still need to buy and the time to onboard.",
+        ],
+      },
+      {
+        heading: "Who this approach fits, and who it does not",
+        paragraphs: [
+          "It fits treasury, procurement, risk and trading teams at mid-size industrials, agri-food companies, miners and energy marketers who hold material commodity exposure in oil, metals or agriculture and who today price hedges by combining terminal quotes with Excel. If that describes you, see [what breaks when Excel runs the hedge book](/blog/excel-to-hedging-terminal) and the [commodity risk management framework](/blog/commodity-risk-management).",
+          "It does not fit dealers and market makers who need tick data and a chat network, or operations that need physical logistics, inventory and invoicing in one system. Those needs point to a terminal or a CTRM, as the sections above show.",
+        ],
+      },
+      {
+        heading: "Where CommoHedge fits",
+        paragraphs: [
+          "CommoHedge is a commodity and FX hedging terminal built for the replaceable jobs: pricing forwards, swaps, vanilla options, barriers, Asians and touch structures with Black-76, closed-form barriers and Monte Carlo; a strategy builder with zero-cost structures; exposure roll-up by entity and maturity; hedge inventory with mark-to-market; stress scenarios; and exportable committee packs.",
+          "It is not an exchange-licensed data feed, a news wire, a dealer chat network or an execution system. Market data inside the workspace serves monitoring and pricing inputs, and you can override any input. Free monthly World Bank commodity price history is on the public [Commodity Pricers](/commodity-pricers) page.",
+          "Sector workflows have their own pages: [oil and energy](/solutions/oil-energy), [metals and mining](/solutions/metals-mining) and [agriculture](/solutions/agriculture). To compare options on your own book, read the [buyer's checklist for commodity hedging software](/blog/choose-commodity-hedging-software), then request access and ask for a quote you can run through the break-even test above.",
+        ],
+      },
+      {
+        heading: "Sources and method",
+        paragraphs: [
+          "Terminal prices were reviewed on 5 November 2026 using [BlueGamma's Bloomberg Terminal cost analysis](https://www.bluegamma.io/post/bloomberg-terminal-pricing) and [Investables.ai's LSEG Workspace cost analysis](https://investables.ai/blog/how-much-does-lseg-workspace-cost). Bloomberg prices come from its customer communications as reported in the press; LSEG quotes per contract. Treat every figure as a reported benchmark and confirm it with a written quote. Vendor descriptions in the alternatives table come from each vendor's own website. The Black-76 table was computed from the formula above and reproduced in CommoHedge's pricing engine.",
+        ],
+      },
+    ],
+    takeaways: [
+      "A terminal seat bundles five jobs; pricing and hedge-book reporting are the two a specialized tool replaces well.",
+      "Reported 2026 prices: Bloomberg $31,980 (single seat) or $28,320 (multi-seat); LSEG Workspace about $22,000 for a full seat.",
+      "The Black-76 formula is public; the risk is inconsistent inputs across modules, not a missing model.",
+      "Keep terminal seats for live licensed data, proprietary assessments and dealer messaging; remove seats whose job is pricing and reporting.",
+      "Run a parallel period and diarise the notice date before cancelling a two-year term.",
+    ],
+    faqs: [
+      {
+        q: "What is a cheaper alternative to Bloomberg for commodity pricing?",
+        a: "For pricing and hedging, a specialized commodity hedging terminal such as CommoHedge covers forwards, swaps and options pricing, mark-to-market and scenarios without the full terminal bundle. For data, vendors such as Sparta, Fastmarkets or Enverus sell commodity curves and assessments separately. No single product replaces Bloomberg's dealer network and licensed cross-asset data.",
+      },
+      {
+        q: "How much does a Bloomberg Terminal cost in 2026?",
+        a: "Reported list pricing is $31,980 per year for a single seat and $28,320 per seat for two or more seats, usually on a two-year contract. Exchange and third-party data fees and enterprise feeds can be extra. A further increase for contracts starting from 1 January 2027 has been reported but not confirmed.",
+      },
+      {
+        q: "What replaced Refinitiv Eikon, and what does it cost?",
+        a: "LSEG Workspace replaced Refinitiv Eikon, which was retired on 30 June 2025. LSEG does not publish prices. A full seat is commonly reported at about $22,000 per user per year, and narrow configurations from about $3,600 per year.",
+      },
+      {
+        q: "Can a mid-size company replace Bloomberg for commodity hedging?",
+        a: "Partly. A purpose-built tool can replace the pricing, mark-to-market, scenario and reporting work. It cannot replace dealer chat, exchange-licensed real-time data or proprietary price assessments. The practical approach is to keep a few seats for those needs and remove seats used mainly for pricing and reporting.",
+      },
+      {
+        q: "What is the Black-76 model and why do commodity desks use it?",
+        a: "Black-76 is the standard model for options on futures and forwards, published by Fischer Black in 1976. It prices an option from the forward price, strike, volatility, time to expiry and discount rate. Commodity desks use it because the underlying is a forward or futures contract rather than a spot asset.",
+      },
+      {
+        q: "Do I need a CTRM system instead of a hedging terminal?",
+        a: "Only if you manage physical trades, inventory, logistics or invoicing in one system. If your need is pricing hedges, tracking exposures and reporting risk, a CTRM can be more system than required. Light CTRMs such as CTRM Next or Phlo Systems target firms that do need the physical workflow.",
+      },
+      {
+        q: "What can a specialized commodity pricer not replace?",
+        a: "Dealer messaging and execution connectivity, exchange-licensed real-time data, and proprietary price assessments or news from providers such as Bloomberg, Reuters, Platts, Argus or Fastmarkets. Keep those where your workflow depends on them.",
+      },
+      {
+        q: "Is CommoHedge a Bloomberg replacement?",
+        a: "No. CommoHedge replaces the commodity pricing, hedge-book and risk-reporting work of a terminal seat for mid-size desks. It is not a data feed, news service or execution network. Request access to test it on your own structures.",
+      },
+      {
+        q: "How do I know if my desk is overpaying for terminal seats?",
+        a: "List each seat's main job. If it is mostly pricing, marking hedges and producing reports, it is a replacement candidate; if it is live data, assessments or dealer chat, it is not. Then compare the annual cost of the seats you could remove with a written quote for the alternative.",
+      },
+    ],
+    relatedCta: { label: "Request a desk trial", to: "/request-access" },
+    seo: {
+      title: `Bloomberg & Refinitiv Alternative for Commodities (2026) | ${BRAND.name}`,
+      description:
+        "Bloomberg costs $31,980 a seat; LSEG Workspace ~$22,000. What a mid-size commodity desk can replace for pricing and hedging, and what it can't.",
+      path: "/blog/bloomberg-refinitiv-alternative-commodity-pricing",
+      robots: "index, follow",
+    },
+  },
   {
     slug: "case-study-wheat-buyer-hedge-h1-2026",
     path: "/blog/case-study-wheat-buyer-hedge-h1-2026",
@@ -1181,6 +1465,7 @@ export const BLOG_ARTICLES: BlogArticle[] = [
     description:
       "Commodity hedging software checklist: pricing spine, exposures, audit trail, sector fit and how to pilot before you commit.",
     date: "2026-08-22",
+    updated: "2026-11-05",
     readMinutes: 9,
     tags: ["Buyer's guide"],
     keywords: [
@@ -1196,6 +1481,7 @@ export const BLOG_ARTICLES: BlogArticle[] = [
         paragraphs: [
           "Consistent pricing across vanillas and exotics; exposure roll-up by entity and tenor; hedge inventory with MTM; scenario tools; exportable risk packs; clear permissions.",
           "Sector fit matters: oil, metals and agriculture are not cosmetic themes — they change curves, calendars and instrument mixes.",
+          "Weighing a specialized tool against a terminal seat? See the [Bloomberg and Refinitiv alternative for commodity pricing](/blog/bloomberg-refinitiv-alternative-commodity-pricing) for a job-by-job comparison, 2026 seat costs and a break-even test.",
         ],
       },
       {

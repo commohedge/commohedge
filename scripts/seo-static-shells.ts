@@ -144,13 +144,26 @@ function noscriptFor(seo: PageSeo): string {
 
   const article = BLOG_ARTICLES.find((a) => a.path === seo.path);
   if (article) {
+    const plain = (t: string) => escapeHtml(stripMdLinks(t));
     const sections = article.sections
-      .map(
-        (s) =>
-          `<h2>${escapeHtml(s.heading)}</h2>${s.paragraphs
-            .map((p) => `<p>${escapeHtml(stripMdLinks(p))}</p>`)
-            .join("")}`,
-      )
+      .map((s) => {
+        const paragraphs = s.paragraphs.map((p) => `<p>${plain(p)}</p>`).join("");
+        const list = s.list ? `<ul>${s.list.map((i) => `<li>${plain(i)}</li>`).join("")}</ul>` : "";
+        const table = s.table
+          ? `<table><caption>${plain(s.table.caption)}</caption><thead><tr>${s.table.headers
+              .map((h) => `<th scope="col">${plain(h)}</th>`)
+              .join("")}</tr></thead><tbody>${s.table.rows
+              .map(
+                (row) =>
+                  `<tr>${row
+                    .map((c, i) => (i === 0 ? `<th scope="row">${plain(c)}</th>` : `<td>${plain(c)}</td>`))
+                    .join("")}</tr>`,
+              )
+              .join("")}</tbody></table>`
+          : "";
+        const closing = (s.closing ?? []).map((p) => `<p>${plain(p)}</p>`).join("");
+        return `<h2>${escapeHtml(s.heading)}</h2>${paragraphs}${list}${table}${closing}`;
+      })
       .join("");
     const faqs = article.faqs
       .map((f) => `<h3>${escapeHtml(f.q)}</h3><p>${escapeHtml(f.a)}</p>`)
@@ -211,6 +224,7 @@ function noscriptFor(seo: PageSeo): string {
     <ul>
       <li><a href="${SITE_ORIGIN}/blog/commodity-hedging-definition-meaning">Commodity hedging definition</a></li>
       <li><a href="${SITE_ORIGIN}/blog/commodity-risk-management">Commodity risk management</a></li>
+      <li><a href="${SITE_ORIGIN}/blog/bloomberg-refinitiv-alternative-commodity-pricing">Bloomberg and Refinitiv alternative for commodity pricing</a></li>
       <li><a href="${SITE_ORIGIN}/solutions/oil-energy">Oil &amp; energy hedging</a></li>
       <li><a href="${SITE_ORIGIN}/solutions/metals-mining">Metals &amp; mining hedging</a></li>
       <li><a href="${SITE_ORIGIN}/solutions/agriculture">Agriculture hedging</a></li>
